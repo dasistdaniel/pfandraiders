@@ -16,4 +16,20 @@ describe('resolveServerUrl', () => {
     expect(resolveServerUrl('?server=javascript:alert(1)', 'ws://env')).toBe('ws://env');
     expect(resolveServerUrl('?server=https://x.example', undefined)).toBe('ws://localhost:8080');
   });
+
+  it('rejects malformed addresses and falls through to the next source', () => {
+    for (const bad of ['foo', 'ws:/x', 'ws://', ' ws://x ', 'ws://x y']) {
+      expect(resolveServerUrl(`?server=${encodeURIComponent(bad)}`, undefined)).toBe('ws://localhost:8080');
+    }
+    expect(resolveServerUrl('?server=', 'ws://env')).toBe('ws://env');
+  });
+
+  it('is case-sensitive: upper-case WS:// is rejected', () => {
+    expect(resolveServerUrl('?server=WS://x', undefined)).toBe('ws://localhost:8080');
+  });
+
+  it('ignores an invalid build-time URL', () => {
+    expect(resolveServerUrl('', 'http://env')).toBe('ws://localhost:8080');
+    expect(resolveServerUrl('', 'garbage')).toBe('ws://localhost:8080');
+  });
 });

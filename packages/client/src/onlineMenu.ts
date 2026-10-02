@@ -7,9 +7,17 @@ const NAME_KEY = 'pfandraiders.name';
 
 function safeGet(key: string): string | null {
   try {
-    return sessionStorage.getItem(key) ?? localStorage.getItem(key);
+    return sessionStorage.getItem(key) ?? (key === NAME_KEY ? localStorage.getItem(key) : null);
   } catch {
     return null;
+  }
+}
+
+function safeRemove(key: string): void {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* egal */
   }
 }
 
@@ -104,7 +112,12 @@ export function showOnlineMenu(
         safeSet(NAME_KEY, name.value.trim(), true);
         if (conn.status === 'idle' || conn.status === 'closed') {
           showError('');
-          conn.connect();
+          try {
+            conn.connect();
+          } catch {
+            showError('Server nicht erreichbar.');
+            return false;
+          }
         }
         return true;
       };
@@ -127,6 +140,12 @@ export function showOnlineMenu(
         whenOpen(() => conn.join(room, name.value.trim(), safeGet(TOKEN_KEY(room)) ?? undefined));
       };
       cancel.onclick = () => finish(null);
+      const onEnter = (primary: HTMLButtonElement) => (e: KeyboardEvent) => {
+        if (e.key === 'Enter') primary.click();
+      };
+      name.onkeydown = onEnter(code.value.trim() ? join : create);
+      code.onkeydown = onEnter(join);
+      name.focus();
     };
 
     const renderLobby = () => {
@@ -137,7 +156,7 @@ export function showOnlineMenu(
       const draw = (players: RosterEntry[]) => {
         list.replaceChildren();
         for (const p of players) {
-          const hex = `#${p.color.toString(16).padStart(6, '0')}`;
+          const hex = Number.isInteger(p.color) ? `#${p.color.toString(16).padStart(6, '0')}` : '#fff';
           const row = el('div', { textContent: `${p.name}${p.id === conn.host ? ' (Host)' : ''}${p.connected ? '' : ' (getrennt)'}` }, `color:${hex}`);
           list.appendChild(row);
         }
@@ -153,7 +172,10 @@ export function showOnlineMenu(
         start.disabled = conn.roster.filter((p) => p.connected).length < 2;
       };
       start.onclick = () => conn.requestStart();
-      leave.onclick = () => finish(null);
+      leave.onclick = () => {
+        safeRemove(TOKEN_KEY(conn.room));
+        finish(null);
+      };
       box.append(list, start, hint, leave, message);
       conn.onLobby = refresh;
       refresh();

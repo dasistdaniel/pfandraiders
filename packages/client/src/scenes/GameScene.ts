@@ -75,6 +75,11 @@ export class GameScene extends Phaser.Scene {
       // Neue Runde (Server schickt erneut `start`) und Verbindungsverlust
       online.onStart = () => this.scene.restart({ online });
       online.onClosed = () => this.scene.start('lobby', { notice: 'Verbindung zum Server verloren.' });
+      if (online.status === 'closed') {
+        // Das close-Ereignis kam schon vor dem Szenenwechsel an
+        this.scene.start('lobby', { notice: 'Verbindung zum Server verloren.' });
+        return;
+      }
     } else {
       const params = new URLSearchParams(window.location.search);
       localParams = params;

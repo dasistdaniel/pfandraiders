@@ -83,7 +83,13 @@ export class OnlineConnection implements GameConnection {
 
   connect(): void {
     this.status = 'connecting';
-    const socket = this.factory(this.url);
+    let socket: SocketLike;
+    try {
+      socket = this.factory(this.url);
+    } catch (err) {
+      this.status = 'closed';
+      throw err;
+    }
     this.socket = socket;
     socket.onopen = () => {
       this.status = 'open';

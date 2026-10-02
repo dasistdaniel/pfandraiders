@@ -6,7 +6,12 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0);
-const roundMs = process.env.ROUND_MS ? Number(process.env.ROUND_MS) : undefined;
+let roundMs: number | undefined;
+if (process.env.ROUND_MS) {
+  const n = Number(process.env.ROUND_MS);
+  if (Number.isFinite(n) && n >= 1000) roundMs = n;
+  else console.warn(`ROUND_MS=${process.env.ROUND_MS} ist ungültig (mindestens 1000), Standardwert wird genutzt.`);
+}
 
 // Letzte Rettung: loggen und weiterlaufen, damit ein Fehler nicht alle Räume beendet
 process.on('uncaughtException', (err) => {
