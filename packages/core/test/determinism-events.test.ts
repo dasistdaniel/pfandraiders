@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CONFIG } from '../src/config';
 import { createGame } from '../src/game';
 import { CITY_MAP } from '../src/maps/city';
 import { step } from '../src/step';
@@ -61,10 +62,23 @@ describe('determinism with events', () => {
     const { stats } = play(5);
     expect(stats.maxNpcs).toBeGreaterThan(0);
     expect(stats.zoneActive).toBe(true);
-    expect(stats.minHealth).toBeLessThan(100); // Hunger greift immer
+    expect(stats.minHealth).toBeLessThan(100); // players take damage in that scenario
   });
 
   it('diverges for a different seed', () => {
     expect(JSON.stringify(play(6).state.zones)).not.toBe(JSON.stringify(play(5).state.zones));
+  });
+
+  it('applies hunger inside the full step pipeline', () => {
+    const s = createGame(5, CITY_MAP, ['a', 'b'], { roundMs: 400000 });
+    s.nextNpcMs = 1e9;
+    s.zones.forEach((z) => {
+      z.timerMs = 1e9;
+    });
+    const idle: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+    for (let t = 0; t < 100; t++) step(s, { a: idle, b: idle }, 100);
+    for (const p of Object.values(s.players)) {
+      expect(p.health).toBeCloseTo(CONFIG.health.max - 10000 / CONFIG.health.hungerEveryMs, 5);
+    }
   });
 });
