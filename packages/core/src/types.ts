@@ -16,11 +16,13 @@ export interface Input {
   moveY: -1 | 0 | 1;
   /** Aktionstaste gehalten */
   action: boolean;
+  /** Klauen-Taste gehalten */
+  steal: boolean;
   /** Einmaliger Kaufbefehl, null = nichts kaufen */
   buy: BuyCommand | null;
 }
 
-export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, buy: null };
+export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
 
 export interface SpotDef extends Point {
   id: number;
@@ -51,6 +53,8 @@ export interface Player {
   searchProgressMs: number;
   /** Aktionstaste im vorigen Tick gedrückt, für Flankenerkennung */
   actionHeld: boolean;
+  /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Bolzenschneider) */
+  stealHeld: boolean;
   /** Special Item im einzigen Slot, null = keins */
   item: ItemId | null;
   /** Opfer, das gerade bestohlen wird */

@@ -44,6 +44,7 @@ function newPlayer(id: string, at: Point): Player {
     searchSpotId: null,
     searchProgressMs: 0,
     actionHeld: false,
+    stealHeld: false,
     item: null,
     stealTargetId: null,
     stealProgressMs: 0,

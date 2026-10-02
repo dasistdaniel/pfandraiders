@@ -12,7 +12,6 @@ export function cancelSteal(p: Player): void {
 export function canBeRobbed(thief: Player, victim: Player): boolean {
   return (
     victim.id !== thief.id &&
-    victim.mode === 'searching' &&
     victim.shieldMs === 0 &&
     totalBottles(victim.bottles) > 0 &&
     distance(thief, victim) <= CONFIG.steal.radius
@@ -51,9 +50,9 @@ function takeLoot(thief: Player, victim: Player, fraction: number): void {
 }
 
 /**
- * Ein Diebstahlschritt für einen Spieler, der die Aktionstaste hält und stillsteht.
+ * Ein Diebstahlschritt für einen Spieler, der die Klauen-Taste hält und stillsteht.
  * Gibt true zurück, wenn er gerade klaut (oder in diesem Schritt fertig geworden ist).
- * `pressed` ist true im Schritt, in dem die Taste neu gedrückt wurde (löst den Bolzenschneider aus).
+ * `pressed` ist true im Schritt, in dem die Klauen-Taste neu gedrückt wurde (löst den Bolzenschneider aus).
  * Bei false verändert die Funktion nichts außer einem veralteten Ziel, das der Aufrufer mit cancelSteal löscht.
  */
 export function updateSteal(
@@ -65,13 +64,10 @@ export function updateSteal(
   if (totalBottles(thief.bottles) >= capacityOf(thief)) return false;
 
   const current = thief.stealTargetId === null ? undefined : state.players[thief.stealTargetId];
-  let target: Player | null = null;
-  if (current !== undefined && canBeRobbed(thief, current)) {
-    target = current;
-  } else if (thief.mode !== 'searching') {
-    // Wer gerade selbst sucht, wechselt nicht zum Klauen.
-    target = findStealTarget(state, thief);
-  }
+  const target =
+    current !== undefined && canBeRobbed(thief, current)
+      ? current
+      : findStealTarget(state, thief);
   if (target === null) return false;
 
   if (thief.item === 'bolt_cutters' && pressed) {

@@ -19,7 +19,7 @@ function base(seed: number): GameState {
 function normalTheft(seed: number): GameState {
   const s = base(seed);
   for (let t = 0; t < 200; t++) {
-    step(s, { p1: input({ action: true }), p2: input({ action: true }) }, 20);
+    step(s, { p1: input({ steal: true }), p2: input({ action: true }) }, 20);
   }
   return s;
 }
@@ -31,7 +31,7 @@ function cutters(seed: number): GameState {
   s.players.p1.item = 'bolt_cutters';
   step(s, { p2: input({ action: true }) }, 20);
   for (let t = 0; t < 200; t++) {
-    step(s, { p1: input({ action: t === 0 }), p2: input({ action: true }) }, 20);
+    step(s, { p1: input({ steal: t === 0 }), p2: input({ action: true }) }, 20);
   }
   return s;
 }

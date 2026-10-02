@@ -36,6 +36,8 @@ export function step(
 function updatePlayer(state: GameState, p: Player, input: Input, dt: number): void {
   const pressed = input.action && !p.actionHeld;
   p.actionHeld = input.action;
+  const stealPressed = input.steal && !p.stealHeld;
+  p.stealHeld = input.steal;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
 
   if (input.buy !== null) tryBuy(state, p, input.buy);
@@ -50,7 +52,7 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
     cancelSearch(p);
     cancelSteal(p);
     walk(state.map, p, input, dt);
-  } else if (input.action && !deposited && updateSteal(state, p, pressed, dt)) {
+  } else if (input.steal && updateSteal(state, p, stealPressed, dt)) {
     cancelSearch(p);
   } else if (input.action && !deposited && updateSearch(state, p, dt)) {
     cancelSteal(p);
