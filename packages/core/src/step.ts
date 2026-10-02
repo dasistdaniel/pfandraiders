@@ -1,4 +1,5 @@
 import { CONFIG } from './config';
+import { deposit, isNear, tryUpgrade } from './economy';
 import { walk } from './movement';
 import { cancelSearch, refillSpot, updateSearch } from './search';
 import { NO_INPUT } from './types';
@@ -32,13 +33,22 @@ export function step(
 }
 
 function updatePlayer(state: GameState, p: Player, input: Input, dt: number): void {
+  const pressed = input.action && !p.actionHeld;
   p.actionHeld = input.action;
+
+  if (input.buy === 'upgrade') tryUpgrade(state, p);
+
+  let deposited = false;
+  if (pressed && isNear(state.map.dropoffs, p)) {
+    deposit(p);
+    deposited = true;
+  }
 
   if (input.moveX !== 0 || input.moveY !== 0) {
     cancelSearch(p);
     walk(state.map, p, input, dt);
     return;
   }
-  if (input.action && updateSearch(state, p, dt)) return;
+  if (input.action && !deposited && updateSearch(state, p, dt)) return;
   cancelSearch(p);
 }

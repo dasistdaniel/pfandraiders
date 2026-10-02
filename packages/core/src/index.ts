@@ -9,4 +9,5 @@ export * from './game';
 export * from './movement';
 export * from './step';
 export * from './economy';
+export * from './ranking';
 export * from './search';
