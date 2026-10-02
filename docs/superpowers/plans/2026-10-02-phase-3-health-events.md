@@ -642,26 +642,24 @@ export function tryBuy(state: GameState, p: Player, cmd: BuyCommand): boolean {
 
 - [ ] **Step 4: `step.ts` anpassen**
 
-In `packages/core/src/step.ts` den Import `import { cancelSteal, updateSteal } from './theft';` ergänzen um darunter `import { updateHealth } from './health';` (alphabetisch passend nach `./economy`: Zeile `import { updateHealth } from './health';` direkt nach `import { deposit, isNear, tryBuy } from './economy';`). In `updatePlayer` die Zeile `p.shieldMs = Math.max(0, p.shieldMs - dt);` ersetzen durch:
+In `packages/core/src/step.ts` den Import `import { updateHealth } from './health';` direkt nach der Zeile `import { deposit, isNear, tryBuy } from './economy';` einfügen. Der Anfang von `updatePlayer` lautet danach (die Zeilen bis `p.shieldMs` bleiben unverändert, der `updateHealth`-Block ist neu):
 ```ts
-  p.shieldMs = Math.max(0, p.shieldMs - dt);
-
-  if (updateHealth(p, dt)) {
-    // Bewusstlos: keine Eingabe wirksam, Tastenflanken aber nachführen
-    p.actionHeld = input.action;
-    p.stealHeld = input.steal;
-    p.mode = 'unconscious';
-    return;
-  }
-```
-und die beiden Zeilen
-```ts
+function updatePlayer(state: GameState, p: Player, input: Input, dt: number): void {
   const pressed = input.action && !p.actionHeld;
   p.actionHeld = input.action;
   const stealPressed = input.steal && !p.stealHeld;
   p.stealHeld = input.steal;
+  p.shieldMs = Math.max(0, p.shieldMs - dt);
+
+  if (updateHealth(p, dt)) {
+    // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgeführt)
+    p.mode = 'unconscious';
+    return;
+  }
+
+  if (input.buy !== null) tryBuy(state, p, input.buy);
+  // ... Rest unverändert ...
 ```
-**vor** den neuen Block `if (updateHealth(...))` unverändert stehen lassen. Reihenfolge am Ende also: `pressed`/`stealPressed` berechnen und `actionHeld`/`stealHeld` setzen, dann `shieldMs`, dann der `updateHealth`-Block (der bei Bewusstlosigkeit `actionHeld`/`stealHeld` erneut gleich setzt), dann der Rest wie bisher.
 
 `packages/core/src/index.ts` ergänzen: `export * from './health';`
 
