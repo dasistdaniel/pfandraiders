@@ -14,6 +14,7 @@ function game() {
   s.players.p2.bottles = { plastic: 0, glass: 3, crate: 0 };
   s.players.p2.item = 'dog_treat';
   s.rngState = 987654321;
+  s.nextNpcId = 7;
   return s;
 }
 
@@ -45,6 +46,7 @@ describe('projectSnapshot', () => {
     const snap = projectSnapshot(game(), 'p1');
     expect(snap.rngState).toBe(0);
     expect(snap.nextNpcMs).toBe(0);
+    expect(snap.nextNpcId).toBe(0);
     expect(JSON.stringify(snap)).not.toContain('987654321');
   });
 
@@ -117,11 +119,47 @@ describe('projectSnapshot', () => {
 
   it('still projects correctly after the game has run', () => {
     const s = game();
+    s.players.p1.money = 500;
     runSteps(s, { p1: input({ moveX: 1 }) }, 10, 20);
     const snap = projectSnapshot(s, 'p2');
     expect(snap.tick).toBe(10);
     expect(snap.players.p1.x).toBe(s.players.p1.x);
     expect(snap.players.p1.money).toBe(0);
+    expect(projectSnapshot(s, 'p1').players.p1.money).toBe(500);
+  });
+});
+
+// Diese Schlüssellisten pinnen, was ein Snapshot preisgibt. Wer ein Feld zu
+// Player, Spot, Npc oder GameState hinzufügt, muss diese Tests bewusst anpassen
+// (und in snapshot.ts entscheiden, ob das Feld öffentlich ist).
+describe('snapshot key sets', () => {
+  const PLAYER_KEYS = [
+    'actionHeld', 'bottles', 'containerLevel', 'health', 'id', 'item', 'mode', 'money', 'searchProgressMs',
+    'searchSpotId', 'shieldMs', 'spawn', 'stealHeld', 'stealProgressMs', 'stealTargetId', 'unconsciousMs', 'x', 'y',
+  ];
+
+  it('pins the keys of own and foreign players', () => {
+    const s = game();
+    const snap = projectSnapshot(s, 'p1');
+    expect(Object.keys(snap.players.p1).sort()).toEqual(PLAYER_KEYS);
+    expect(Object.keys(snap.players.p2).sort()).toEqual(PLAYER_KEYS);
+  });
+
+  it('pins the keys of the snapshot', () => {
+    const snap = projectSnapshot(game(), 'p1');
+    expect(Object.keys(snap).sort()).toEqual(
+      ['nextNpcId', 'nextNpcMs', 'npcs', 'phase', 'players', 'rngState', 'spots', 'tick', 'timeLeftMs', 'zones'],
+    );
+  });
+
+  it('pins the keys of spots and npcs', () => {
+    const s = game();
+    s.npcs.push({ id: 1, kind: 'dog', x: 1, y: 1, lifeMs: 1000, targetId: null, cooldownMs: 0, distractedMs: 0, checkMs: 0 });
+    const snap = projectSnapshot(s, 'p1');
+    expect(Object.keys(snap.spots[0]).sort()).toEqual(['contents', 'id', 'refillInMs', 'type', 'x', 'y']);
+    expect(Object.keys(snap.npcs[0]).sort()).toEqual(
+      ['checkMs', 'cooldownMs', 'distractedMs', 'id', 'kind', 'lifeMs', 'targetId', 'x', 'y'],
+    );
   });
 });
 
