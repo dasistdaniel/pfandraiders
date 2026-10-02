@@ -43,6 +43,10 @@ Umgebungsvariablen des Servers:
 - `PORT`: Listen-Port, Standard 8080.
 - `ALLOWED_ORIGINS`: kommagetrennte Liste erlaubter Origins, zum Beispiel `https://dasistdaniel.github.io`. Ist sie leer, darf jede Origin verbinden (nur für die Entwicklung, der Server warnt beim Start).
 
+- `ROUND_MS`: optionale Rundenlänge in Millisekunden (für kurze Testrunden), Standard 10 Minuten.
+
+In der Lobby öffnet die Taste `O` das Online-Menü (Raum erstellen oder mit Code beitreten). Die Server-Adresse kommt aus `?server=ws://…`, sonst aus der Build-Variable `VITE_SERVER_URL`, sonst `ws://localhost:8080`. Nach einem Verbindungsabbruch das Menü erneut öffnen und mit demselben Namen und Code beitreten (Frist 30 s).
+
 Bauen: `npm run build:server` erzeugt `packages/server/dist/server.cjs` (eine einzelne Datei, läuft mit `node server.cjs` ohne `node_modules`).
 
 Auf dem VPS (Docker, Caddy übernimmt HTTPS):

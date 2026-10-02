@@ -6,6 +6,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((s) => s.trim())
   .filter((s) => s.length > 0);
+const roundMs = process.env.ROUND_MS ? Number(process.env.ROUND_MS) : undefined;
 
 // Letzte Rettung: loggen und weiterlaufen, damit ein Fehler nicht alle Räume beendet
 process.on('uncaughtException', (err) => {
@@ -17,7 +18,7 @@ process.on('unhandledRejection', (reason) => {
 
 let running: RunningServer | null = null;
 
-startServer({ port, allowedOrigins })
+startServer({ port, allowedOrigins, roundMs })
   .then((srv) => {
     running = srv;
     console.log(`PfandRaiders server listening on :${srv.port}`);
