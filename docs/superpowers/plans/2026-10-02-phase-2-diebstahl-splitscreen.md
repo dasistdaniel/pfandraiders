@@ -2066,12 +2066,13 @@ export class GameScene extends Phaser.Scene {
     this.conn.update(delta);
 
     const state = this.conn.getState();
-    if (state.phase === 'ended') {
-      const confirm = this.sources.map((s) => s.confirmPressed()).some(Boolean);
-      if (Phaser.Input.Keyboard.JustDown(this.restartKey) || confirm) {
-        this.scene.restart({ slots: this.slots });
-        return;
-      }
+    // JustDown und confirmPressed jeden Frame abfragen und so Druck aus der Spielphase verwerfen,
+    // sonst löst ein alter Tastendruck beim Rundenende sofort einen Neustart aus.
+    const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
+    const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
+    if (state.phase === 'ended' && (restartPressed || confirmPressed)) {
+      this.scene.restart({ slots: this.slots });
+      return;
     }
 
     state.spots.forEach((spot, i) => {
