@@ -146,7 +146,7 @@ export class GameScene extends Phaser.Scene {
     // Jedes HUD erscheint nur in der Kamera seines Spielers.
     const online = this.online;
     const nameOf = (id: string): string => online?.roster.find((r) => r.id === id)?.name ?? playerName(id);
-    this.huds = views.map((v, i) => new PlayerHud(this, v, this.slots[i].color, nameOf(this.slots[i].id), this.sources[i].labels));
+    this.huds = views.map((v, i) => new PlayerHud(this, v, this.slots[i].color, nameOf(this.slots[i].id), this.sources[i].labels, nameOf));
     this.huds.forEach((hud, i) => {
       cams.forEach((cam, j) => {
         if (i !== j) cam.ignore(hud.objects);

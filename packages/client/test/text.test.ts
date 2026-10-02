@@ -151,6 +151,14 @@ describe('labels for other devices', () => {
     s.phase = 'ended';
     expect(resultLines(s, KEYS2).at(-1)).toBe('Neue Runde: R oder Enter');
   });
+
+  it('uses the given name resolver for the ranking', () => {
+    const s = shopGame();
+    s.phase = 'ended';
+    s.players.p1.money = 500;
+    expect(resultLines(s, KEYS2, (id) => (id === 'p1' ? 'Anna' : 'Bob'))[1]).toMatch(/^1\. Anna /);
+    expect(resultLines(s, KEYS2)[1]).toMatch(/^1\. P1 /);
+  });
 });
 
 describe('health and shop', () => {

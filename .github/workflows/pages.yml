@@ -17,6 +17,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Require SERVER_URL
+        if: ${{ vars.SERVER_URL == '' }}
+        run: |
+          echo "::error::Repository variable SERVER_URL is empty. Set it (for example wss://play.example.org) under Settings > Secrets and variables > Actions > Variables."
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

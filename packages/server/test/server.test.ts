@@ -210,6 +210,40 @@ describe('websocket server', () => {
     await ok.until('joined');
   });
 
+  it('accepts origins regardless of case, spaces and trailing slash', async () => {
+    server = await startServer({ port: 0, stepMs: 20, allowedOrigins: [' HTTPS://Good.Example/ '] });
+    const ok = await connect(server.port, { Origin: 'https://good.example' });
+    ok.send({ t: 'create', name: 'Anna' });
+    await ok.until('joined');
+    const ok2 = await connect(server.port, { Origin: 'https://GOOD.example/' });
+    ok2.send({ t: 'create', name: 'Bob' });
+    await ok2.until('joined');
+    await expect(connect(server.port, { Origin: 'https://evil.example' })).rejects.toThrow(/403/);
+  });
+
+  it('closes sockets that never join a room', async () => {
+    server = await startServer({ port: 0, stepMs: 20, idleMs: 100 });
+    const idle = await connect(server.port);
+    const busy = await connect(server.port);
+    busy.send({ t: 'create', name: 'Anna' });
+    await busy.until('joined');
+    await waitFor(() => idle.ws.readyState === WebSocket.CLOSED);
+    expect(busy.ws.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('caps connections per IP (X-Forwarded-For first entry)', async () => {
+    server = await startServer({ port: 0, stepMs: 20, maxPerIp: 1 });
+    const a = await connect(server.port, { 'X-Forwarded-For': '1.1.1.1, 10.0.0.1' });
+    await expect(connect(server.port, { 'X-Forwarded-For': '1.1.1.1, 10.0.0.2' })).rejects.toThrow(/429/);
+    const other = await connect(server.port, { 'X-Forwarded-For': '2.2.2.2' });
+    expect(other.ws.readyState).toBe(WebSocket.OPEN);
+    a.ws.close();
+    await waitFor(() => a.ws.readyState === WebSocket.CLOSED);
+    await new Promise((r) => setTimeout(r, 50));
+    const again = await connect(server.port, { 'X-Forwarded-For': '1.1.1.1' });
+    expect(again.ws.readyState).toBe(WebSocket.OPEN);
+  });
+
   it('throttles a message flood without taking the server down', async () => {
     server = await startServer({ port: 0, stepMs: 20 });
     const a = await connect(server.port);

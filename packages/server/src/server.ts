@@ -1,5 +1,6 @@
 import { MAX_MESSAGE_BYTES, parseClientMessage } from '@pfandraiders/core';
 import type { ErrorCode, ServerMessage } from '@pfandraiders/core';
+import type { IncomingMessage } from 'http';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 import { SERVER_CONFIG } from './config';
@@ -16,8 +17,17 @@ export interface ServerOptions {
   random?: () => number;
   /** Mehr gleichzeitige Verbindungen werden abgewiesen (503). */
   maxConnections?: number;
+  /** Gleichzeitige Verbindungen pro IP (X-Forwarded-For, sonst Socket-Adresse). Standard 10. */
+  maxPerIp?: number;
+  /** Ein Socket ohne Raum wird nach so vielen ms geschlossen. Standard 30000. */
+  idleMs?: number;
   /** Abgefangene Ausnahmen (Tick und Nachrichtenhandler). Ohne Angabe wird nach stderr geloggt. */
   onError?: (err: unknown, room: Room | null) => void;
+}
+
+/** Origin vergleichbar machen: trimmen, kleinschreiben, Schrägstrich am Ende entfernen. */
+export function normalizeOrigin(origin: string): string {
+  return origin.trim().toLowerCase().replace(/\/+$/, '');
 }
 
 export interface RunningServer {
@@ -225,7 +235,15 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
 
 export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const stepMs = opts.stepMs ?? SERVER_CONFIG.stepMs;
-  const allowed = opts.allowedOrigins ?? [];
+  const allowed = (opts.allowedOrigins ?? []).map(normalizeOrigin).filter((o) => o.length > 0);
+  const maxPerIp = opts.maxPerIp ?? 10;
+  const idleMs = opts.idleMs ?? 30_000;
+  const ipCounts = new Map<string, number>();
+  const ipOf = (req: IncomingMessage): string => {
+    const xff = req.headers['x-forwarded-for'];
+    const first = (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim();
+    return first ? first : (req.socket.remoteAddress ?? 'unknown');
+  };
   const maxConnections = opts.maxConnections ?? SERVER_CONFIG.maxConnections;
   const manager = new RoomManager({
     stepMs,
@@ -243,10 +261,12 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     verifyClient: (info, done) => {
       if (wss.clients.size >= maxConnections) {
         done(false, 503, 'server full');
-      } else if (allowed.length === 0 || (info.origin && allowed.includes(info.origin))) {
-        done(true);
-      } else {
+      } else if (!(allowed.length === 0 || (info.origin && allowed.includes(normalizeOrigin(info.origin))))) {
         done(false, 403, 'origin not allowed');
+      } else if ((ipCounts.get(ipOf(info.req)) ?? 0) >= maxPerIp) {
+        done(false, 429, 'too many connections');
+      } else {
+        done(true);
       }
     },
   });
@@ -255,7 +275,9 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const sockets = new Map<Conn, Sock>();
   const env: Env = { manager, sockets, onError: opts.onError };
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    const ip = ipOf(req);
+    ipCounts.set(ip, (ipCounts.get(ip) ?? 0) + 1);
     const session = newSession(Date.now());
     sessions.set(ws, session);
     const sender = makeSender(ws);
@@ -265,11 +287,19 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     };
     sockets.set(conn, ws);
 
+    const idleTimer = setTimeout(() => {
+      if (session.room === null) ws.close(1008, 'idle: no room joined');
+    }, idleMs);
+
     ws.on('pong', () => {
       session.alive = true;
     });
     ws.on('message', (data) => handleMessage(env, session, conn, ws, String(data)));
     ws.on('close', () => {
+      clearTimeout(idleTimer);
+      const n = (ipCounts.get(ip) ?? 1) - 1;
+      if (n <= 0) ipCounts.delete(ip);
+      else ipCounts.set(ip, n);
       try {
         session.room?.leave(conn);
       } catch (err) {

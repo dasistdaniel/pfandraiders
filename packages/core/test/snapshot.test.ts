@@ -163,6 +163,17 @@ describe('snapshot key sets', () => {
   });
 });
 
+describe('snapshot zone key set', () => {
+  it('pins the keys of zones', () => {
+    const s = game();
+    if (s.zones.length === 0) {
+      s.zones.push({ def: { id: 'z', name: 'Z', area: { x: 0, y: 0, w: 1, h: 1 } } as never, phase: 'idle', timerMs: 0 });
+    }
+    const snap = projectSnapshot(s, 'p1');
+    expect(Object.keys(snap.zones[0]).sort()).toEqual(['def', 'phase', 'timerMs']);
+  });
+});
+
 describe('stateFromSnapshot', () => {
   it('puts the map back to build a full GameState', () => {
     const s = game();

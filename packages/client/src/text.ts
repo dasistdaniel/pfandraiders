@@ -82,9 +82,13 @@ export function alertText(state: GameState, p: Player): string {
   return lines.slice(0, 3).join('\n');
 }
 
-export function resultLines(state: GameState, labels: KeyLabels): string[] {
+export function resultLines(
+  state: GameState,
+  labels: KeyLabels,
+  nameOf: (id: string) => string = playerName,
+): string[] {
   const places = ranking(state).map(
-    (r, i) => `${i + 1}. ${playerName(r.id)}  ${formatMoney(r.money)}`,
+    (r, i) => `${i + 1}. ${nameOf(r.id)}  ${formatMoney(r.money)}`,
   );
   return ['Runde vorbei!', ...places, '', `Neue Runde: R oder ${labels.action}`];
 }

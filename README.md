@@ -47,6 +47,8 @@ Umgebungsvariablen des Servers:
 
 In der Lobby öffnet die Taste `O` das Online-Menü (Raum erstellen oder mit Code beitreten). Die Server-Adresse kommt aus `?server=ws://…`, sonst aus der Build-Variable `VITE_SERVER_URL`, sonst `ws://localhost:8080`. Nach einem Verbindungsabbruch das Menü erneut öffnen und mit demselben Namen und Code beitreten (Frist 30 s). Das Token liegt nur im sessionStorage, die Wiederverbindung klappt also beim Neuladen oder in einem duplizierten Tab, nicht in einem ganz neuen Tab.
 
+Weitere Grenzen im Server: Pro IP-Adresse sind höchstens 10 gleichzeitige Verbindungen erlaubt (Option `maxPerIp`), ein Socket ohne Raum wird nach 30 s geschlossen (`idleMs`). Als IP gilt der erste Eintrag des Headers `X-Forwarded-For`, sonst die Socket-Adresse. Der Header wird vertraut, weil nur Caddy den Server erreicht (der Container hat keinen Host-Port). Origins in `ALLOWED_ORIGINS` werden normalisiert (Kleinschreibung, ohne Schrägstrich am Ende).
+
 Bauen: `npm run build:server` erzeugt `packages/server/dist/server.cjs` (eine einzelne Datei, läuft mit `node server.cjs` ohne `node_modules`).
 
 Auf dem VPS (Docker, Caddy übernimmt HTTPS):
