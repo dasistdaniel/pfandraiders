@@ -1,8 +1,16 @@
 import type { KeyState } from './input';
 
+/** Beschriftung der Tasten eines Geräts für Hinweistexte. */
+export interface KeyLabels {
+  action: string;
+  upgrade: string;
+  item: string;
+}
+
 /** Ein Gerät, das einem Spieler gehört. Phaser-Anbindung steht in devices.ts. */
 export interface InputSource {
   readonly label: string;
+  readonly labels: KeyLabels;
   /** Eingabe dieses Frames. Kauftasten sind nur im Frame des neuen Drückens true. */
   read(): KeyState;
   /** Wurde die Bestätigungstaste in diesem Frame neu gedrückt (Neustart nach Rundenende)? */

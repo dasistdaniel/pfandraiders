@@ -19,7 +19,7 @@ Lokal mit 1 bis 4 Spielern, jeder mit eigener Kamera. In der Lobby treten Spiele
 | Tastatur 2 | Pfeile | Enter | , | . |
 | Gamepad | Stick oder Steuerkreuz | A | X | Y |
 
-Aktion: Suchen (halten), Pfand abgeben (drücken am Pfandautomaten), Klauen (halten bei einem suchenden Mitspieler, 2 s). Mit dem Bolzenschneider (im Shop 6,00 €) klaut ein neuer Druck der Aktionstaste sofort alles, was in den eigenen Container passt. `R` oder `A` startet nach Rundenende neu.
+Aktion: Suchen (halten), Pfand abgeben (drücken am Pfandautomaten), Klauen (halten bei einem suchenden Mitspieler, 2 s). Mit dem Bolzenschneider (im Shop 6,00 €) klaut ein neuer Druck der Aktionstaste sofort alles, was in den eigenen Container passt. `R` oder die Aktionstaste startet nach Rundenende (nach kurzer Sperre) neu. Zwei Spieler an einer Tastatur sind durch Keyboard-Ghosting begrenzt (nicht alle Tastenkombinationen werden erkannt).
 
 ## Testhilfen per URL
 

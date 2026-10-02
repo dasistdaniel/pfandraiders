@@ -1,7 +1,11 @@
 import { CONFIG, createGame, parseMap } from '@pfandraiders/core';
 import type { GameState } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
+import type { KeyLabels } from '../src/sources';
 import { alertText, hintLines, playerName, resultLines, statusLines } from '../src/text';
+
+const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2' };
+const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.' };
 
 // p1 (24,24) steht 16 px vom Shop (40,24). p2 liegt weit weg am Ende des Ganges.
 function shopGame(): GameState {
@@ -38,7 +42,7 @@ describe('statusLines', () => {
 describe('hintLines', () => {
   it('offers upgrade and item at the shop', () => {
     const s = shopGame();
-    const lines = hintLines(s, s.players.p1);
+    const lines = hintLines(s, s.players.p1, KEYS);
     expect(lines.some((l) => l.startsWith('[1] Tasche'))).toBe(true);
     expect(lines.some((l) => l.startsWith('[2] Bolzenschneider'))).toBe(true);
   });
@@ -46,7 +50,7 @@ describe('hintLines', () => {
   it('says the item slot is taken instead of offering a second item', () => {
     const s = shopGame();
     s.players.p1.item = 'bolt_cutters';
-    const lines = hintLines(s, s.players.p1);
+    const lines = hintLines(s, s.players.p1, KEYS);
     expect(lines).toContain('Item-Slot belegt');
     expect(lines.some((l) => l.startsWith('[2]'))).toBe(false);
   });
@@ -54,21 +58,21 @@ describe('hintLines', () => {
   it('says fully upgraded at the last level', () => {
     const s = shopGame();
     s.players.p1.containerLevel = CONFIG.containers.length - 1;
-    expect(hintLines(s, s.players.p1)).toContain('Voll ausgebaut');
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('Voll ausgebaut');
   });
 
   it('is empty away from everything', () => {
     const s = shopGame();
-    expect(hintLines(s, s.players.p2)).toEqual([]);
+    expect(hintLines(s, s.players.p2, KEYS)).toEqual([]);
   });
 
   it('offers stealing next to a searching victim with free room', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.mode = 'searching';
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1)).toContain('[E halten] Klauen');
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[E halten] Klauen');
     s.players.p1.item = 'bolt_cutters';
-    expect(hintLines(s, s.players.p1)).toContain('[E] Bolzenschneider einsetzen');
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[E] Bolzenschneider einsetzen');
   });
 
   it('does not offer stealing with a full container', () => {
@@ -76,13 +80,13 @@ describe('hintLines', () => {
     s.players.p2.mode = 'searching';
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
     s.players.p1.bottles = { plastic: 3, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1).some((l) => l.includes('Klauen'))).toBe(false);
+    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Klauen'))).toBe(false);
   });
 
   it('is empty after the round has ended', () => {
     const s = shopGame();
     s.phase = 'ended';
-    expect(hintLines(s, s.players.p1)).toEqual([]);
+    expect(hintLines(s, s.players.p1, KEYS)).toEqual([]);
   });
 });
 
@@ -108,12 +112,37 @@ describe('resultLines', () => {
     s.players.p1.money = 500;
     s.players.p2.money = 1230;
     s.phase = 'ended';
-    expect(resultLines(s)).toEqual([
+    expect(resultLines(s, KEYS)).toEqual([
       'Runde vorbei!',
       '1. P2  12,30 €',
       '2. P1  5,00 €',
       '',
-      '[R] Neue Runde',
+      'Neue Runde: R oder E',
     ]);
+  });
+});
+
+describe('labels for other devices', () => {
+  it('uses the given keys in shop hints', () => {
+    const s = shopGame();
+    const lines = hintLines(s, s.players.p1, KEYS2);
+    expect(lines.some((l) => l.startsWith('[,] Tasche'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('[.] Bolzenschneider'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('[1]') || l.startsWith('[2]'))).toBe(false);
+  });
+
+  it('uses the action key for stealing', () => {
+    const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
+    s.players.p2.mode = 'searching';
+    s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[Enter halten] Klauen');
+    s.players.p1.item = 'bolt_cutters';
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[Enter] Bolzenschneider einsetzen');
+  });
+
+  it('names the action key in the last results line', () => {
+    const s = shopGame();
+    s.phase = 'ended';
+    expect(resultLines(s, KEYS2).at(-1)).toBe('Neue Runde: R oder Enter');
   });
 });

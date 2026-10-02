@@ -45,6 +45,7 @@ export function tryUpgrade(state: GameState, p: Player): boolean {
 
 /** Kauft ein Special Item, wenn Shop in Reichweite, Slot frei und Geld reicht. */
 export function tryBuyItem(state: GameState, p: Player, item: ItemId): boolean {
+  if (!Object.hasOwn(CONFIG.items, item)) return false;
   if (!isNear(state.map.shops, p)) return false;
   if (p.item !== null) return false;
   const price = CONFIG.items[item].price;

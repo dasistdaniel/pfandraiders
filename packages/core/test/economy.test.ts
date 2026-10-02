@@ -126,6 +126,16 @@ describe('container upgrade', () => {
 });
 
 describe('special item', () => {
+  it('ignores unknown buy commands without throwing', () => {
+    const s = atShop();
+    s.players.p1.money = 100000;
+    for (const bogus of ['nonsense', '__proto__']) {
+      expect(() => runSteps(s, { p1: input({ buy: bogus as never }) }, 1)).not.toThrow();
+    }
+    expect(s.players.p1.money).toBe(100000);
+    expect(s.players.p1.item).toBeNull();
+  });
+
   const BUY_ITEM = { p1: input({ buy: 'bolt_cutters' }) };
 
   it('buys the bolt cutters at the shop', () => {

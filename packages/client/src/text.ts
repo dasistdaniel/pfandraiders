@@ -12,6 +12,7 @@ import {
   totalBottles,
 } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
+import type { KeyLabels } from './sources';
 import { formatMoney, formatTime } from './format';
 
 export function playerName(id: string): string {
@@ -28,32 +29,32 @@ export function statusLines(state: GameState, p: Player): string[] {
   return lines;
 }
 
-export function hintLines(state: GameState, p: Player): string[] {
+export function hintLines(state: GameState, p: Player, labels: KeyLabels): string[] {
   if (state.phase === 'ended') return [];
   const lines: string[] = [];
 
   if (isNear(state.map.shops, p)) {
     const up = nextUpgrade(p);
-    lines.push(up ? `[1] ${up.name} (${up.capacity} Plätze) ${formatMoney(up.price)}` : 'Voll ausgebaut');
+    lines.push(up ? `[${labels.upgrade}] ${up.name} (${up.capacity} Plätze) ${formatMoney(up.price)}` : 'Voll ausgebaut');
     lines.push(
       p.item === null
-        ? `[2] ${CONFIG.items.bolt_cutters.name} ${formatMoney(CONFIG.items.bolt_cutters.price)}`
+        ? `[${labels.item}] ${CONFIG.items.bolt_cutters.name} ${formatMoney(CONFIG.items.bolt_cutters.price)}`
         : 'Item-Slot belegt',
     );
   } else if (isNear(state.map.dropoffs, p)) {
     lines.push(
       totalBottles(p.bottles) > 0
-        ? `[E] Pfand abgeben ${formatMoney(bottlesValue(p.bottles))}`
+        ? `[${labels.action}] Pfand abgeben ${formatMoney(bottlesValue(p.bottles))}`
         : 'Pfandautomat: nichts zum Abgeben',
     );
   }
 
   const full = totalBottles(p.bottles) >= capacityOf(p);
   if (findSearchableSpot(state, p)) {
-    lines.push(full ? 'Container voll' : '[E halten] Suchen');
+    lines.push(full ? 'Container voll' : `[${labels.action} halten] Suchen`);
   }
   if (p.mode !== 'searching' && !full && findStealTarget(state, p)) {
-    lines.push(p.item !== null ? '[E] Bolzenschneider einsetzen' : '[E halten] Klauen');
+    lines.push(p.item !== null ? `[${labels.action}] Bolzenschneider einsetzen` : `[${labels.action} halten] Klauen`);
   }
   return lines;
 }
@@ -64,9 +65,9 @@ export function alertText(state: GameState, p: Player): string {
   return '';
 }
 
-export function resultLines(state: GameState): string[] {
+export function resultLines(state: GameState, labels: KeyLabels): string[] {
   const places = ranking(state).map(
     (r, i) => `${i + 1}. ${playerName(r.id)}  ${formatMoney(r.money)}`,
   );
-  return ['Runde vorbei!', ...places, '', '[R] Neue Runde'];
+  return ['Runde vorbei!', ...places, '', `Neue Runde: R oder ${labels.action}`];
 }

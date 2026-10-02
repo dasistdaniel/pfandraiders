@@ -10,6 +10,9 @@ import { viewportsFor } from '../layout';
 import type { InputSource } from '../sources';
 import { playerName } from '../text';
 
+/** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
+const RESTART_DELAY_MS = 1500;
+
 const COLOR = {
   wall: 0x37474f,
   floor: 0x9e9e9e,
@@ -29,16 +32,22 @@ export class GameScene extends Phaser.Scene {
   private warnings: Phaser.GameObjects.Text[] = [];
   private spotRects: Phaser.GameObjects.Rectangle[] = [];
   private restartKey!: Phaser.Input.Keyboard.Key;
+  private endedForMs = 0;
 
   constructor() {
     super('game');
   }
 
-  init(data: { slots: PlayerSlot[] }): void {
-    this.slots = data.slots;
+  init(data?: { slots: PlayerSlot[] }): void {
+    this.slots = data?.slots ?? [];
   }
 
   create(): void {
+    if (this.slots.length === 0) {
+      this.scene.start('lobby');
+      return;
+    }
+    this.endedForMs = 0;
     const params = new URLSearchParams(window.location.search);
     const seed = params.has('seed')
       ? Number(params.get('seed'))
@@ -81,7 +90,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Jedes HUD erscheint nur in der Kamera seines Spielers.
-    this.huds = views.map((v, i) => new PlayerHud(this, v, this.slots[i].color, playerName(this.slots[i].id)));
+    this.huds = views.map((v, i) => new PlayerHud(this, v, this.slots[i].color, playerName(this.slots[i].id), this.sources[i].labels));
     this.huds.forEach((hud, i) => {
       cams.forEach((cam, j) => {
         if (i !== j) cam.ignore(hud.objects);
@@ -102,7 +111,8 @@ export class GameScene extends Phaser.Scene {
     // sonst löst ein alter Tastendruck beim Rundenende sofort einen Neustart aus.
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
     const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
-    if (state.phase === 'ended' && (restartPressed || confirmPressed)) {
+    if (state.phase === 'ended') this.endedForMs += delta;
+    if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && (restartPressed || confirmPressed)) {
       this.scene.restart({ slots: this.slots });
       return;
     }

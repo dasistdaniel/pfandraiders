@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { KeyState } from './input';
 import { EdgeTracker, padToHeld } from './sources';
-import type { InputSource } from './sources';
+import type { InputSource, KeyLabels } from './sources';
 
 export interface KeyboardLayout {
   name: string;
@@ -12,6 +12,7 @@ export interface KeyboardLayout {
   action: string;
   buyUpgrade: string;
   buyItem: string;
+  labels: KeyLabels;
 }
 
 /** Phaser-Tastennamen. Zwei Spieler teilen sich eine Tastatur. */
@@ -25,6 +26,7 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     action: 'E',
     buyUpgrade: 'ONE',
     buyItem: 'TWO',
+    labels: { action: 'E', upgrade: '1', item: '2' },
   },
   {
     name: 'Tastatur 2 (Pfeile, Enter)',
@@ -35,6 +37,7 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     action: 'ENTER',
     buyUpgrade: 'COMMA',
     buyItem: 'PERIOD',
+    labels: { action: 'Enter', upgrade: ',', item: '.' },
   },
 ];
 
@@ -54,6 +57,7 @@ type Key = Phaser.Input.Keyboard.Key;
 
 class KeyboardSource implements InputSource {
   readonly label: string;
+  readonly labels: KeyLabels;
   private readonly keys: Record<string, Key>;
 
   constructor(
@@ -61,6 +65,7 @@ class KeyboardSource implements InputSource {
     private readonly layout: KeyboardLayout,
   ) {
     this.label = layout.name;
+    this.labels = layout.labels;
     const names = [
       layout.left,
       layout.right,
@@ -96,6 +101,7 @@ type Pad = Phaser.Input.Gamepad.Gamepad;
 
 class GamepadSource implements InputSource {
   readonly label: string;
+  readonly labels: KeyLabels = { action: 'A', upgrade: 'X', item: 'Y' };
   private readonly edges = new EdgeTracker();
   private prevA = false;
 
@@ -108,8 +114,9 @@ class GamepadSource implements InputSource {
 
   read(): KeyState {
     const pad = this.getPad();
-    // Abgezogenes Gamepad: Spieler steht still, das Spiel läuft weiter.
-    if (!pad) return this.edges.apply(padToHeld(IDLE_PAD));
+    // Abgezogenes Gamepad: Phaser behält das alte Objekt mit eingefrorenen Werten in gamepads[index],
+    // daher zählt es nur mit connected. Spieler steht still, das Spiel läuft weiter.
+    if (!pad || !pad.connected) return this.edges.apply(padToHeld(IDLE_PAD));
     return this.edges.apply(
       padToHeld({
         stickX: pad.leftStick.x,
@@ -126,7 +133,8 @@ class GamepadSource implements InputSource {
   }
 
   confirmPressed(): boolean {
-    const a = this.getPad()?.A ?? false;
+    const pad = this.getPad();
+    const a = pad !== undefined && pad.connected && pad.A;
     const pressed = a && !this.prevA;
     this.prevA = a;
     return pressed;

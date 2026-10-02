@@ -60,7 +60,7 @@ export class LobbyScene extends Phaser.Scene {
 
     let startPressed = Phaser.Input.Keyboard.JustDown(this.startKey);
     for (const pad of this.input.gamepad?.gamepads ?? []) {
-      if (!pad) continue;
+      if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
       const prev = this.padPrev[pad.index] ?? { a: false, start: false };
       const start = pad.buttons[PAD_START_BUTTON]?.pressed ?? false;
       if (pad.A && !prev.a) this.join({ kind: 'pad', index: pad.index });
