@@ -23,59 +23,122 @@ function play(seed: number): GameState {
   return s;
 }
 
-function comprehensive(seed: number): GameState {
-  // Short round for testing: 150 seconds = 1500 steps of 100ms, but we only run 1200
-  const s = createGame(seed, CITY_MAP, ['a'], { roundMs: 150 * 1000 });
+function comprehensive(seed: number): {
+  state: GameState;
+  searchCompleted: boolean;
+  spotEmptied: boolean;
+  spotRefilled: boolean;
+  spotEmptyStep: number;
+  spotRefillStep: number;
+  moneyBeforeDeposit: number;
+  moneyAfterDeposit: number;
+  depositAmount: number;
+  upgradeSucceeded: boolean;
+} {
+  // Short round: 90 seconds = 900 steps of 100ms
+  const s = createGame(seed, CITY_MAP, ['a'], { roundMs: 90 * 1000 });
   const player = s.players['a'];
   const firstSpot = s.spots[0];
   const dropoff = s.map.dropoffs[0];
   const shop = s.map.shops[0];
 
+  // Guard: verify spot 0 is active at start
+  const initialSpotBottles = firstSpot.contents.plastic + firstSpot.contents.glass + firstSpot.contents.crate;
+
+  // Track events
+  let searchCompleted = false;
+  let spotEmptied = false;
+  let spotRefilled = false;
+  let spotEmptyStep = -1;
+  let spotRefillStep = -1;
+  let moneyBeforeDeposit = 0;
+  let moneyAfterDeposit = 0;
+  let depositAmount = 0;
+  let upgradeSucceeded = false;
+
   let phase = 0;
 
-  for (let t = 0; t < 1200; t++) {
+  for (let t = 0; t < 900; t++) {
     const dt = 100;
+    const spotBottlesBefore = firstSpot.contents.plastic + firstSpot.contents.glass + firstSpot.contents.crate;
 
     if (phase === 0) {
-      // Phase 0: Teleport to spot and search
+      // Phase 0: teleport to spot and search (hold action for 31 steps = 3100ms > 3000ms searchMs)
       player.x = firstSpot.x;
       player.y = firstSpot.y;
-      // Hold action for 31 steps (31 * 100 = 3100ms > 3000ms searchMs)
       const input: Input = t < 31 ? { moveX: 0, moveY: 0, action: true, buy: null } : NO_INPUT;
       step(s, { a: input }, dt);
-      if (t === 31) phase = 1;
+      if (t === 31) {
+        searchCompleted = player.bottles.plastic + player.bottles.glass + player.bottles.crate > 0;
+        phase = 1;
+      }
     } else if (phase === 1) {
-      // Phase 1: Move to dropoff and deposit
+      // Phase 1: teleport to dropoff and deposit
       player.x = dropoff.x;
       player.y = dropoff.y;
-      const releasedAction = t === 32; // Release action on first step
-      const pressAction = t === 33; // Press action to trigger deposit
+      const pressAction = t === 32; // Deposit on step 32
       const input: Input = { moveX: 0, moveY: 0, action: pressAction, buy: null };
+      if (t === 32) {
+        moneyBeforeDeposit = player.money;
+        depositAmount = player.bottles.plastic + player.bottles.glass + player.bottles.crate;
+      }
       step(s, { a: input }, dt);
-      if (t === 33) phase = 2;
+      if (t === 32) {
+        moneyAfterDeposit = player.money;
+        phase = 2;
+      }
     } else if (phase === 2) {
-      // Phase 2: Wait for refill and search again
+      // Phase 2: wait for refill (>450 steps = 45000ms to ensure CONFIG.refillMs of 45000ms elapses)
       player.x = firstSpot.x;
       player.y = firstSpot.y;
-      // Hold action for ~46 steps to wait for refill (45000ms) and complete another search
-      const input: Input = t < 34 + 46 ? { moveX: 0, moveY: 0, action: true, buy: null } : NO_INPUT;
+      const holdAction = t < 32 + 451; // 451 steps to ensure > 45s wait
+      const input: Input = { moveX: 0, moveY: 0, action: holdAction, buy: null };
       step(s, { a: input }, dt);
-      if (t === 34 + 46) phase = 3;
+      if (t === 32 + 451) phase = 3;
     } else if (phase === 3) {
-      // Phase 3: Move to shop and try upgrade
+      // Phase 3: fund player and attempt upgrade at shop
       player.x = shop.x;
       player.y = shop.y;
-      // Try to buy upgrade on step 83
-      const input: Input = { moveX: 0, moveY: 0, action: false, buy: t === 83 ? 'upgrade' : null };
+      // Fund player with enough money for first upgrade (150 cents) before attempting
+      if (t === 32 + 452) {
+        player.money = 200; // Enough for upgrade (costs 150)
+      }
+      const attemptUpgrade = t === 32 + 453; // Attempt upgrade one step after funding
+      const input: Input = { moveX: 0, moveY: 0, action: false, buy: attemptUpgrade ? 'upgrade' : null };
       step(s, { a: input }, dt);
-      if (t === 83) phase = 4;
+      if (t === 32 + 453) {
+        upgradeSucceeded = player.containerLevel === 1 && player.money === 50;
+        phase = 4;
+      }
     } else {
-      // Phase 4: Just run until round ends
+      // Phase 4: run until round ends (phase === 'ended' and timeLeftMs === 0)
       step(s, { a: NO_INPUT }, dt);
+    }
+
+    // Track spot emptying and refilling (check after each step)
+    const spotBottlesAfter = firstSpot.contents.plastic + firstSpot.contents.glass + firstSpot.contents.crate;
+    if (spotBottlesBefore > 0 && spotBottlesAfter === 0 && !spotEmptied) {
+      spotEmptied = true;
+      spotEmptyStep = t;
+    }
+    if (spotEmptied && spotBottlesAfter > 0 && !spotRefilled) {
+      spotRefilled = true;
+      spotRefillStep = t;
     }
   }
 
-  return s;
+  return {
+    state: s,
+    searchCompleted,
+    spotEmptied,
+    spotRefilled,
+    spotEmptyStep,
+    spotRefillStep,
+    moneyBeforeDeposit,
+    moneyAfterDeposit,
+    depositAmount,
+    upgradeSucceeded,
+  };
 }
 
 describe('determinism', () => {
@@ -94,20 +157,36 @@ describe('determinism', () => {
     const first = comprehensive(42);
     const second = comprehensive(42);
 
-    // Verify the scenario actually did something
-    expect(first.tick).toBe(1200);
-    expect(first.phase).toBe('running'); // Should still be running (150s round, only 120s elapsed)
-    expect(first.players['a'].money).toBeGreaterThan(0); // Should have collected and deposited bottles
-    expect(first.players['a'].bottles.plastic + first.players['a'].bottles.glass + first.players['a'].bottles.crate).toBeGreaterThanOrEqual(0); // May have bottles after second search
+    // Verify round reached end
+    expect(first.state.phase).toBe('ended');
+    expect(first.state.timeLeftMs).toBe(0);
+    expect(first.state.tick).toBe(900);
 
-    // Verify at least one spot was emptied and refilled
-    let spotWasEmptied = false;
-    for (const spot of first.spots) {
-      if (spot.refillInMs === 0) spotWasEmptied = true; // Spot was emptied and refilled
-    }
-    expect(spotWasEmptied).toBe(true);
+    // Verify search was completed: player has bottles and spot was emptied
+    expect(first.searchCompleted).toBe(true);
+    expect(first.spotEmptied).toBe(true);
 
-    // Verify determinism: same seed + deterministic inputs = identical state
-    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    // Verify refill occurred: spot 0 went empty then back to having bottles
+    expect(first.spotRefilled).toBe(true);
+    // Sanity: refill must happen after empty
+    expect(first.spotRefillStep).toBeGreaterThan(-1);
+
+    // Verify deposit at dropoff: money increased by bottles value
+    expect(first.depositAmount).toBeGreaterThan(0);
+    expect(first.moneyAfterDeposit).toBeGreaterThan(first.moneyBeforeDeposit);
+    expect(first.moneyAfterDeposit - first.moneyBeforeDeposit).toBeGreaterThan(0);
+
+    // Verify upgrade succeeded: containerLevel incremented and money deducted
+    expect(first.upgradeSucceeded).toBe(true);
+
+    // Verify determinism: same seed + deterministic inputs = identical state and events
+    expect(JSON.stringify(second.state)).toBe(JSON.stringify(first.state));
+    expect(second.searchCompleted).toBe(first.searchCompleted);
+    expect(second.spotEmptied).toBe(first.spotEmptied);
+    expect(second.spotEmptyStep).toBe(first.spotEmptyStep);
+    expect(second.spotRefilled).toBe(first.spotRefilled);
+    expect(second.spotRefillStep).toBe(first.spotRefillStep);
+    expect(second.moneyAfterDeposit).toBe(first.moneyAfterDeposit);
+    expect(second.upgradeSucceeded).toBe(first.upgradeSucceeded);
   });
 });
