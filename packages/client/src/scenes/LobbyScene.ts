@@ -23,9 +23,14 @@ export class LobbyScene extends Phaser.Scene {
   private joinKeys: Phaser.Input.Keyboard.Key[] = [];
   private startKey!: Phaser.Input.Keyboard.Key;
   private padPrev: Record<number, { a: boolean; start: boolean }> = {};
+  private notice = '';
 
   constructor() {
     super('lobby');
+  }
+
+  init(data?: { notice?: string }): void {
+    this.notice = data?.notice ?? '';
   }
 
   create(): void {
@@ -89,6 +94,7 @@ export class LobbyScene extends Phaser.Scene {
       lines.push(slot ? `P${i + 1}: ${describe(slot.device)}` : `P${i + 1}: (frei)`);
     }
     lines.push('', this.slots.length > 0 ? 'Start: Leertaste oder Start-Taste' : 'Mindestens ein Spieler muss beitreten');
+    if (this.notice) lines.push('', this.notice);
     return lines;
   }
 }
