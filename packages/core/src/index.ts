@@ -6,3 +6,5 @@ export * from './map';
 export * from './maps/city';
 export * from './loot';
 export * from './game';
+export * from './movement';
+export * from './step';
