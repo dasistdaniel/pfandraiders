@@ -31,7 +31,13 @@ export function cancelSearch(p: Player): void {
  */
 export function updateSearch(state: GameState, p: Player, dtMs: number): boolean {
   if (totalBottles(p.bottles) >= capacityOf(p)) return false;
-  const spot = findSearchableSpot(state, p);
+  // Ziel bleibt "klebrig": solange der aktuelle Spot gefüllt und in Reichweite ist, wird nicht gewechselt.
+  const current = p.searchSpotId === null ? undefined : state.spots.find((x) => x.id === p.searchSpotId);
+  const stillValid =
+    current !== undefined &&
+    totalBottles(current.contents) > 0 &&
+    distance(p, current) <= CONFIG.interactRadius;
+  const spot = stillValid ? current : findSearchableSpot(state, p);
   if (!spot) return false;
 
   if (p.searchSpotId !== spot.id) {

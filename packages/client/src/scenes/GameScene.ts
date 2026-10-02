@@ -153,18 +153,20 @@ export class GameScene extends Phaser.Scene {
 
   private hintFor(state: GameState, p: Player): string {
     if (state.phase === 'ended') return '';
+    const lines: string[] = [];
     if (isNear(state.map.shops, p)) {
       const up = nextUpgrade(p);
-      return up ? `[1] ${up.name} (${up.capacity} Plätze) ${formatMoney(up.price)}` : 'Voll ausgebaut';
-    }
-    if (isNear(state.map.dropoffs, p)) {
-      return totalBottles(p.bottles) > 0
-        ? `[E] Pfand abgeben ${formatMoney(bottlesValue(p.bottles))}`
-        : 'Pfandautomat: nichts zum Abgeben';
+      lines.push(up ? `[1] ${up.name} (${up.capacity} Plätze) ${formatMoney(up.price)}` : 'Voll ausgebaut');
+    } else if (isNear(state.map.dropoffs, p)) {
+      lines.push(
+        totalBottles(p.bottles) > 0
+          ? `[E] Pfand abgeben ${formatMoney(bottlesValue(p.bottles))}`
+          : 'Pfandautomat: nichts zum Abgeben',
+      );
     }
     if (findSearchableSpot(state, p)) {
-      return totalBottles(p.bottles) >= capacityOf(p) ? 'Container voll' : '[E halten] Suchen';
+      lines.push(totalBottles(p.bottles) >= capacityOf(p) ? 'Container voll' : '[E halten] Suchen');
     }
-    return '';
+    return lines.join('\n');
   }
 }

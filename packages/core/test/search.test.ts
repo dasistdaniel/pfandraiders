@@ -8,6 +8,7 @@ import {
   runSteps,
   SEARCH_ROWS,
   setSpot,
+  teleport,
   TWO_PLAYER_ROWS,
 } from './helpers';
 
@@ -111,5 +112,25 @@ describe('searching', () => {
     expect(total).toBe(1);
     expect(s.players.p1.bottles.plastic).toBe(1); // wer in der Spielerreihenfolge zuerst fertig wird
     expect(s.players.p2.mode).toBe('walking');
+  });
+
+  it('keeps the current search target when a nearer spot refills mid-search', () => {
+    // Spots bei x=24 (id 0) und x=56 (id 1); Spieler bei x=36: id 0 ist näher (12 px), id 1 noch in Reichweite (20 px)
+    const s = newGame(['######', '#b.m@#']);
+    teleport(s, 'p1', { x: 36, y: 24 });
+    setSpot(s, 0, {});
+    s.spots[0].refillInMs = 99999;
+    setSpot(s, 1, { plastic: 2 });
+    runSteps(s, HOLD, 75, 20); // 1500 ms am fernen Spot
+    expect(s.players.p1.searchSpotId).toBe(1);
+    expect(s.players.p1.searchProgressMs).toBe(1500);
+    setSpot(s, 0, { glass: 1 }); // der nähere Spot füllt sich nach
+    runSteps(s, HOLD, 1, 20);
+    expect(s.players.p1.searchSpotId).toBe(1);
+    expect(s.players.p1.searchProgressMs).toBe(1520);
+    runSteps(s, HOLD, 74, 20); // insgesamt 3000 ms
+    expect(s.players.p1.bottles.plastic).toBe(2);
+    expect(s.players.p1.bottles.glass).toBe(0);
+    expect(s.spots[0].contents.glass).toBe(1);
   });
 });
