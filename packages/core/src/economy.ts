@@ -56,5 +56,7 @@ export function tryBuyItem(state: GameState, p: Player, item: ItemId): boolean {
 }
 
 export function tryBuy(state: GameState, p: Player, cmd: BuyCommand): boolean {
-  return cmd === 'upgrade' ? tryUpgrade(state, p) : tryBuyItem(state, p, cmd);
+  if (cmd === 'upgrade') return tryUpgrade(state, p);
+  if (cmd === 'food') return false; // wird in einer spaeteren Aufgabe umgesetzt
+  return tryBuyItem(state, p, cmd);
 }
