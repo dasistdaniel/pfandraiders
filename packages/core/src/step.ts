@@ -6,6 +6,7 @@ import { cancelSearch, refillSpot, updateSearch } from './search';
 import { cancelSteal, updateSteal } from './theft';
 import { NO_INPUT } from './types';
 import type { GameState, Input, Player } from './types';
+import { updateZones } from './zones';
 
 /**
  * Ein Simulationsschritt. Verändert `state` direkt und gibt ihn zurück.
@@ -25,6 +26,7 @@ export function step(
   }
 
   for (const spot of state.spots) refillSpot(state, spot, dt);
+  updateZones(state, dt);
 
   state.timeLeftMs -= dt;
   if (state.timeLeftMs <= 0) {
