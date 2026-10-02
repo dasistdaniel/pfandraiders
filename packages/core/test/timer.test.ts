@@ -40,4 +40,13 @@ describe('round timer', () => {
     step(s, {}, -50);
     expect(s.timeLeftMs).toBe(CONFIG.roundMs);
   });
+
+  it('ignores non-finite time steps instead of poisoning the state', () => {
+    const s = createGame(1, map, ['p1']);
+    step(s, {}, Number.NaN);
+    step(s, {}, Number.POSITIVE_INFINITY);
+    expect(Number.isNaN(s.timeLeftMs)).toBe(false);
+    expect(s.timeLeftMs).toBeGreaterThan(CONFIG.roundMs - 200);
+    expect(Number.isNaN(s.players.p1.health)).toBe(false);
+  });
 });

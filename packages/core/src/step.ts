@@ -19,7 +19,7 @@ export function step(
   dtMs: number,
 ): GameState {
   if (state.phase === 'ended') return state;
-  const dt = Math.min(Math.max(dtMs, 0), CONFIG.maxStepMs);
+  const dt = Number.isFinite(dtMs) ? Math.min(Math.max(dtMs, 0), CONFIG.maxStepMs) : 0;
   state.tick++;
 
   for (const id of Object.keys(state.players)) {
