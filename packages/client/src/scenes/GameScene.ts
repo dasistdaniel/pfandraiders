@@ -94,7 +94,8 @@ export class GameScene extends Phaser.Scene {
         up: k.W.isDown || k.UP.isDown,
         down: k.S.isDown || k.DOWN.isDown,
         action: k.E.isDown || k.SPACE.isDown,
-        buy: Phaser.Input.Keyboard.JustDown(k.ONE),
+        buyUpgrade: Phaser.Input.Keyboard.JustDown(k.ONE),
+        buyItem: false,
       }),
     );
     this.conn.update(delta);

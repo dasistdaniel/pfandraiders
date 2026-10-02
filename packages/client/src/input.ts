@@ -6,8 +6,10 @@ export interface KeyState {
   up: boolean;
   down: boolean;
   action: boolean;
-  /** true nur im Frame, in dem die Kauftaste neu gedrückt wurde */
-  buy: boolean;
+  /** true nur im Frame, in dem die Taste neu gedrückt wurde */
+  buyUpgrade: boolean;
+  /** true nur im Frame, in dem die Taste neu gedrückt wurde */
+  buyItem: boolean;
 }
 
 function axis(negative: boolean, positive: boolean): -1 | 0 | 1 {
@@ -19,6 +21,6 @@ export function buildInput(k: KeyState): Input {
     moveX: axis(k.left, k.right),
     moveY: axis(k.up, k.down),
     action: k.action,
-    buy: k.buy ? 'upgrade' : null,
+    buy: k.buyUpgrade ? 'upgrade' : k.buyItem ? 'bolt_cutters' : null,
   };
 }
