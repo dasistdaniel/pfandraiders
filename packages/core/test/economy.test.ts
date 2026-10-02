@@ -178,3 +178,24 @@ describe('special item', () => {
     expect(s.players.p1.item).toBeNull();
   });
 });
+
+describe('dog treat', () => {
+  const BUY = { p1: input({ buy: 'dog_treat' }) };
+
+  it('buys the treat at the shop', () => {
+    const s = atShop();
+    s.players.p1.money = CONFIG.items.dog_treat.price + 7;
+    runSteps(s, BUY, 1);
+    expect(s.players.p1.item).toBe('dog_treat');
+    expect(s.players.p1.money).toBe(7);
+  });
+
+  it('shares the item slot with the bolt cutters', () => {
+    const s = atShop();
+    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.money = 100_000;
+    runSteps(s, BUY, 1);
+    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.money).toBe(100_000);
+  });
+});

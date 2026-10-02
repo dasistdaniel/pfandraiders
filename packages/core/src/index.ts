@@ -12,3 +12,4 @@ export * from './economy';
 export * from './ranking';
 export * from './search';
 export * from './theft';
+export * from './health';
