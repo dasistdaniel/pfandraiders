@@ -1,6 +1,6 @@
 import { bottlesValue, emptyBottles } from './bottles';
 import { CONFIG } from './config';
-import type { GameState, Player, Point } from './types';
+import type { BuyCommand, GameState, ItemId, Player, Point } from './types';
 
 export function containerOf(p: Player) {
   return CONFIG.containers[p.containerLevel];
@@ -41,4 +41,19 @@ export function tryUpgrade(state: GameState, p: Player): boolean {
   p.money -= up.price;
   p.containerLevel++;
   return true;
+}
+
+/** Kauft ein Special Item, wenn Shop in Reichweite, Slot frei und Geld reicht. */
+export function tryBuyItem(state: GameState, p: Player, item: ItemId): boolean {
+  if (!isNear(state.map.shops, p)) return false;
+  if (p.item !== null) return false;
+  const price = CONFIG.items[item].price;
+  if (p.money < price) return false;
+  p.money -= price;
+  p.item = item;
+  return true;
+}
+
+export function tryBuy(state: GameState, p: Player, cmd: BuyCommand): boolean {
+  return cmd === 'upgrade' ? tryUpgrade(state, p) : tryBuyItem(state, p, cmd);
 }

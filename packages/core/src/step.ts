@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import { deposit, isNear, tryUpgrade } from './economy';
+import { deposit, isNear, tryBuy } from './economy';
 import { walk } from './movement';
 import { cancelSearch, refillSpot, updateSearch } from './search';
 import { NO_INPUT } from './types';
@@ -36,7 +36,7 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   const pressed = input.action && !p.actionHeld;
   p.actionHeld = input.action;
 
-  if (input.buy === 'upgrade') tryUpgrade(state, p);
+  if (input.buy !== null) tryBuy(state, p, input.buy);
 
   let deposited = false;
   if (pressed && isNear(state.map.dropoffs, p)) {
