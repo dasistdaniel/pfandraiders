@@ -6,7 +6,7 @@ export const LOCAL_STEP_MS = 16;
 /** Größter Zeitsprung, den ein Frame nachholt (Tab im Hintergrund, Lag) */
 const MAX_FRAME_MS = 250;
 
-/** Schnittstelle zwischen Darstellung und Spielkern. Online kommt in Phase 4 dazu. */
+/** Schnittstelle zwischen Darstellung und Spielkern. Lokal: LocalConnection, online: OnlineConnection. */
 export interface GameConnection {
   readonly localPlayerIds: string[];
   setInput(playerId: string, input: Input): void;
