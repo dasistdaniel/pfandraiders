@@ -28,3 +28,38 @@ Leben sinken durch Hunger (1 pro 8 s), Hundebisse (15) und das Umfallen kostet F
 ## Testhilfen per URL
 
 `?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden), `?seed=123` (feste Zufallsbefüllung), `?events=now` (NPCs und Zonen sofort statt nach Minuten).
+
+## Online spielen und Server
+
+Der Mehrspieler-Server (`packages/server`) ist ein WebSocket-Server mit Räumen. Die Spiellogik liegt im Paket `core`.
+
+Lokal starten (zwei Terminals):
+
+    npm run dev:server   # Server auf ws://localhost:8080
+    npm run dev          # Client; Server-Adresse per URL: ?server=ws://localhost:8080
+
+Umgebungsvariablen des Servers:
+
+- `PORT`: Listen-Port, Standard 8080.
+- `ALLOWED_ORIGINS`: kommagetrennte Liste erlaubter Origins, zum Beispiel `https://dasistdaniel.github.io`. Ist sie leer, darf jede Origin verbinden (nur für die Entwicklung, der Server warnt beim Start).
+
+Bauen: `npm run build:server` erzeugt `packages/server/dist/server.cjs` (eine einzelne Datei, läuft mit `node server.cjs` ohne `node_modules`).
+
+Auf dem VPS (Docker, Caddy übernimmt HTTPS):
+
+    cd deploy
+    DOMAIN=play.example.org ALLOWED_ORIGINS=https://dasistdaniel.github.io docker compose up -d --build
+
+Der Client für GitHub Pages wird mit der Repository-Variable `SERVER_URL` gebaut (zum Beispiel `wss://play.example.org`).
+
+Handarbeit:
+
+1. DNS-Eintrag der Domain auf den VPS zeigen lassen.
+2. Ports 80 und 443 am VPS öffnen.
+3. In den Repository-Einstellungen unter Pages die Quelle auf "GitHub Actions" stellen.
+
+Grenzen (nicht für großen öffentlichen Betrieb gedacht):
+
+- Es gibt keine Limits pro IP-Adresse.
+- Eine leere Lobby bleibt offen, solange ein Client verbunden ist.
+- Das Raumcode-Raten ist nur pro Verbindung begrenzt, nicht global.
