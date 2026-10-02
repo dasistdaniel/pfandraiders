@@ -20,7 +20,6 @@ export function findSearchableSpot(state: GameState, p: Player): Spot | null {
 }
 
 export function cancelSearch(p: Player): void {
-  p.mode = 'walking';
   p.searchSpotId = null;
   p.searchProgressMs = 0;
 }
@@ -44,7 +43,6 @@ export function updateSearch(state: GameState, p: Player, dtMs: number): boolean
     p.searchSpotId = spot.id;
     p.searchProgressMs = 0;
   }
-  p.mode = 'searching';
   p.searchProgressMs += dtMs;
 
   if (p.searchProgressMs >= CONFIG.searchMs) {

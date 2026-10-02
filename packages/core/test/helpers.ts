@@ -20,6 +20,9 @@ export const SEARCH_ROWS = ['########', '#@b.D.S#', '########'];
 /** Zwei Spieler (x=24 und x=56) mit einem Spot dazwischen (x=40) */
 export const TWO_PLAYER_ROWS = ['#########', '#@b@.D.S#', '#########'];
 
+/** p1 (x=24) steht 16 px neben p2 (x=40). Der Spot (x=56) liegt nur bei p2 in Reichweite. */
+export const THIEF_ROWS = ['#########', '#@@b.D.S#', '#########'];
+
 export function newGame(rows: string[], ids: string[] = ['p1']): GameState {
   return createGame(1, parseMap(rows), ids);
 }
