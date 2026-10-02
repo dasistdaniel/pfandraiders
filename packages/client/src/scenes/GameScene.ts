@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CITY_MAP, CONFIG, createGame, isBeingRobbed, TILE, totalBottles } from '@pfandraiders/core';
-import type { MapData } from '@pfandraiders/core';
+import type { MapData, Npc, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
@@ -20,6 +20,10 @@ const COLOR = {
   spotEmpty: 0x616161,
   dropoff: 0x42a5f5,
   shop: 0xffca28,
+  dog: 0x8d6e63,
+  police: 0x1565c0,
+  zoneAnnounced: 0xffee58,
+  zoneActive: 0xff7043,
 };
 const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
 
@@ -31,6 +35,9 @@ export class GameScene extends Phaser.Scene {
   private bodies: Phaser.GameObjects.Rectangle[] = [];
   private warnings: Phaser.GameObjects.Text[] = [];
   private spotRects: Phaser.GameObjects.Rectangle[] = [];
+  private npcSprites = new Map<number, Phaser.GameObjects.Rectangle>();
+  private zoneRects: Phaser.GameObjects.Rectangle[] = [];
+  private zoneLabels: Phaser.GameObjects.Text[] = [];
   private restartKey!: Phaser.Input.Keyboard.Key;
   private endedForMs = 0;
 
@@ -64,6 +71,23 @@ export class GameScene extends Phaser.Scene {
     this.bodies = [];
     this.warnings = [];
     this.drawMap(state.map);
+    this.npcSprites = new Map();
+    this.zoneRects = [];
+    this.zoneLabels = [];
+    for (const z of state.zones) {
+      const { x0, y0, x1, y1 } = z.def.area;
+      this.zoneRects.push(
+        this.add.rectangle((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, COLOR.zoneActive, 0).setDepth(1),
+      );
+      this.zoneLabels.push(this.add.text(x0 + 2, y0 + 1, z.def.name, FONT).setDepth(2).setVisible(false));
+    }
+    if (params.get('events') === 'now') {
+      // Testhilfe: NPCs und Zonen sofort statt nach Minuten
+      state.nextNpcMs = 2000;
+      state.zones.forEach((z, i) => {
+        z.timerMs = 3000 + i * 4000;
+      });
+    }
     for (const spot of state.spots) {
       this.spotRects.push(this.add.rectangle(spot.x, spot.y, 10, 10, COLOR.spotFull));
     }
@@ -120,12 +144,50 @@ export class GameScene extends Phaser.Scene {
     state.spots.forEach((spot, i) => {
       this.spotRects[i].setFillStyle(totalBottles(spot.contents) > 0 ? COLOR.spotFull : COLOR.spotEmpty);
     });
+    this.renderZones(state.zones);
+    this.renderNpcs(state.npcs);
     this.slots.forEach((slot, i) => {
       const p = state.players[slot.id];
       this.bodies[i].setPosition(p.x, p.y);
+      this.bodies[i].setAlpha(p.mode === 'unconscious' ? 0.35 : 1);
       this.warnings[i].setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, slot.id));
       this.huds[i].update(state, p);
     });
+  }
+
+  private renderZones(zones: ZoneState[]): void {
+    zones.forEach((z, i) => {
+      const rect = this.zoneRects[i];
+      if (z.phase === 'idle') {
+        rect.setFillStyle(COLOR.zoneActive, 0);
+        this.zoneLabels[i].setVisible(false);
+        return;
+      }
+      rect.setFillStyle(z.phase === 'active' ? COLOR.zoneActive : COLOR.zoneAnnounced, z.phase === 'active' ? 0.28 : 0.16);
+      this.zoneLabels[i].setVisible(true);
+    });
+  }
+
+  private renderNpcs(npcs: Npc[]): void {
+    const alive = new Set<number>();
+    for (const npc of npcs) {
+      alive.add(npc.id);
+      let sprite = this.npcSprites.get(npc.id);
+      if (!sprite) {
+        const dog = npc.kind === 'dog';
+        sprite = this.add
+          .rectangle(npc.x, npc.y, dog ? 9 : 8, dog ? 6 : 10, dog ? COLOR.dog : COLOR.police)
+          .setDepth(4);
+        this.npcSprites.set(npc.id, sprite);
+      }
+      sprite.setPosition(npc.x, npc.y);
+      sprite.setAlpha(npc.distractedMs > 0 ? 0.5 : 1);
+    }
+    for (const [id, sprite] of this.npcSprites) {
+      if (alive.has(id)) continue;
+      sprite.destroy();
+      this.npcSprites.delete(id);
+    }
   }
 
   private drawMap(map: MapData): void {
