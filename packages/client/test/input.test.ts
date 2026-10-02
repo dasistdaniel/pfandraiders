@@ -55,4 +55,9 @@ describe('buildInput', () => {
     expect(buildInput({ ...all, buyUpgrade: false })).toMatchObject({ buy: 'bolt_cutters' });
     expect(buildInput({ ...all, buyUpgrade: false, buyItem: false })).toMatchObject({ buy: 'dog_treat' });
   });
+
+  it('lets the treat win over food when both come in one frame', () => {
+    expect(buildInput({ ...NONE, buyTreat: true, buyFood: true })).toMatchObject({ buy: 'dog_treat' });
+    expect(buildInput({ ...NONE, buyFood: true })).toMatchObject({ buy: 'food' });
+  });
 });

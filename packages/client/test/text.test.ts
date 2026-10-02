@@ -109,7 +109,7 @@ describe('alertText', () => {
     const s = shopGame();
     expect(alertText(s, s.players.p1)).toBe('');
     s.players.p1.shieldMs = 2500;
-    expect(alertText(s, s.players.p1)).toBe('Bestohlen! Schutz 3 s');
+    expect(alertText(s, s.players.p1)).toBe('Schutz 3 s');
   });
 });
 
@@ -213,7 +213,45 @@ describe('more alerts', () => {
     s.zones[0].timerMs = 5000;
     s.players.p1.shieldMs = 2000;
     const lines = alertText(s, s.players.p1).split('\n');
-    expect(lines[0]).toBe('Bestohlen! Schutz 2 s');
+    expect(lines[0]).toBe('Schutz 2 s');
     expect(lines[1]).toBe('Stadion in 5 s!');
+  });
+});
+
+describe('final review fixes', () => {
+  const ZONES = [
+    { id: 'a', name: 'Stadion', area: { x0: 0, y0: 0, x1: 10, y1: 10 } },
+    { id: 'b', name: 'Konzert', area: { x0: 0, y0: 0, x1: 10, y1: 10 } },
+  ];
+
+  it('shows no alerts after the round has ended', () => {
+    const s = createGame(1, parseMap(['#####', '#@..#', '#####'], ZONES), ['p1']);
+    s.zones[0].phase = 'active';
+    s.zones[0].timerMs = 23000;
+    s.players.p1.unconsciousMs = 7000;
+    s.players.p1.shieldMs = 2000;
+    s.phase = 'ended';
+    expect(alertText(s, s.players.p1)).toBe('');
+  });
+
+  it('gives no hints to an unconscious player', () => {
+    const s = shopGame();
+    s.players.p1.unconsciousMs = 3000;
+    expect(hintLines(s, s.players.p1, KEYS)).toEqual([]);
+  });
+
+  it('shows at most three alert lines, personal ones first', () => {
+    const s = createGame(1, parseMap(['#####', '#@..#', '#####'], ZONES), ['p1', 'p2']);
+    s.players.p1.unconsciousMs = 4000;
+    s.players.p2.stealTargetId = 'p1';
+    s.players.p2.stealProgressMs = 40;
+    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, targetId: 'p1', cooldownMs: 0, distractedMs: 0, checkMs: 300 });
+    s.zones[0].phase = 'announced';
+    s.zones[0].timerMs = 5000;
+    s.zones[1].phase = 'active';
+    s.zones[1].timerMs = 9000;
+    const lines = alertText(s, s.players.p1).split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe('Bewusstlos! Noch 4 s');
   });
 });

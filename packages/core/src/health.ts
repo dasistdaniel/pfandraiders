@@ -21,6 +21,7 @@ export function damage(p: Player, amount: number): void {
   if (p.unconsciousMs > 0) return;
   cancelSearch(p);
   cancelSteal(p);
+  p.mode = 'walking';
   p.health = Math.max(0, p.health - amount);
   if (p.health <= 0) knockOut(p);
 }

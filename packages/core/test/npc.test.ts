@@ -6,7 +6,7 @@ import { damage } from '../src/health';
 import { parseMap } from '../src/map';
 import { isBeingChecked } from '../src/npc';
 import type { GameState, NpcKind } from '../src/types';
-import { input, newGame, openRows, runFor, runSteps, SEARCH_ROWS } from './helpers';
+import { input, newGame, openRows, runFor, runSteps, SEARCH_ROWS, teleport } from './helpers';
 
 function quiet(s: GameState): GameState {
   s.nextNpcMs = 1e9; // keine Zufalls-Spawns in diesem Test
@@ -153,6 +153,21 @@ describe('police', () => {
     expect(isBeingChecked(s, 'p1')).toBe(false);
     expect(totalBottles(s.players.p1.bottles)).toBe(4);
     expect(s.npcs).toHaveLength(1);
+  });
+
+  it('restarts the check when the target switches', () => {
+    const s = quiet(newGame(openRows(30, 5), ['p1', 'p2']));
+    s.players.p1.bottles = { plastic: 4, glass: 0, crate: 0 };
+    s.players.p2.bottles = { plastic: 4, glass: 0, crate: 0 };
+    teleport(s, 'p1', { x: 60, y: 24 });
+    teleport(s, 'p2', { x: 62, y: 24 });
+    const cop = addNpc(s, 'police', 60, 24);
+    cop.targetId = 'p1';
+    cop.checkMs = 1500;
+    s.players.p1.bottles = { plastic: 0, glass: 0, crate: 0 };
+    runSteps(s, {}, 1, 20);
+    expect(cop.targetId).toBe('p2');
+    expect(cop.checkMs).toBeLessThanOrEqual(20);
   });
 });
 

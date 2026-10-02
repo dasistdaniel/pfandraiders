@@ -32,7 +32,7 @@ export function statusLines(state: GameState, p: Player): string[] {
 }
 
 export function hintLines(state: GameState, p: Player, labels: KeyLabels): string[] {
-  if (state.phase === 'ended') return [];
+  if (state.phase === 'ended' || p.unconsciousMs > 0) return [];
   const lines: string[] = [];
 
   if (isNear(state.map.shops, p)) {
@@ -68,17 +68,18 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
 }
 
 export function alertText(state: GameState, p: Player): string {
+  if (state.phase === 'ended') return '';
   const lines: string[] = [];
   if (p.unconsciousMs > 0) lines.push(`Bewusstlos! Noch ${Math.ceil(p.unconsciousMs / 1000)} s`);
   if (isBeingChecked(state, p.id)) lines.push('KONTROLLE! Lauf weg!');
   if (isBeingRobbed(state, p.id)) lines.push('! DU WIRST BESTOHLEN !');
-  else if (p.shieldMs > 0) lines.push(`Bestohlen! Schutz ${Math.ceil(p.shieldMs / 1000)} s`);
+  else if (p.shieldMs > 0) lines.push(`Schutz ${Math.ceil(p.shieldMs / 1000)} s`);
   for (const z of state.zones) {
     const secs = Math.ceil(z.timerMs / 1000);
     if (z.phase === 'announced') lines.push(`${z.def.name} in ${secs} s!`);
     else if (z.phase === 'active') lines.push(`${z.def.name}: mehr Pfand! Noch ${secs} s`);
   }
-  return lines.join('\n');
+  return lines.slice(0, 3).join('\n');
 }
 
 export function resultLines(state: GameState, labels: KeyLabels): string[] {

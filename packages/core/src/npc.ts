@@ -67,7 +67,9 @@ function updateDog(state: GameState, npc: Npc, dtMs: number): void {
 
 function updatePolice(state: GameState, npc: Npc, dtMs: number): void {
   const cfg = CONFIG.npc.police;
+  const previous = npc.targetId;
   const target = pickTarget(state, npc, cfg.senseRadius, (p) => totalBottles(p.bottles) > 0);
+  if (target && target.id !== previous) npc.checkMs = 0;
   if (!target) {
     npc.checkMs = 0;
     return;

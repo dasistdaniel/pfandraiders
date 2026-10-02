@@ -127,7 +127,7 @@ describe('food', () => {
     s.players.p1.health = 50;
     s.players.p1.money = CONFIG.health.food.price - 1;
     runSteps(s, EAT, 1);
-    expect(s.players.p1.health).toBeLessThan(50);
+    expect(s.players.p1.health).toBeCloseTo(50 - 0.0025, 3);
     expect(s.players.p1.money).toBe(CONFIG.health.food.price - 1);
   });
 
@@ -137,5 +137,19 @@ describe('food', () => {
     s.players.p1.money = 1000;
     runSteps(s, EAT, 1);
     expect(s.players.p1.money).toBe(1000);
+  });
+});
+
+describe('non-lethal damage', () => {
+  it('interrupts searching, resets the mode and keeps the player conscious', () => {
+    const s = newGame(SEARCH_ROWS);
+    const p = s.players.p1;
+    p.searchSpotId = 0;
+    p.mode = 'searching';
+    damage(p, 5);
+    expect(p.mode).toBe('walking');
+    expect(p.searchSpotId).toBeNull();
+    expect(p.health).toBe(CONFIG.health.max - 5);
+    expect(p.unconsciousMs).toBe(0);
   });
 });

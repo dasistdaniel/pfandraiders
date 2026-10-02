@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
 import { CONFIG } from '../src/config';
-import { capacityOf, nextUpgrade } from '../src/economy';
+import { capacityOf, nextUpgrade, tryBuy } from '../src/economy';
 import { input, newGame, SEARCH_ROWS, setSpot, teleport, runFor, runSteps } from './helpers';
 
 const PRESS = { p1: input({ action: true }) };
@@ -197,5 +197,16 @@ describe('dog treat', () => {
     runSteps(s, BUY, 1);
     expect(s.players.p1.item).toBe('bolt_cutters');
     expect(s.players.p1.money).toBe(100_000);
+  });
+});
+
+describe('tryBuy with bogus commands', () => {
+  it('neither throws nor changes money', () => {
+    const s = newGame(SEARCH_ROWS);
+    s.players.p1.money = 5000;
+    for (const cmd of ['nonsense', '__proto__', 'food']) {
+      expect(() => tryBuy(s, s.players.p1, cmd as never)).not.toThrow();
+      expect(s.players.p1.money).toBe(5000);
+    }
   });
 });
