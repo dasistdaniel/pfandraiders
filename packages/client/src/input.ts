@@ -6,6 +6,8 @@ export interface KeyState {
   up: boolean;
   down: boolean;
   action: boolean;
+  /** Klauen-Taste gehalten */
+  steal: boolean;
   /** true nur im Frame, in dem die Taste neu gedrückt wurde */
   buyUpgrade: boolean;
   /** true nur im Frame, in dem die Taste neu gedrückt wurde */
@@ -21,6 +23,7 @@ export function buildInput(k: KeyState): Input {
     moveX: axis(k.left, k.right),
     moveY: axis(k.up, k.down),
     action: k.action,
+    steal: k.steal,
     buy: k.buyUpgrade ? 'upgrade' : k.buyItem ? 'bolt_cutters' : null,
   };
 }

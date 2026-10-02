@@ -10,6 +10,7 @@ export interface KeyboardLayout {
   up: string;
   down: string;
   action: string;
+  steal: string;
   buyUpgrade: string;
   buyItem: string;
   labels: KeyLabels;
@@ -24,9 +25,10 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     up: 'W',
     down: 'S',
     action: 'E',
+    steal: 'Q',
     buyUpgrade: 'ONE',
     buyItem: 'TWO',
-    labels: { action: 'E', upgrade: '1', item: '2' },
+    labels: { action: 'E', upgrade: '1', item: '2', steal: 'Q' },
   },
   {
     name: 'Tastatur 2 (Pfeile, Enter)',
@@ -35,9 +37,10 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     up: 'UP',
     down: 'DOWN',
     action: 'ENTER',
+    steal: 'SLASH',
     buyUpgrade: 'COMMA',
     buyItem: 'PERIOD',
-    labels: { action: 'Enter', upgrade: ',', item: '.' },
+    labels: { action: 'Enter', upgrade: ',', item: '.', steal: '/' },
   },
 ];
 
@@ -72,6 +75,7 @@ class KeyboardSource implements InputSource {
       layout.up,
       layout.down,
       layout.action,
+      layout.steal,
       layout.buyUpgrade,
       layout.buyItem,
     ];
@@ -87,6 +91,7 @@ class KeyboardSource implements InputSource {
       up: k[l.up].isDown,
       down: k[l.down].isDown,
       action: k[l.action].isDown,
+      steal: k[l.steal].isDown,
       buyUpgrade: Phaser.Input.Keyboard.JustDown(k[l.buyUpgrade]),
       buyItem: Phaser.Input.Keyboard.JustDown(k[l.buyItem]),
     };
@@ -101,7 +106,7 @@ type Pad = Phaser.Input.Gamepad.Gamepad;
 
 class GamepadSource implements InputSource {
   readonly label: string;
-  readonly labels: KeyLabels = { action: 'A', upgrade: 'X', item: 'Y' };
+  readonly labels: KeyLabels = { action: 'A', upgrade: 'X', item: 'Y', steal: 'B' };
   private readonly edges = new EdgeTracker();
   private prevA = false;
 
@@ -124,6 +129,7 @@ class GamepadSource implements InputSource {
         a: pad.A,
         x: pad.X,
         y: pad.Y,
+        b: pad.B,
         left: pad.left,
         right: pad.right,
         up: pad.up,
@@ -147,6 +153,7 @@ const IDLE_PAD = {
   a: false,
   x: false,
   y: false,
+  b: false,
   left: false,
   right: false,
   up: false,

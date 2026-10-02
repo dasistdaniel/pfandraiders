@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
 import { alertText, hintLines, playerName, resultLines, statusLines } from '../src/text';
 
-const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2' };
-const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.' };
+const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q' };
+const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/' };
 
 // p1 (24,24) steht 16 px vom Shop (40,24). p2 liegt weit weg am Ende des Ganges.
 function shopGame(): GameState {
@@ -66,13 +66,19 @@ describe('hintLines', () => {
     expect(hintLines(s, s.players.p2, KEYS)).toEqual([]);
   });
 
-  it('offers stealing next to a searching victim with free room', () => {
+  it('offers stealing next to a victim who carries bottles', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
-    s.players.p2.mode = 'searching';
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[E halten] Klauen');
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q halten] Klauen');
     s.players.p1.item = 'bolt_cutters';
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[E] Bolzenschneider einsetzen');
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Bolzenschneider einsetzen');
+  });
+
+  it('offers stealing even while the player is searching', () => {
+    const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
+    s.players.p1.mode = 'searching';
+    s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q halten] Klauen');
   });
 
   it('does not offer stealing with a full container', () => {
@@ -131,13 +137,12 @@ describe('labels for other devices', () => {
     expect(lines.some((l) => l.startsWith('[1]') || l.startsWith('[2]'))).toBe(false);
   });
 
-  it('uses the action key for stealing', () => {
+  it('uses the steal key for stealing', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
-    s.players.p2.mode = 'searching';
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[Enter halten] Klauen');
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/ halten] Klauen');
     s.players.p1.item = 'bolt_cutters';
-    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[Enter] Bolzenschneider einsetzen');
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Bolzenschneider einsetzen');
   });
 
   it('names the action key in the last results line', () => {

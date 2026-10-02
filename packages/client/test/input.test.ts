@@ -7,6 +7,7 @@ const NONE = {
   up: false,
   down: false,
   action: false,
+  steal: false,
   buyUpgrade: false,
   buyItem: false,
 };
@@ -25,6 +26,11 @@ describe('buildInput', () => {
 
   it('passes the action through', () => {
     expect(buildInput({ ...NONE, action: true })).toMatchObject({ action: true, buy: null });
+  });
+
+  it('passes the steal key through as held', () => {
+    expect(buildInput({ ...NONE, steal: true })).toMatchObject({ steal: true, action: false });
+    expect(buildInput(NONE)).toMatchObject({ steal: false });
   });
 
   it('maps the buy keys', () => {

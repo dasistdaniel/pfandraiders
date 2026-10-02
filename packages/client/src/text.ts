@@ -53,8 +53,8 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   if (findSearchableSpot(state, p)) {
     lines.push(full ? 'Container voll' : `[${labels.action} halten] Suchen`);
   }
-  if (p.mode !== 'searching' && !full && findStealTarget(state, p)) {
-    lines.push(p.item !== null ? `[${labels.action}] Bolzenschneider einsetzen` : `[${labels.action} halten] Klauen`);
+  if (!full && findStealTarget(state, p)) {
+    lines.push(p.item !== null ? `[${labels.steal}] Bolzenschneider einsetzen` : `[${labels.steal} halten] Klauen`);
   }
   return lines;
 }

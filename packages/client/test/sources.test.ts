@@ -8,6 +8,7 @@ const IDLE: PadSnapshot = {
   a: false,
   x: false,
   y: false,
+  b: false,
   left: false,
   right: false,
   up: false,
@@ -15,6 +16,11 @@ const IDLE: PadSnapshot = {
 };
 
 describe('padToHeld', () => {
+  it('maps B to the steal key', () => {
+    expect(padToHeld({ ...IDLE, b: true })).toMatchObject({ steal: true, action: false });
+    expect(padToHeld(IDLE)).toMatchObject({ steal: false });
+  });
+
   it('maps buttons: A action, X upgrade, Y item', () => {
     expect(padToHeld({ ...IDLE, a: true })).toMatchObject({ action: true, buyUpgrade: false, buyItem: false });
     expect(padToHeld({ ...IDLE, x: true })).toMatchObject({ buyUpgrade: true });
@@ -45,12 +51,19 @@ describe('padToHeld', () => {
 });
 
 describe('EdgeTracker', () => {
+  it('passes the steal key through as held, not as an edge', () => {
+    const t = new EdgeTracker();
+    expect(t.apply(held({ steal: true })).steal).toBe(true);
+    expect(t.apply(held({ steal: true })).steal).toBe(true);
+  });
+
   const held = (over: Partial<HeldKeys>): HeldKeys => ({
     left: false,
     right: false,
     up: false,
     down: false,
     action: false,
+    steal: false,
     buyUpgrade: false,
     buyItem: false,
     ...over,

@@ -5,6 +5,7 @@ export interface KeyLabels {
   action: string;
   upgrade: string;
   item: string;
+  steal: string;
 }
 
 /** Ein Gerät, das einem Spieler gehört. Phaser-Anbindung steht in devices.ts. */
@@ -23,6 +24,7 @@ export interface PadSnapshot {
   a: boolean;
   x: boolean;
   y: boolean;
+  b: boolean;
   left: boolean;
   right: boolean;
   up: boolean;
@@ -36,6 +38,7 @@ export interface HeldKeys {
   up: boolean;
   down: boolean;
   action: boolean;
+  steal: boolean;
   buyUpgrade: boolean;
   buyItem: boolean;
 }
@@ -43,7 +46,7 @@ export interface HeldKeys {
 /** Sticks unterhalb dieses Betrags zählen als in Ruhe. */
 export const STICK_DEADZONE = 0.4;
 
-/** A = Aktion, X = Container-Upgrade, Y = Bolzenschneider. Stick und Steuerkreuz laufen. */
+/** A = Aktion, B = Klauen, X = Container-Upgrade, Y = Bolzenschneider. Stick und Steuerkreuz laufen. */
 export function padToHeld(s: PadSnapshot): HeldKeys {
   return {
     left: s.left || s.stickX < -STICK_DEADZONE,
@@ -51,6 +54,7 @@ export function padToHeld(s: PadSnapshot): HeldKeys {
     up: s.up || s.stickY < -STICK_DEADZONE,
     down: s.down || s.stickY > STICK_DEADZONE,
     action: s.a,
+    steal: s.b,
     buyUpgrade: s.x,
     buyItem: s.y,
   };
@@ -68,6 +72,7 @@ export class EdgeTracker {
       up: h.up,
       down: h.down,
       action: h.action,
+      steal: h.steal,
       buyUpgrade: h.buyUpgrade && !this.prevUpgrade,
       buyItem: h.buyItem && !this.prevItem,
     };
