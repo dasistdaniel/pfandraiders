@@ -11,6 +11,7 @@ function scripted(tick: number, shift: number): Input {
     moveX: dirs[(tick + shift) % 3],
     moveY: dirs[(Math.floor(tick / 5) + shift) % 3],
     action: (tick + shift) % 7 < 4,
+    steal: false,
     buy: tick % 400 === 0 ? 'upgrade' : null,
   };
 }
@@ -66,7 +67,7 @@ function comprehensive(seed: number): {
       // Phase 0: teleport to spot and search (hold action for 31 steps = 3100ms > 3000ms searchMs)
       player.x = firstSpot.x;
       player.y = firstSpot.y;
-      const input: Input = t < 31 ? { moveX: 0, moveY: 0, action: true, buy: null } : NO_INPUT;
+      const input: Input = t < 31 ? { moveX: 0, moveY: 0, action: true, steal: false, buy: null } : NO_INPUT;
       step(s, { a: input }, dt);
       if (t === 31) {
         searchCompleted = player.bottles.plastic + player.bottles.glass + player.bottles.crate > 0;
@@ -77,7 +78,7 @@ function comprehensive(seed: number): {
       player.x = dropoff.x;
       player.y = dropoff.y;
       const pressAction = t === 32; // Deposit on step 32
-      const input: Input = { moveX: 0, moveY: 0, action: pressAction, buy: null };
+      const input: Input = { moveX: 0, moveY: 0, action: pressAction, steal: false, buy: null };
       if (t === 32) {
         moneyBeforeDeposit = player.money;
         depositAmount = player.bottles.plastic + player.bottles.glass + player.bottles.crate;
@@ -92,7 +93,7 @@ function comprehensive(seed: number): {
       player.x = firstSpot.x;
       player.y = firstSpot.y;
       const holdAction = t < 32 + 451; // 451 steps to ensure > 45s wait
-      const input: Input = { moveX: 0, moveY: 0, action: holdAction, buy: null };
+      const input: Input = { moveX: 0, moveY: 0, action: holdAction, steal: false, buy: null };
       step(s, { a: input }, dt);
       if (t === 32 + 451) phase = 3;
     } else if (phase === 3) {
@@ -104,7 +105,7 @@ function comprehensive(seed: number): {
         player.money = 200; // Enough for upgrade (costs 150)
       }
       const attemptUpgrade = t === 32 + 453; // Attempt upgrade one step after funding
-      const input: Input = { moveX: 0, moveY: 0, action: false, buy: attemptUpgrade ? 'upgrade' : null };
+      const input: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: attemptUpgrade ? 'upgrade' : null };
       step(s, { a: input }, dt);
       if (t === 32 + 453) {
         upgradeSucceeded = player.containerLevel === 1 && player.money === 50;

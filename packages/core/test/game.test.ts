@@ -56,4 +56,18 @@ describe('createGame', () => {
     const noSpawn = { ...CITY_MAP, spawns: [] };
     expect(() => createGame(1, noSpawn, ['a'])).toThrow(/spawn/);
   });
+
+  it('starts players without item, theft state or shield', () => {
+    const s = createGame(1, CITY_MAP, ['a']);
+    expect(s.players.a).toMatchObject({
+      item: null,
+      stealTargetId: null,
+      stealProgressMs: 0,
+      shieldMs: 0,
+    });
+  });
+
+  it('refuses duplicate player ids', () => {
+    expect(() => createGame(1, CITY_MAP, ['a', 'a'])).toThrow(/duplicate/);
+  });
 });

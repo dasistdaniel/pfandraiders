@@ -1,4 +1,4 @@
-import type { BottleKind, SpotType } from './types';
+import type { BottleKind, ItemId, SpotType } from './types';
 
 /** Kantenlänge einer Kachel in Pixeln */
 export const TILE = 16;
@@ -28,6 +28,20 @@ export const CONFIG = {
   ],
   /** Preis in Cent, um von Stufe i auf i+1 zu kommen */
   upgradePrices: [150, 400, 900],
+  /** Diebstahl */
+  steal: {
+    /** größter Abstand Dieb zu Opfer in Pixeln */
+    radius: 20,
+    /** so lange hält der Dieb die Taste */
+    durationMs: 2000,
+    /** Anteil des Opfer-Containers */
+    fraction: 0.5,
+    /** Schutz des Opfers nach einem Diebstahl */
+    shieldMs: 3000,
+  },
+  items: {
+    bolt_cutters: { name: 'Bolzenschneider', price: 600 },
+  } as Record<ItemId, { name: string; price: number }>,
   /** Fundtabelle: pro Spot-Typ und Flaschenart [min, max] */
   spotTypes: {
     bus_stop: { plastic: [0, 2], glass: [0, 1], crate: [0, 0] },

@@ -124,3 +124,57 @@ describe('container upgrade', () => {
     expect(nextUpgrade(s.players.p1)).toBeNull();
   });
 });
+
+describe('special item', () => {
+  it('ignores unknown buy commands without throwing', () => {
+    const s = atShop();
+    s.players.p1.money = 100000;
+    for (const bogus of ['nonsense', '__proto__']) {
+      expect(() => runSteps(s, { p1: input({ buy: bogus as never }) }, 1)).not.toThrow();
+    }
+    expect(s.players.p1.money).toBe(100000);
+    expect(s.players.p1.item).toBeNull();
+  });
+
+  const BUY_ITEM = { p1: input({ buy: 'bolt_cutters' }) };
+
+  it('buys the bolt cutters at the shop', () => {
+    const s = atShop();
+    s.players.p1.money = CONFIG.items.bolt_cutters.price + 50;
+    runSteps(s, BUY_ITEM, 1);
+    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.money).toBe(50);
+  });
+
+  it('refuses when money is short by one cent', () => {
+    const s = atShop();
+    s.players.p1.money = CONFIG.items.bolt_cutters.price - 1;
+    runSteps(s, BUY_ITEM, 1);
+    expect(s.players.p1.item).toBeNull();
+    expect(s.players.p1.money).toBe(CONFIG.items.bolt_cutters.price - 1);
+  });
+
+  it('refuses when the item slot is already taken', () => {
+    const s = atShop();
+    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.money = 100_000;
+    runSteps(s, BUY_ITEM, 1);
+    expect(s.players.p1.money).toBe(100_000);
+  });
+
+  it('refuses away from the shop', () => {
+    const s = newGame(SEARCH_ROWS); // Spawn ist weit vom Shop
+    s.players.p1.money = 100_000;
+    runSteps(s, BUY_ITEM, 1);
+    expect(s.players.p1.item).toBeNull();
+    expect(s.players.p1.money).toBe(100_000);
+  });
+
+  it('keeps the container upgrade working next to the item purchase', () => {
+    const s = atShop();
+    s.players.p1.money = 100_000;
+    runSteps(s, { p1: input({ buy: 'upgrade' }) }, 1);
+    expect(s.players.p1.containerLevel).toBe(1);
+    expect(s.players.p1.item).toBeNull();
+  });
+});

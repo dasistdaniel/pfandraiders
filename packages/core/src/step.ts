@@ -1,7 +1,8 @@
 import { CONFIG } from './config';
-import { deposit, isNear, tryUpgrade } from './economy';
+import { deposit, isNear, tryBuy } from './economy';
 import { walk } from './movement';
 import { cancelSearch, refillSpot, updateSearch } from './search';
+import { cancelSteal, updateSteal } from './theft';
 import { NO_INPUT } from './types';
 import type { GameState, Input, Player } from './types';
 
@@ -35,8 +36,11 @@ export function step(
 function updatePlayer(state: GameState, p: Player, input: Input, dt: number): void {
   const pressed = input.action && !p.actionHeld;
   p.actionHeld = input.action;
+  const stealPressed = input.steal && !p.stealHeld;
+  p.stealHeld = input.steal;
+  p.shieldMs = Math.max(0, p.shieldMs - dt);
 
-  if (input.buy === 'upgrade') tryUpgrade(state, p);
+  if (input.buy !== null) tryBuy(state, p, input.buy);
 
   let deposited = false;
   if (pressed && isNear(state.map.dropoffs, p)) {
@@ -46,9 +50,17 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
 
   if (input.moveX !== 0 || input.moveY !== 0) {
     cancelSearch(p);
+    cancelSteal(p);
     walk(state.map, p, input, dt);
-    return;
+  } else if (input.steal && updateSteal(state, p, stealPressed, dt)) {
+    cancelSearch(p);
+  } else if (input.action && !deposited && updateSearch(state, p, dt)) {
+    cancelSteal(p);
+  } else {
+    cancelSearch(p);
+    cancelSteal(p);
   }
-  if (input.action && !deposited && updateSearch(state, p, dt)) return;
-  cancelSearch(p);
+
+  p.mode =
+    p.stealTargetId !== null ? 'stealing' : p.searchSpotId !== null ? 'searching' : 'walking';
 }

@@ -15,6 +15,7 @@ export function createGame(
   options: GameOptions = {},
 ): GameState {
   if (map.spawns.length === 0) throw new Error('map has no spawn point');
+  if (new Set(playerIds).size !== playerIds.length) throw new Error('duplicate player id');
   const state: GameState = {
     tick: 0,
     timeLeftMs: options.roundMs ?? CONFIG.roundMs,
@@ -43,6 +44,11 @@ function newPlayer(id: string, at: Point): Player {
     searchSpotId: null,
     searchProgressMs: 0,
     actionHeld: false,
+    stealHeld: false,
+    item: null,
+    stealTargetId: null,
+    stealProgressMs: 0,
+    shieldMs: 0,
   };
 }
 

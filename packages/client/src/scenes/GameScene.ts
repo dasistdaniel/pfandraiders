@@ -1,25 +1,18 @@
 import Phaser from 'phaser';
-import {
-  bottlesValue,
-  capacityOf,
-  CITY_MAP,
-  CONFIG,
-  containerOf,
-  createGame,
-  findSearchableSpot,
-  isNear,
-  nextUpgrade,
-  ranking,
-  TILE,
-  totalBottles,
-} from '@pfandraiders/core';
-import type { GameState, MapData, Player } from '@pfandraiders/core';
+import { CITY_MAP, CONFIG, createGame, isBeingRobbed, TILE, totalBottles } from '@pfandraiders/core';
+import type { MapData } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
-import { formatMoney, formatTime } from '../format';
+import { createSource } from '../devices';
+import type { PlayerSlot } from '../devices';
+import { PlayerHud } from '../hud';
 import { buildInput } from '../input';
+import { viewportsFor } from '../layout';
+import type { InputSource } from '../sources';
+import { playerName } from '../text';
 
-const PLAYER_ID = 'p1';
-const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
+/** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
+const RESTART_DELAY_MS = 1500;
+
 const COLOR = {
   wall: 0x37474f,
   floor: 0x9e9e9e,
@@ -27,84 +20,112 @@ const COLOR = {
   spotEmpty: 0x616161,
   dropoff: 0x42a5f5,
   shop: 0xffca28,
-  player: 0xef5350,
 };
-const BAR_WIDTH = 40;
+const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
 
 export class GameScene extends Phaser.Scene {
+  private slots: PlayerSlot[] = [];
   private conn!: LocalConnection;
-  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  private playerRect!: Phaser.GameObjects.Rectangle;
+  private sources: InputSource[] = [];
+  private huds: PlayerHud[] = [];
+  private bodies: Phaser.GameObjects.Rectangle[] = [];
+  private warnings: Phaser.GameObjects.Text[] = [];
   private spotRects: Phaser.GameObjects.Rectangle[] = [];
-  private hud!: Phaser.GameObjects.Text;
-  private hint!: Phaser.GameObjects.Text;
-  private barBg!: Phaser.GameObjects.Rectangle;
-  private bar!: Phaser.GameObjects.Rectangle;
-  private banner!: Phaser.GameObjects.Text;
+  private restartKey!: Phaser.Input.Keyboard.Key;
+  private endedForMs = 0;
 
   constructor() {
     super('game');
   }
 
+  init(data?: { slots: PlayerSlot[] }): void {
+    this.slots = data?.slots ?? [];
+  }
+
   create(): void {
+    if (this.slots.length === 0) {
+      this.scene.start('lobby');
+      return;
+    }
+    this.endedForMs = 0;
     const params = new URLSearchParams(window.location.search);
     const seed = params.has('seed')
       ? Number(params.get('seed'))
       : (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
     const roundSec = Number(params.get('round'));
-    const state = createGame(seed, CITY_MAP, [PLAYER_ID], {
+    const ids = this.slots.map((s) => s.id);
+    const state = createGame(seed, CITY_MAP, ids, {
       roundMs: roundSec > 0 ? roundSec * 1000 : undefined,
     });
-    this.conn = new LocalConnection(state, [PLAYER_ID]);
+    this.conn = new LocalConnection(state, ids);
+    this.sources = this.slots.map((s) => createSource(this, s.device));
 
     this.spotRects = [];
+    this.bodies = [];
+    this.warnings = [];
     this.drawMap(state.map);
     for (const spot of state.spots) {
       this.spotRects.push(this.add.rectangle(spot.x, spot.y, 10, 10, COLOR.spotFull));
     }
-    const me = state.players[PLAYER_ID];
-    this.playerRect = this.add.rectangle(me.x, me.y, CONFIG.playerHalf * 2, CONFIG.playerHalf * 2, COLOR.player);
-    this.playerRect.setDepth(5);
+    for (const slot of this.slots) {
+      const p = state.players[slot.id];
+      const body = this.add.rectangle(p.x, p.y, CONFIG.playerHalf * 2, CONFIG.playerHalf * 2, slot.color);
+      body.setDepth(5);
+      this.bodies.push(body);
+      this.warnings.push(
+        this.add.text(p.x, p.y - 8, '!', { ...FONT, color: '#ff5252', fontSize: '12px' }).setOrigin(0.5, 1).setDepth(6).setVisible(false),
+      );
+    }
 
-    this.cameras.main.setBounds(0, 0, state.map.cols * TILE, state.map.rows * TILE);
-    this.cameras.main.startFollow(this.playerRect, true, 0.15, 0.15);
+    // Eine Kamera pro Spieler. Die erste ist Phasers Hauptkamera.
+    const views = viewportsFor(this.slots.length);
+    const cams = views.map((v, i) =>
+      i === 0
+        ? this.cameras.main.setViewport(v.x, v.y, v.w, v.h)
+        : this.cameras.add(v.x, v.y, v.w, v.h),
+    );
+    cams.forEach((cam, i) => {
+      cam.setBounds(0, 0, state.map.cols * TILE, state.map.rows * TILE);
+      cam.startFollow(this.bodies[i], true, 0.15, 0.15);
+    });
 
-    this.hud = this.add.text(4, 4, '', FONT).setScrollFactor(0).setDepth(10);
-    this.hint = this.add.text(4, 176, '', FONT).setOrigin(0, 1).setScrollFactor(0).setDepth(10);
-    this.barBg = this.add.rectangle(140, 156, BAR_WIDTH, 4, 0x000000).setOrigin(0, 0).setScrollFactor(0).setDepth(10);
-    this.bar = this.add.rectangle(140, 156, 0, 4, 0xffee58).setOrigin(0, 0).setScrollFactor(0).setDepth(11);
-    this.banner = this.add
-      .text(160, 90, '', { ...FONT, fontSize: '10px', align: 'center', backgroundColor: '#000000cc' })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(20);
+    // Jedes HUD erscheint nur in der Kamera seines Spielers.
+    this.huds = views.map((v, i) => new PlayerHud(this, v, this.slots[i].color, playerName(this.slots[i].id), this.sources[i].labels));
+    this.huds.forEach((hud, i) => {
+      cams.forEach((cam, j) => {
+        if (i !== j) cam.ignore(hud.objects);
+      });
+    });
 
-    this.keys = this.input.keyboard!.addKeys(
-      'W,A,S,D,UP,DOWN,LEFT,RIGHT,E,SPACE,ONE,R',
-    ) as Record<string, Phaser.Input.Keyboard.Key>;
+    this.restartKey = this.input.keyboard!.addKey('R');
   }
 
   update(_time: number, delta: number): void {
-    const k = this.keys;
-    this.conn.setInput(
-      PLAYER_ID,
-      buildInput({
-        left: k.A.isDown || k.LEFT.isDown,
-        right: k.D.isDown || k.RIGHT.isDown,
-        up: k.W.isDown || k.UP.isDown,
-        down: k.S.isDown || k.DOWN.isDown,
-        action: k.E.isDown || k.SPACE.isDown,
-        buy: Phaser.Input.Keyboard.JustDown(k.ONE),
-      }),
-    );
+    this.slots.forEach((slot, i) => {
+      this.conn.setInput(slot.id, buildInput(this.sources[i].read()));
+    });
     this.conn.update(delta);
 
     const state = this.conn.getState();
-    if (state.phase === 'ended' && Phaser.Input.Keyboard.JustDown(k.R)) {
-      this.scene.restart();
+    // JustDown und confirmPressed jeden Frame abfragen und so Druck aus der Spielphase verwerfen,
+    // sonst löst ein alter Tastendruck beim Rundenende sofort einen Neustart aus.
+    const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
+    const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
+    if (state.phase === 'ended') this.endedForMs += delta;
+    if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && (restartPressed || confirmPressed)) {
+      this.scene.restart({ slots: this.slots });
       return;
     }
-    this.render(state, state.players[PLAYER_ID]);
+
+    state.spots.forEach((spot, i) => {
+      this.spotRects[i].setFillStyle(totalBottles(spot.contents) > 0 ? COLOR.spotFull : COLOR.spotEmpty);
+    });
+    this.slots.forEach((slot, i) => {
+      const p = state.players[slot.id];
+      this.bodies[i].setPosition(p.x, p.y);
+      this.warnings[i].setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, slot.id));
+      this.huds[i].update(state, p);
+    });
   }
 
   private drawMap(map: MapData): void {
@@ -122,51 +143,5 @@ export class GameScene extends Phaser.Scene {
   private marker(x: number, y: number, color: number, label: string): void {
     this.add.rectangle(x, y, TILE, TILE, color);
     this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1);
-  }
-
-  private render(state: GameState, p: Player): void {
-    this.playerRect.setPosition(p.x, p.y);
-    state.spots.forEach((spot, i) => {
-      this.spotRects[i].setFillStyle(totalBottles(spot.contents) > 0 ? COLOR.spotFull : COLOR.spotEmpty);
-    });
-
-    this.hud.setText(
-      `Zeit ${formatTime(state.timeLeftMs)}   Geld ${formatMoney(p.money)}\n` +
-        `${containerOf(p).name} ${totalBottles(p.bottles)}/${capacityOf(p)}` +
-        `   Pl${p.bottles.plastic} Gl${p.bottles.glass} Ka${p.bottles.crate}`,
-    );
-    this.hint.setText(this.hintFor(state, p));
-
-    const progress = p.mode === 'searching' ? p.searchProgressMs / CONFIG.searchMs : 0;
-    this.barBg.setVisible(progress > 0);
-    this.bar.setVisible(progress > 0);
-    this.bar.setSize(BAR_WIDTH * progress, 4);
-
-    if (state.phase === 'ended') {
-      const best = ranking(state)[0];
-      this.banner.setText(`Runde vorbei!\nGeld: ${formatMoney(best.money)}\n\n[R] Neue Runde`);
-    } else {
-      this.banner.setText('');
-    }
-    this.banner.setVisible(state.phase === 'ended');
-  }
-
-  private hintFor(state: GameState, p: Player): string {
-    if (state.phase === 'ended') return '';
-    const lines: string[] = [];
-    if (isNear(state.map.shops, p)) {
-      const up = nextUpgrade(p);
-      lines.push(up ? `[1] ${up.name} (${up.capacity} Plätze) ${formatMoney(up.price)}` : 'Voll ausgebaut');
-    } else if (isNear(state.map.dropoffs, p)) {
-      lines.push(
-        totalBottles(p.bottles) > 0
-          ? `[E] Pfand abgeben ${formatMoney(bottlesValue(p.bottles))}`
-          : 'Pfandautomat: nichts zum Abgeben',
-      );
-    }
-    if (findSearchableSpot(state, p)) {
-      lines.push(totalBottles(p.bottles) >= capacityOf(p) ? 'Container voll' : '[E halten] Suchen');
-    }
-    return lines.join('\n');
   }
 }

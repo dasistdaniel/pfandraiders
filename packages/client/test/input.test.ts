@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { buildInput } from '../src/input';
 
-const NONE = { left: false, right: false, up: false, down: false, action: false, buy: false };
+const NONE = {
+  left: false,
+  right: false,
+  up: false,
+  down: false,
+  action: false,
+  steal: false,
+  buyUpgrade: false,
+  buyItem: false,
+};
 
 describe('buildInput', () => {
   it('maps directions to axes', () => {
@@ -15,8 +24,21 @@ describe('buildInput', () => {
     expect(buildInput({ ...NONE, up: true, down: true })).toMatchObject({ moveY: 0 });
   });
 
-  it('passes action and buy through', () => {
+  it('passes the action through', () => {
     expect(buildInput({ ...NONE, action: true })).toMatchObject({ action: true, buy: null });
-    expect(buildInput({ ...NONE, buy: true })).toMatchObject({ action: false, buy: 'upgrade' });
+  });
+
+  it('passes the steal key through as held', () => {
+    expect(buildInput({ ...NONE, steal: true })).toMatchObject({ steal: true, action: false });
+    expect(buildInput(NONE)).toMatchObject({ steal: false });
+  });
+
+  it('maps the buy keys', () => {
+    expect(buildInput({ ...NONE, buyUpgrade: true })).toMatchObject({ buy: 'upgrade' });
+    expect(buildInput({ ...NONE, buyItem: true })).toMatchObject({ buy: 'bolt_cutters' });
+  });
+
+  it('prefers the upgrade when both buy keys come in the same frame', () => {
+    expect(buildInput({ ...NONE, buyUpgrade: true, buyItem: true })).toMatchObject({ buy: 'upgrade' });
   });
 });
