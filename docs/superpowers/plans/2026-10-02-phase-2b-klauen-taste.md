@@ -12,7 +12,7 @@
 
 ## Entscheidungen (vom Nutzer vorgegeben, Rest vom Plan)
 
-1. **Eigene Taste:** Tastatur 1 `Q`, Tastatur 2 `/` (Phaser-Name `SLASH`), Gamepad `B`. Die Aktionstaste klaut nicht mehr.
+1. **Eigene Taste:** Tastatur 1 `Q`, Tastatur 2 `/` (Phaser-Name `FORWARD_SLASH`), Gamepad `B`. Die Aktionstaste klaut nicht mehr.
 2. **Immer möglich:** Das Opfer muss nur Flaschen im Container haben, nicht geschützt sein (Schutzzeit nach einem Diebstahl bleibt) und in Reichweite stehen. Es muss nicht suchen.
 3. **Wer klauen darf:** Jeder, der stillsteht, die Klauen-Taste hält und freien Platz im Container hat, auch wenn er gerade sucht. Die Klauen-Taste hat Vorrang vor Suchen und bricht eine laufende Suche des Diebs ab.
 4. **Abbruch:** Dieb läuft los oder lässt die Taste los, Opfer geht außer Reichweite, Opfer verliert alle Flaschen oder wird geschützt. (Das Opfer kann also weglaufen.)
@@ -412,7 +412,7 @@ Expected: FAIL.
 `sources.ts`: `KeyLabels` um `steal: string;` erweitern; `PadSnapshot` um `b: boolean;`; `HeldKeys` um `steal: boolean;`; `padToHeld` liefert zusätzlich `steal: s.b,`; `EdgeTracker.apply` gibt zusätzlich `steal: h.steal,` zurück (gehalten, keine Flanke).
 
 `devices.ts`:
-- `KeyboardLayout` um `steal: string;` erweitern. Tastatur 1: `steal: 'Q'`, Labels `{ action: 'E', upgrade: '1', item: '2', steal: 'Q' }`. Tastatur 2: `steal: 'SLASH'`, Labels `{ action: 'Enter', upgrade: ',', item: '.', steal: '/' }`.
+- `KeyboardLayout` um `steal: string;` erweitern. Tastatur 1: `steal: 'Q'`, Labels `{ action: 'E', upgrade: '1', item: '2', steal: 'Q' }`. Tastatur 2: `steal: 'FORWARD_SLASH'`, Labels `{ action: 'Enter', upgrade: ',', item: '.', steal: '/' }`.
 - `KeyboardSource`: `steal` in die Liste der `addKeys`-Namen aufnehmen und `read()` um `steal: k[l.steal].isDown,` ergänzen.
 - `GamepadSource`: im Snapshot `b: pad.B,` ergänzen (und in `IDLE_PAD` `b: false`), Labels `{ action: 'A', upgrade: 'X', item: 'Y', steal: 'B' }`.
 

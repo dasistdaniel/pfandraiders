@@ -37,7 +37,7 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     up: 'UP',
     down: 'DOWN',
     action: 'ENTER',
-    steal: 'SLASH',
+    steal: 'FORWARD_SLASH',
     buyUpgrade: 'COMMA',
     buyItem: 'PERIOD',
     labels: { action: 'Enter', upgrade: ',', item: '.', steal: '/' },
