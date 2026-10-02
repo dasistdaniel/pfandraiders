@@ -43,7 +43,7 @@ Karte: Tiled-JSON. Tiles, Kollision und benannte Objektebenen (Spots, Abgabestel
 
 **Event-Zonen** (Stadion, Konzert, Fußballspiel): zeitlich begrenzt, höhere Fundmengen. Der Server kündigt sie ca. 20 s vorher an.
 
-**Diebstahl (Standard):** Dieb steht beim Opfer und hält die Aktionstaste 2 s. Das Opfer wird gewarnt (Symbol, Sound). Bewegt sich der Dieb oder wird er berührt oder getroffen, Abbruch. Bei Erfolg erhält der Dieb 50 % der Flaschen. Nur möglich, wenn das Opfer im Zustand `suchen` ist.
+**Diebstahl (Standard):** Dieb steht beim Opfer und hält die eigene Klauen-Taste (Gamepad: B) 2 s. Das Opfer wird gewarnt (Symbol, Sound). Bewegt sich der Dieb oder gerät das Opfer außer Reichweite, Abbruch. Bei Erfolg erhält der Dieb 50 % der Flaschen. Möglich, sobald das Opfer Flaschen im Container hat, unabhängig davon, was es gerade tut. (Geändert nach Phase 2: vorher nur bei suchendem Opfer und mit der Aktionstaste.)
 
 **Special Item** (ein Slot, einmalig, im Shop kaufbar oder findbar): Bolzenschneider = Sofort-Diebstahl von 100 % des Containers. Weitere Items später.
 
