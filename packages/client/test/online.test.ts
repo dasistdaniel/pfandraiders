@@ -1,6 +1,6 @@
 import { CITY_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
 import type { ClientMessage, ServerMessage } from '@pfandraiders/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
 import type { SocketLike } from '../src/online';
 
@@ -190,6 +190,7 @@ describe('OnlineConnection rendering state', () => {
     socket.receive(startMessage(0));
     const s = createGame(1, CITY_MAP, ['p1', 'p2']);
     s.players.p1.x = 200;
+    s.tick = 1;
     conn.update(100);
     socket.receive({ t: 'snap', snap: projectSnapshot(s, 'p1'), ack: 0 });
     conn.update(10);
@@ -206,5 +207,109 @@ describe('OnlineConnection rendering state', () => {
     conn.update(200); // Renderzeit hinter dem neuesten Snapshot
     expect(conn.bufferedSnapshots()).toBeLessThanOrEqual(32);
     expect(conn.getState().tick).toBe(200);
+  });
+});
+
+describe('OnlineConnection robustness', () => {
+  function started() {
+    const ctx = setup();
+    ctx.socket.receive(startMessage(0, 40));
+    ctx.conn.update(10);
+    return ctx;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function rawSnap(mutate: (snap: any) => void, tickValue = 1): string {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msg = snapMessage(tickValue, 50) as any;
+    mutate(msg.snap);
+    return JSON.stringify(msg);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cases: [string, (snap: any) => void][] = [
+    ['missing npcs', (s) => delete s.npcs],
+    ['npcs not an array', (s) => (s.npcs = {})],
+    ['players as array', (s) => (s.players = [])],
+    ['NaN position (null via JSON)', (s) => (s.players.p2.x = null)],
+    ['string tick', (s) => (s.tick = '5')],
+    ['null tick', (s) => (s.tick = null)],
+    ['negative tick', (s) => (s.tick = -1)],
+    ['bad phase', (s) => (s.phase = 'x')],
+    ['bad npc kind', (s) => (s.npcs = [{ id: 1, kind: 'cat', x: 1, y: 1 }])],
+    ['zone without phase', (s) => (s.zones = [{ def: {} }])],
+  ];
+
+  for (const [name, mutate] of cases) {
+    it(`drops an invalid snapshot (${name})`, () => {
+      const { socket, conn } = started();
+      const before = conn.getState().tick;
+      expect(() => socket.onmessage?.({ data: rawSnap(mutate) })).not.toThrow();
+      expect(() => conn.update(50)).not.toThrow();
+      expect(conn.bufferedSnapshots()).toBe(1);
+      expect(conn.getState().tick).toBe(before);
+    });
+  }
+
+  it('drops an Infinity tick and ignores an invalid start entirely', () => {
+    const { socket, conn } = started();
+    socket.onmessage?.({ data: rawSnap((s) => (s.tick = Infinity)) });
+    expect(conn.bufferedSnapshots()).toBe(1);
+    let starts = 0;
+    conn.onStart = () => starts++;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bad = startMessage(0) as any;
+    delete bad.snap.npcs;
+    socket.onmessage?.({ data: JSON.stringify(bad) });
+    expect(starts).toBe(0);
+    expect(() => conn.update(10)).not.toThrow();
+    expect(conn.getState().tick).toBe(0);
+  });
+
+  it('does not throw when a buffered snapshot turns out to be unrenderable', () => {
+    const { socket, conn } = started();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    socket.receive(snapMessage(1, 60));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const buf = (conn as any).buffer as { snap: any }[];
+    buf[buf.length - 1].snap.npcs = undefined;
+    expect(() => conn.update(10)).not.toThrow();
+    expect(conn.bufferedSnapshots()).toBe(1);
+    expect(conn.getState().tick).toBe(0);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('drops duplicate or older ticks, and a new start resets the buffer', () => {
+    const { socket, conn } = started();
+    socket.receive(snapMessage(5, 50));
+    socket.receive(snapMessage(3, 70));
+    socket.receive(snapMessage(5, 90));
+    expect(conn.bufferedSnapshots()).toBe(2);
+    conn.update(250);
+    conn.update(250);
+    expect(conn.getState().tick).toBe(5);
+    socket.receive(startMessage(0, 40));
+    expect(conn.bufferedSnapshots()).toBe(1);
+    conn.update(10);
+    expect(conn.getState().tick).toBe(0);
+  });
+
+  it('ignores NaN and negative deltas and caps huge ones', () => {
+    const { socket, conn } = started();
+    const count = () => socket.sent.filter((m) => m.t === 'input').length;
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    conn.update(10); // geaenderte Eingabe: sendet sofort
+    const base = count();
+    conn.update(Number.NaN);
+    conn.update(-5);
+    conn.update(90);
+    expect(count()).toBe(base);
+    conn.update(10); // 100 ms seit dem Senden
+    expect(count()).toBe(base + 1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const before = (conn as any).clock as number;
+    conn.update(10_000);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((conn as any).clock - before).toBeLessThanOrEqual(250);
   });
 });

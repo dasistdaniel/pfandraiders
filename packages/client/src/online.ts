@@ -12,12 +12,15 @@ import type {
 import { NO_INPUT } from '@pfandraiders/core';
 import type { GameConnection } from './connection';
 import { interpolateSnapshot } from './interpolate';
+import { isValidSnapshot } from './snapshotGuard';
 
 /** Fremde Figuren werden so viel später gezeigt, damit zwischen zwei Snapshots interpoliert werden kann. */
 export const INTERP_DELAY_MS = 100;
 /** Ungeänderte Eingaben werden trotzdem so oft wiederholt (Lebenszeichen). */
 export const HEARTBEAT_MS = 100;
 const MAX_BUFFER = 32;
+/** Größter Zeitsprung pro update() (wie in LocalConnection). */
+const MAX_FRAME_MS = 250;
 
 export interface SocketLike {
   send(data: string): void;
@@ -71,6 +74,7 @@ export class OnlineConnection implements GameConnection {
   private lastSent: Input | null = null;
   private sinceSent = 0;
   private rendered: GameState | null = null;
+  private warned = false;
 
   constructor(
     private readonly url: string,
@@ -142,6 +146,7 @@ export class OnlineConnection implements GameConnection {
         this.onLobby?.();
         break;
       case 'start':
+        if (!msg.map || !isValidSnapshot(msg.snap)) break;
         this.map = msg.map;
         this.you = msg.you;
         this.localPlayerIds = [msg.you];
@@ -153,7 +158,9 @@ export class OnlineConnection implements GameConnection {
         this.onStart?.();
         break;
       case 'snap':
-        if (!this.map || !msg.snap || typeof msg.snap.tick !== 'number' || !msg.snap.players) break;
+        if (!this.map || !isValidSnapshot(msg.snap)) break;
+        // Doppelte oder rückwärts laufende Snapshots verwerfen.
+        if (this.buffer.length > 0 && msg.snap.tick <= this.buffer[this.buffer.length - 1].snap.tick) break;
         this.buffer.push({ at: this.clock, snap: msg.snap });
         if (this.buffer.length > MAX_BUFFER) this.buffer.splice(0, this.buffer.length - MAX_BUFFER);
         break;
@@ -173,10 +180,20 @@ export class OnlineConnection implements GameConnection {
   }
 
   update(deltaMs: number): void {
-    this.clock += deltaMs;
-    this.sinceSent += deltaMs;
+    const dt = Number.isFinite(deltaMs) && deltaMs > 0 ? Math.min(deltaMs, MAX_FRAME_MS) : 0;
+    this.clock += dt;
+    this.sinceSent += dt;
     this.sendInputIfNeeded();
-    this.rendered = this.computeRendered();
+    try {
+      this.rendered = this.computeRendered();
+    } catch {
+      // Beschädigter Snapshot im Puffer: neuesten verwerfen, letzten guten Zustand behalten.
+      this.buffer.pop();
+      if (!this.warned) {
+        this.warned = true;
+        console.warn('OnlineConnection: dropped a snapshot that could not be rendered');
+      }
+    }
   }
 
   private sendInputIfNeeded(): void {
