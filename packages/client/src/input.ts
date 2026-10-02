@@ -12,9 +12,9 @@ export interface KeyState {
   buyUpgrade: boolean;
   /** true nur im Frame, in dem die Taste neu gedrÃ¼ckt wurde */
   buyItem: boolean;
-  /** true nur im Frame, in dem die Taste neu gedrückt wurde */
+  /** true nur im Frame, in dem die Taste neu gedrÃ¼ckt wurde */
   buyTreat: boolean;
-  /** true nur im Frame, in dem die Taste neu gedrückt wurde */
+  /** true nur im Frame, in dem die Taste neu gedrÃ¼ckt wurde */
   buyFood: boolean;
 }
 

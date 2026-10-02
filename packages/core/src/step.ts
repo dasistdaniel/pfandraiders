@@ -46,7 +46,7 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   p.shieldMs = Math.max(0, p.shieldMs - dt);
 
   if (updateHealth(p, dt)) {
-    // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgeführt)
+    // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgefÃ¼hrt)
     p.mode = 'unconscious';
     return;
   }

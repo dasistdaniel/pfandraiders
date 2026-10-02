@@ -5,6 +5,7 @@ import {
   containerOf,
   findSearchableSpot,
   findStealTarget,
+  isBeingChecked,
   isBeingRobbed,
   isNear,
   nextUpgrade,
@@ -25,7 +26,8 @@ export function statusLines(state: GameState, p: Player): string[] {
     `${containerOf(p).name} ${totalBottles(p.bottles)}/${capacityOf(p)}` +
       `   Pl${p.bottles.plastic} Gl${p.bottles.glass} Ka${p.bottles.crate}`,
   ];
-  if (p.item !== null) lines.push(`Item: ${CONFIG.items[p.item].name}`);
+  const health = `Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`;
+  lines.push(p.item !== null ? `${health}   Item: ${CONFIG.items[p.item].name}` : health);
   return lines;
 }
 
@@ -40,6 +42,12 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
       p.item === null
         ? `[${labels.item}] ${CONFIG.items.bolt_cutters.name} ${formatMoney(CONFIG.items.bolt_cutters.price)}`
         : 'Item-Slot belegt',
+    );
+    if (p.item === null) {
+      lines.push(`[${labels.treat}] ${CONFIG.items.dog_treat.name} ${formatMoney(CONFIG.items.dog_treat.price)}`);
+    }
+    lines.push(
+      `[${labels.food}] Essen +${CONFIG.health.food.heal} Leben ${formatMoney(CONFIG.health.food.price)}`,
     );
   } else if (isNear(state.map.dropoffs, p)) {
     lines.push(
@@ -60,9 +68,17 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
 }
 
 export function alertText(state: GameState, p: Player): string {
-  if (isBeingRobbed(state, p.id)) return '! DU WIRST BESTOHLEN !';
-  if (p.shieldMs > 0) return `Bestohlen! Schutz ${Math.ceil(p.shieldMs / 1000)} s`;
-  return '';
+  const lines: string[] = [];
+  if (p.unconsciousMs > 0) lines.push(`Bewusstlos! Noch ${Math.ceil(p.unconsciousMs / 1000)} s`);
+  if (isBeingChecked(state, p.id)) lines.push('KONTROLLE! Lauf weg!');
+  if (isBeingRobbed(state, p.id)) lines.push('! DU WIRST BESTOHLEN !');
+  else if (p.shieldMs > 0) lines.push(`Bestohlen! Schutz ${Math.ceil(p.shieldMs / 1000)} s`);
+  for (const z of state.zones) {
+    const secs = Math.ceil(z.timerMs / 1000);
+    if (z.phase === 'announced') lines.push(`${z.def.name} in ${secs} s!`);
+    else if (z.phase === 'active') lines.push(`${z.def.name}: mehr Pfand! Noch ${secs} s`);
+  }
+  return lines.join('\n');
 }
 
 export function resultLines(state: GameState, labels: KeyLabels): string[] {
