@@ -262,3 +262,172 @@ describe('room lifetime', () => {
     expect(room.isDead()).toBe(true);
   });
 });
+
+function threePlayers(opts: { roundMs?: number } = {}) {
+  const base = twoPlayers(opts);
+  const c = new FakeConn();
+  const rc = base.room.join('Cara', c);
+  if (!rc.ok) throw new Error('join failed');
+  return { ...base, c, mc: rc.value };
+}
+
+describe('review fixes', () => {
+  it('F1: gives distinct colors after a lobby leaver was removed', () => {
+    const { room, mb } = threePlayers();
+    room.leave(mb.conn!);
+    const r = room.join('Dora', new FakeConn());
+    if (!r.ok) throw new Error('join failed');
+    const colors = room.members.map((m) => m.color);
+    expect(new Set(colors).size).toBe(colors.length);
+  });
+
+  it('F2: a returning player can rejoin under his own name after the round ended', () => {
+    const { room, advance, ma } = twoPlayers({ roundMs: 100 });
+    room.start('p1');
+    room.leave(ma.conn!);
+    advance(31_000);
+    room.tick();
+    room.tick();
+    expect(room.phase).toBe('ended');
+    const r = room.join('Anna', new FakeConn());
+    expect(r.ok).toBe(true);
+    expect(room.members.filter((m) => m.name === 'Anna')).toHaveLength(1);
+    expect(room.members.every((m) => m.conn !== null)).toBe(true);
+  });
+
+  it('F2: tick purges expired ghosts when the room is not running', () => {
+    const { room, advance, ma } = twoPlayers({ roundMs: 100 });
+    room.start('p1');
+    room.leave(ma.conn!);
+    room.tick();
+    room.tick();
+    expect(room.phase).toBe('ended');
+    advance(31_000);
+    room.tick();
+    expect(room.members.map((m) => m.id)).toEqual(['p2']);
+  });
+
+  it('F3: token validity does not depend on tick, boundary is exactly graceMs', () => {
+    const a = twoPlayers();
+    a.room.start('p1');
+    a.room.leave(a.ma.conn!);
+    a.advance(30_000);
+    expect(a.room.join('Anna', new FakeConn(), a.ma.token).ok).toBe(true);
+
+    const b = twoPlayers();
+    b.room.start('p1');
+    b.room.leave(b.ma.conn!);
+    b.advance(30_001);
+    expect(b.room.join('Anna', new FakeConn(), b.ma.token)).toMatchObject({ ok: false, code: 'already_started' });
+  });
+
+  it('F4: invalid seq does not poison the ack but the input is still applied', () => {
+    const { room, a, ma } = twoPlayers();
+    room.start('p1');
+    room.setInput(ma, 1, NO_INPUT);
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5]) room.setInput(ma, bad, MOVE_RIGHT);
+    room.tick();
+    expect(a.last('snap').ack).toBe(1);
+    expect(ma.input.moveX).toBe(1);
+  });
+
+  it('F5: start with an empty id is never allowed', () => {
+    const { room, ma, mb } = twoPlayers({ roundMs: 100 });
+    room.start('p1');
+    room.leave(ma.conn!);
+    room.leave(mb.conn!);
+    expect(room.start('')).toMatchObject({ ok: false, code: 'not_host' });
+    room.tick();
+    room.tick();
+    expect(room.phase).toBe('ended');
+    expect(room.start('')).toMatchObject({ ok: false, code: 'not_host' });
+  });
+
+  it('F6a: host migrates past a disconnected first member during a running round', () => {
+    const { room, ma } = threePlayers();
+    room.start('p1');
+    room.leave(ma.conn!);
+    expect(room.hostId()).toBe('p2');
+  });
+
+  it('F6b: setInput on a disconnected member is ignored', () => {
+    const { room, ma } = twoPlayers();
+    room.start('p1');
+    const x = room.state!.players.p1.x;
+    room.leave(ma.conn!);
+    room.setInput(ma, 5, MOVE_RIGHT);
+    room.tick();
+    room.tick();
+    expect(room.state!.players.p1.x).toBe(x);
+    expect(ma.ackSeq).toBe(0);
+  });
+
+  it('F6c: rejoining resets the disconnect time so the member does not expire later', () => {
+    const { room, advance, ma } = twoPlayers();
+    room.start('p1');
+    room.leave(ma.conn!);
+    advance(10_000);
+    expect(room.join('Anna', new FakeConn(), ma.token).ok).toBe(true);
+    expect(ma.disconnectedAt).toBeNull();
+    advance(25_000);
+    room.tick();
+    expect(ma.expired).toBe(false);
+  });
+
+  it('F6d: a new round drops disconnected members and keeps the other ids stable', () => {
+    const { room, mb } = threePlayers({ roundMs: 100 });
+    room.start('p1');
+    room.leave(mb.conn!);
+    room.tick();
+    room.tick();
+    expect(room.phase).toBe('ended');
+    expect(room.start('p1').ok).toBe(true);
+    expect(room.members.map((m) => m.id)).toEqual(['p1', 'p3']);
+    expect(Object.keys(room.state!.players)).toEqual(['p1', 'p3']);
+  });
+
+  it('F6e: leave of an unknown or already left connection is a no-op', () => {
+    const { room, advance, a, ma } = twoPlayers();
+    room.start('p1');
+    const before = a.messages.length;
+    room.leave(new FakeConn());
+    expect(a.messages.length).toBe(before);
+    const oldConn = ma.conn!;
+    room.leave(oldConn);
+    const t = ma.disconnectedAt;
+    advance(5_000);
+    room.leave(oldConn);
+    expect(ma.disconnectedAt).toBe(t);
+  });
+
+  it('F6f: token rejoin replaces a still connected connection', () => {
+    const { room, a, ma } = twoPlayers();
+    room.start('p1');
+    const fresh = new FakeConn();
+    expect(room.join('Anna', fresh, ma.token).ok).toBe(true);
+    const oldCount = a.messages.length;
+    const freshCount = fresh.messages.length;
+    room.tick();
+    expect(a.messages.length).toBe(oldCount);
+    expect(fresh.messages.length).toBeGreaterThan(freshCount);
+    room.leave(a); // stale conn must not disconnect the member
+    expect(ma.conn).toBe(fresh);
+  });
+
+  it('foreign token in a running room leaves members unchanged', () => {
+    const { room } = twoPlayers();
+    room.start('p1');
+    const ids = room.members.map((m) => m.id);
+    const r = room.join('Cara', new FakeConn(), 'foreign-token-0000');
+    expect(r).toMatchObject({ ok: false, code: 'already_started' });
+    expect(room.members.map((m) => m.id)).toEqual(ids);
+  });
+
+  it('foreign token in the lobby is a normal join with a fresh token', () => {
+    const { room } = twoPlayers();
+    const r = room.join('Cara', new FakeConn(), 'foreign-token-0000');
+    if (!r.ok) throw new Error('join failed');
+    expect(r.value.id).toBe('p3');
+    expect(r.value.token).not.toBe('foreign-token-0000');
+  });
+});

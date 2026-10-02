@@ -105,8 +105,20 @@ export class Room {
     return this.members.filter((m) => m.conn !== null);
   }
 
+  /** Markiert Mitglieder nach der Frist als abgelaufen; ausserhalb der Runde fliegen sie raus. */
+  private expireMembers(): void {
+    const now = this.now();
+    for (const m of this.members) {
+      if (m.disconnectedAt !== null && now - m.disconnectedAt > this.graceMs) m.expired = true;
+    }
+    if (this.phase !== 'running') {
+      this.members = this.members.filter((m) => !(m.conn === null && m.expired));
+    }
+  }
+
   join(name: string, conn: Conn, token?: string): Result<Member> {
     this.lastActive = this.now();
+    this.expireMembers();
 
     // Rückkehr mit Token (nur innerhalb der Frist)
     if (token !== undefined) {
@@ -127,11 +139,12 @@ export class Room {
       return fail('name_taken', 'Der Name ist schon vergeben.');
     }
 
-    const index = this.members.length;
+    const used = new Set(this.members.map((m) => m.color));
+    const free = ROOM_COLORS.find((c) => !used.has(c));
     const member: Member = {
       id: `p${this.nextId++}`,
       name,
-      color: ROOM_COLORS[index % ROOM_COLORS.length],
+      color: free ?? ROOM_COLORS[this.members.length % ROOM_COLORS.length],
       token: randomUUID(),
       conn,
       disconnectedAt: null,
@@ -161,7 +174,7 @@ export class Room {
 
   start(byId: string): Result<void> {
     this.lastActive = this.now();
-    if (this.hostId() !== byId) return fail('not_host', 'Nur der Host kann starten.');
+    if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann starten.');
     if (this.phase === 'running') return fail('already_started', 'Die Runde läuft schon.');
     if (this.connected().length < MIN_START_PLAYERS) {
       return fail('need_players', 'Mindestens zwei Spieler nötig.');
@@ -197,16 +210,14 @@ export class Room {
   setInput(m: Member, seq: number, input: Input): void {
     if (m.conn === null) return;
     this.lastActive = this.now();
-    m.ackSeq = Math.max(m.ackSeq, seq);
+    if (Number.isSafeInteger(seq) && seq >= 0) m.ackSeq = Math.max(m.ackSeq, seq);
     m.input = { ...input, buy: input.buy ?? m.input.buy };
   }
 
   /** Ein Serverschritt: Eingaben anwenden, `step`, Snapshots senden. */
   tick(): void {
     const now = this.now();
-    for (const m of this.members) {
-      if (m.disconnectedAt !== null && now - m.disconnectedAt > this.graceMs) m.expired = true;
-    }
+    this.expireMembers();
     if (this.phase !== 'running' || !this.state) return;
     if (this.connected().length > 0) this.lastActive = now;
 
