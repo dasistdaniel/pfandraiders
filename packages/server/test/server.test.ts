@@ -10,8 +10,18 @@ const sockets: WebSocket[] = [];
 
 afterEach(async () => {
   for (const s of sockets.splice(0)) s.terminate();
-  await server?.close();
+  const s = server;
+  server = undefined as unknown as RunningServer;
+  await s?.close();
 });
+
+async function waitFor(pred: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!pred()) {
+    if (Date.now() > deadline) throw new Error('waitFor timed out');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
 
 class Bot {
   messages: ServerMessage[] = [];
@@ -155,7 +165,7 @@ describe('websocket server', () => {
   it('lets a disconnected player come back with the token and get a fresh start message', async () => {
     const { a, code, joinedA } = await twoBotsInStartedRoom();
     a.ws.close();
-    await new Promise((r) => setTimeout(r, 100));
+    await waitFor(() => server.manager.get(code)!.members[0].conn === null);
     const again = await connect(server.port);
     again.send({ t: 'join', room: code, name: 'Anna', token: joinedA.token });
     await again.until('joined');
@@ -185,7 +195,6 @@ describe('websocket server', () => {
       a.send({ t: 'input', seq: 5, input: { moveX: 1, moveY: 0, action: false, steal: false, buy: null } });
     }
     await expect(oldClosed).resolves.toBeGreaterThan(0);
-    await new Promise((r) => setTimeout(r, 150));
     expect(room.state!.players.p1.x).toBe(x0);
     a2.send({ t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, buy: null } });
     await a2.until('snap', (m) => m.snap.players.p1.x > x0);
@@ -208,6 +217,77 @@ describe('websocket server', () => {
     await a.until('joined');
     for (let i = 0; i < 2000; i++) a.send({ t: 'input', seq: i, input: {} });
     await a.until('error', (m) => m.code === 'rate_limited');
+    const b = await connect(server.port);
+    b.send({ t: 'create', name: 'Bob' });
+    await b.until('joined');
+  });
+
+  it('refuses connections beyond the connection cap', async () => {
+    server = await startServer({ port: 0, stepMs: 20, maxConnections: 1 });
+    const a = await connect(server.port);
+    await expect(connect(server.port)).rejects.toThrow(/503/);
+    a.ws.close();
+    await waitFor(() => a.ws.readyState === WebSocket.CLOSED);
+    const b = await connect(server.port);
+    b.send({ t: 'create', name: 'Bob' });
+    await b.until('joined');
+  });
+
+  it('rejects the start promise when the port is taken and leaves no timers behind', async () => {
+    server = await startServer({ port: 0, stepMs: 20 });
+    const failure = await startServer({ port: server.port }).then(
+      () => null,
+      (e: NodeJS.ErrnoException) => e,
+    );
+    expect(failure?.code).toBe('EADDRINUSE');
+    // Der erste Server lebt weiter
+    const a = await connect(server.port);
+    a.send({ t: 'create', name: 'Anna' });
+    await a.until('joined');
+  });
+
+  it('closes clients with 1001 on shutdown', async () => {
+    server = await startServer({ port: 0, stepMs: 20 });
+    const a = await connect(server.port);
+    const closed = new Promise<number>((resolve) => a.ws.once('close', (c) => resolve(c)));
+    await server.close();
+    await expect(closed).resolves.toBe(1001);
+  });
+
+  it('evicts a room whose tick keeps failing, keeps ticking others and serves new connections', async () => {
+    const errors: unknown[] = [];
+    server = await startServer({ port: 0, stepMs: 20, onError: (e) => errors.push(e) });
+    const a = await connect(server.port);
+    const b = await connect(server.port);
+    a.send({ t: 'create', name: 'Anna' });
+    const { room: badCode } = await a.until('joined');
+    b.send({ t: 'create', name: 'Bob' });
+    const { room: goodCode } = await b.until('joined');
+    server.manager.get(badCode)!.tick = () => {
+      throw new Error('boom');
+    };
+    await a.until('error', (m) => m.code === 'bad_message');
+    await waitFor(() => server.manager.get(badCode) === undefined);
+    expect(errors.length).toBeGreaterThanOrEqual(3);
+    expect(server.manager.get(goodCode)).toBeDefined();
+    const c = await connect(server.port);
+    c.send({ t: 'create', name: 'Cara' });
+    await c.until('joined');
+  });
+
+  it('survives a throwing message handler and answers with a generic error', async () => {
+    const errors: unknown[] = [];
+    server = await startServer({ port: 0, stepMs: 20, onError: (e) => errors.push(e) });
+    const a = await connect(server.port);
+    a.send({ t: 'create', name: 'Anna' });
+    const { room } = await a.until('joined');
+    server.manager.get(room)!.setInput = () => {
+      throw new Error('secret');
+    };
+    a.send({ t: 'input', seq: 1, input: {} });
+    const err = await a.until('error', (m) => m.code === 'bad_message');
+    expect(err.message).not.toContain('secret');
+    expect(errors).toHaveLength(1);
     const b = await connect(server.port);
     b.send({ t: 'create', name: 'Bob' });
     await b.until('joined');

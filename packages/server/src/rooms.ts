@@ -5,16 +5,22 @@ import type { Conn, Member, Result, RoomOptions } from './room';
 
 export interface ManagerOptions extends RoomOptions {
   maxRooms?: number;
+  /** Wird bei jeder abgefangenen Ausnahme beim Ticken aufgerufen (Logging, Tests). */
+  onError?: (err: unknown, room: Room) => void;
+  maxTickFailures?: number;
 }
 
 export class RoomManager {
   private rooms = new Map<string, Room>();
   private readonly maxRooms: number;
   private readonly random: () => number;
+  private readonly maxTickFailures: number;
+  private failures = new Map<string, number>();
 
   constructor(private readonly opts: ManagerOptions = {}) {
     this.maxRooms = opts.maxRooms ?? SERVER_CONFIG.maxRooms;
     this.random = opts.random ?? Math.random;
+    this.maxTickFailures = opts.maxTickFailures ?? SERVER_CONFIG.maxTickFailures;
   }
 
   get size(): number {
@@ -47,14 +53,46 @@ export class RoomManager {
     return { ok: true, value: { room, member: joined.value } };
   }
 
+  /** Tickt jeden Raum einzeln abgesichert; ein kaputter Raum fliegt nach wiederholten Fehlern raus. */
   tickAll(): void {
-    for (const room of this.rooms.values()) room.tick();
+    for (const [code, room] of [...this.rooms]) {
+      try {
+        room.tick();
+        this.failures.delete(code);
+      } catch (err) {
+        const n = (this.failures.get(code) ?? 0) + 1;
+        this.failures.set(code, n);
+        try {
+          if (this.opts.onError) this.opts.onError(err, room);
+          else console.error(`Tick-Fehler in Raum ${code}:`, err);
+        } catch {
+          /* Logging darf nie selbst scheitern */
+        }
+        if (n >= this.maxTickFailures) this.evict(code, room);
+      }
+    }
+  }
+
+  private evict(code: string, room: Room): void {
+    this.rooms.delete(code);
+    this.failures.delete(code);
+    for (const m of room.members) {
+      try {
+        m.conn?.send({ t: 'error', code: 'bad_message', message: 'Der Raum wurde wegen eines Fehlers geschlossen.' });
+        m.conn?.close?.(1011, 'room failed');
+      } catch {
+        /* Verbindung schon weg */
+      }
+    }
   }
 
   /** Löscht Räume, die lange leer waren. */
   sweep(): void {
     for (const [code, room] of this.rooms) {
-      if (room.isDead()) this.rooms.delete(code);
+      if (room.isDead()) {
+        this.rooms.delete(code);
+        this.failures.delete(code);
+      }
     }
   }
 }

@@ -14,6 +14,10 @@ export interface ServerOptions {
   roundMs?: number;
   now?: () => number;
   random?: () => number;
+  /** Mehr gleichzeitige Verbindungen werden abgewiesen (503). */
+  maxConnections?: number;
+  /** Abgefangene Ausnahmen (Tick und Nachrichtenhandler). Ohne Angabe wird nach stderr geloggt. */
+  onError?: (err: unknown, room: Room | null) => void;
 }
 
 export interface RunningServer {
@@ -22,37 +26,224 @@ export interface RunningServer {
   close(): Promise<void>;
 }
 
-interface Session {
+export interface Session {
   room: Room | null;
   member: Member | null;
   tokens: number;
   lastRefill: number;
   alive: boolean;
+  /** Zeitpunkt der letzten rate_limited-Antwort */
+  lastNotice: number;
+  /** Zeitpunkt des letzten Verwerfens wegen Ratenlimit */
+  lastLimited: number | null;
+  /** Beginn der aktuellen Dauerüberlast */
+  overSince: number | null;
+  /** Ausnahmen im Nachrichtenhandler dieser Verbindung */
+  errors: number;
 }
 
-function send(ws: WebSocket, msg: ServerMessage): void {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+export function newSession(now: number): Session {
+  return {
+    room: null,
+    member: null,
+    tokens: SERVER_CONFIG.maxMessagesPerSecond,
+    lastRefill: now,
+    alive: true,
+    lastNotice: -Infinity,
+    lastLimited: null,
+    overSince: null,
+    errors: 0,
+  };
 }
 
-function error(ws: WebSocket, code: ErrorCode, message: string): void {
-  send(ws, { t: 'error', code, message });
+/** Was der Handler vom Socket braucht (testbar ohne echten Socket). */
+export interface Sock {
+  close(code?: number, reason?: string): void;
+}
+
+export interface Env {
+  manager: RoomManager;
+  sockets: Map<Conn, Sock>;
+  now?: () => number;
+  onError?: (err: unknown, room: Room | null) => void;
+}
+
+interface SenderSocket {
+  readyState: number;
+  bufferedAmount: number;
+  send(data: string): void;
+  terminate(): void;
+}
+
+const WS_OPEN = 1;
+
+/**
+ * Sendet Nachrichten an einen Socket. Ist der Sendepuffer über der Grenze, werden Snapshots
+ * verworfen (nie nachgeschoben); bleibt er zu lange darüber, wird der Socket getrennt.
+ */
+export function makeSender(
+  ws: SenderSocket,
+  cfg: { maxBufferedBytes: number; bufferedStaleMs: number } = SERVER_CONFIG,
+  now: () => number = Date.now,
+): { send(msg: ServerMessage): void; skipped(): number } {
+  let skipped = 0;
+  let overSince: number | null = null;
+  return {
+    send(msg) {
+      if (ws.readyState !== WS_OPEN) return;
+      if (msg.t === 'snap') {
+        if (ws.bufferedAmount > cfg.maxBufferedBytes) {
+          skipped++;
+          const t = now();
+          if (overSince === null) overSince = t;
+          else if (t - overSince > cfg.bufferedStaleMs) ws.terminate();
+          return;
+        }
+        overSince = null;
+      }
+      ws.send(JSON.stringify(msg));
+    },
+    skipped: () => skipped,
+  };
+}
+
+function reply(conn: Conn, code: ErrorCode, message: string): void {
+  conn.send({ t: 'error', code, message });
+}
+
+function report(env: Env, err: unknown, room: Room | null): void {
+  try {
+    if (env.onError) env.onError(err, room);
+    else console.error(`Handler-Fehler (Raum ${room?.code ?? '-'}):`, err);
+  } catch {
+    /* Logging darf nie selbst scheitern */
+  }
+}
+
+/** Verarbeitet eine rohe Nachricht einer Verbindung. Wirft nie. */
+export function handleMessage(env: Env, session: Session, conn: Conn, sock: Sock, raw: string): void {
+  try {
+    dispatch(env, session, conn, sock, raw);
+  } catch (err) {
+    report(env, err, session.room);
+    try {
+      reply(conn, 'bad_message', 'Interner Fehler.');
+    } catch {
+      /* Verbindung schon weg */
+    }
+    session.errors++;
+    if (session.errors >= SERVER_CONFIG.maxHandlerErrors) sock.close(1011, 'too many errors');
+  }
+}
+
+function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: string): void {
+  const now = (env.now ?? Date.now)();
+  const { manager } = env;
+
+  // Ratenbegrenzung: Token-Eimer, pro Sekunde maxMessagesPerSecond Nachrichten
+  session.tokens = Math.min(
+    SERVER_CONFIG.maxMessagesPerSecond,
+    session.tokens + ((now - session.lastRefill) / 1000) * SERVER_CONFIG.maxMessagesPerSecond,
+  );
+  session.lastRefill = now;
+  if (session.tokens < 1) {
+    if (session.lastLimited === null || now - session.lastLimited > SERVER_CONFIG.rateNoticeMs) {
+      session.overSince = now;
+    }
+    session.lastLimited = now;
+    if (now - (session.overSince ?? now) >= SERVER_CONFIG.rateCloseMs) {
+      sock.close(1008, 'rate limit');
+      return;
+    }
+    if (now - session.lastNotice >= SERVER_CONFIG.rateNoticeMs) {
+      session.lastNotice = now;
+      reply(conn, 'rate_limited', 'Zu viele Nachrichten.');
+    }
+    return;
+  }
+  session.tokens -= 1;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    reply(conn, 'bad_message', 'Kein gültiges JSON.');
+    return;
+  }
+  const msg = parseClientMessage(parsed);
+  if (msg === null) {
+    reply(conn, 'bad_message', 'Ungültige Nachricht.');
+    return;
+  }
+
+  /** Gehört diese Verbindung noch dem Mitglied? Sonst ersetzt (Token-Rückkehr) und veraltet. */
+  const isCurrent = (): boolean => {
+    if (session.member && session.member.conn !== conn) {
+      sock.close(4000, 'replaced');
+      return false;
+    }
+    return true;
+  };
+
+  switch (msg.t) {
+    case 'create': {
+      if (session.room) return reply(conn, 'bad_message', 'Du bist schon in einem Raum.');
+      const r = manager.create(msg.name, conn);
+      if (!r.ok) return reply(conn, r.code, r.message);
+      session.room = r.value.room;
+      session.member = r.value.member;
+      return;
+    }
+    case 'join': {
+      if (session.room) return reply(conn, 'bad_message', 'Du bist schon in einem Raum.');
+      const room = manager.get(msg.room);
+      if (!room) return reply(conn, 'room_not_found', 'Raum nicht gefunden.');
+      const prev = msg.token === undefined ? undefined : room.members.find((m) => m.token === msg.token)?.conn;
+      const r = room.join(msg.name, conn, msg.token);
+      if (!r.ok) return reply(conn, r.code, r.message);
+      // Rückkehr ersetzt eine noch offene alte Verbindung: diese schliessen
+      if (prev && prev !== conn) env.sockets.get(prev)?.close(4000, 'replaced');
+      session.room = room;
+      session.member = r.value;
+      return;
+    }
+    case 'start': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.start(session.member.id);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
+    case 'input': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      session.room.setInput(session.member, msg.seq, msg.input);
+      return;
+    }
+  }
 }
 
 export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const stepMs = opts.stepMs ?? SERVER_CONFIG.stepMs;
   const allowed = opts.allowedOrigins ?? [];
+  const maxConnections = opts.maxConnections ?? SERVER_CONFIG.maxConnections;
   const manager = new RoomManager({
     stepMs,
     roundMs: opts.roundMs,
     now: opts.now,
     random: opts.random,
+    onError: opts.onError
+      ? (err, room) => opts.onError!(err, room)
+      : (err, room) => console.error(`Tick-Fehler in Raum ${room.code}:`, err),
   });
 
   const wss = new WebSocketServer({
     port: opts.port,
     maxPayload: MAX_MESSAGE_BYTES,
     verifyClient: (info, done) => {
-      if (allowed.length === 0 || (info.origin && allowed.includes(info.origin))) {
+      if (wss.clients.size >= maxConnections) {
+        done(false, 503, 'server full');
+      } else if (allowed.length === 0 || (info.origin && allowed.includes(info.origin))) {
         done(true);
       } else {
         done(false, 403, 'origin not allowed');
@@ -61,105 +252,29 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   });
 
   const sessions = new Map<WebSocket, Session>();
-  const sockets = new Map<Conn, WebSocket>();
+  const sockets = new Map<Conn, Sock>();
+  const env: Env = { manager, sockets, onError: opts.onError };
 
   wss.on('connection', (ws) => {
-    const session: Session = {
-      room: null,
-      member: null,
-      tokens: SERVER_CONFIG.maxMessagesPerSecond,
-      lastRefill: Date.now(),
-      alive: true,
-    };
+    const session = newSession(Date.now());
     sessions.set(ws, session);
-    const conn: Conn = { send: (msg: ServerMessage) => send(ws, msg) };
-    sockets.set(conn, ws);
-    /** Gehört diese Verbindung noch dem Mitglied? Sonst ersetzt (Token-Rückkehr) und veraltet. */
-    const isCurrent = (): boolean => {
-      if (session.member && session.member.conn !== conn) {
-        ws.close(4000, 'replaced');
-        return false;
-      }
-      return true;
+    const sender = makeSender(ws);
+    const conn: Conn = {
+      send: (msg) => sender.send(msg),
+      close: (code, reason) => ws.close(code, reason),
     };
+    sockets.set(conn, ws);
 
     ws.on('pong', () => {
       session.alive = true;
     });
-
-    ws.on('message', (data) => {
-      // Ratenbegrenzung: Token-Eimer, pro Sekunde maxMessagesPerSecond Nachrichten
-      const now = Date.now();
-      session.tokens = Math.min(
-        SERVER_CONFIG.maxMessagesPerSecond,
-        session.tokens + ((now - session.lastRefill) / 1000) * SERVER_CONFIG.maxMessagesPerSecond,
-      );
-      session.lastRefill = now;
-      if (session.tokens < 1) {
-        error(ws, 'rate_limited', 'Zu viele Nachrichten.');
-        return;
-      }
-      session.tokens -= 1;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(String(data));
-      } catch {
-        error(ws, 'bad_message', 'Kein gültiges JSON.');
-        return;
-      }
-      const msg = parseClientMessage(parsed);
-      if (msg === null) {
-        error(ws, 'bad_message', 'Ungültige Nachricht.');
-        return;
-      }
-
-      switch (msg.t) {
-        case 'create': {
-          if (session.room) {
-            error(ws, 'bad_message', 'Du bist schon in einem Raum.');
-            return;
-          }
-          const r = manager.create(msg.name, conn);
-          if (!r.ok) return error(ws, r.code, r.message);
-          session.room = r.value.room;
-          session.member = r.value.member;
-          return;
-        }
-        case 'join': {
-          if (session.room) {
-            error(ws, 'bad_message', 'Du bist schon in einem Raum.');
-            return;
-          }
-          const room = manager.get(msg.room);
-          if (!room) return error(ws, 'room_not_found', 'Raum nicht gefunden.');
-          const prev = msg.token === undefined ? undefined : room.members.find((m) => m.token === msg.token)?.conn;
-          const r = room.join(msg.name, conn, msg.token);
-          if (!r.ok) return error(ws, r.code, r.message);
-          // Rückkehr ersetzt eine noch offene alte Verbindung: diese schliessen
-          if (prev && prev !== conn) sockets.get(prev)?.close(4000, 'replaced');
-          session.room = room;
-          session.member = r.value;
-          return;
-        }
-        case 'start': {
-          if (!session.room || !session.member) return error(ws, 'not_in_room', 'Du bist in keinem Raum.');
-          if (!isCurrent()) return;
-          const r = session.room.start(session.member.id);
-          if (!r.ok) error(ws, r.code, r.message);
-          return;
-        }
-        case 'input': {
-          if (!session.room || !session.member) return error(ws, 'not_in_room', 'Du bist in keinem Raum.');
-          if (!isCurrent()) return;
-          session.room.setInput(session.member, msg.seq, msg.input);
-          return;
-        }
-      }
-    });
-
+    ws.on('message', (data) => handleMessage(env, session, conn, ws, String(data)));
     ws.on('close', () => {
-      session.room?.leave(conn);
+      try {
+        session.room?.leave(conn);
+      } catch (err) {
+        report(env, err, session.room);
+      }
       sessions.delete(ws);
       sockets.delete(conn);
     });
@@ -167,7 +282,13 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   });
 
   const tickTimer = setInterval(() => manager.tickAll(), stepMs);
-  const sweepTimer = setInterval(() => manager.sweep(), 10_000);
+  const sweepTimer = setInterval(() => {
+    try {
+      manager.sweep();
+    } catch (err) {
+      report(env, err, null);
+    }
+  }, 10_000);
   const pingTimer = setInterval(() => {
     for (const [ws, session] of sessions) {
       if (!session.alive) {
@@ -178,9 +299,29 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       ws.ping();
     }
   }, SERVER_CONFIG.pingEveryMs);
+  const clearTimers = (): void => {
+    clearInterval(tickTimer);
+    clearInterval(sweepTimer);
+    clearInterval(pingTimer);
+  };
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let listening = false;
+    wss.on('error', (err) => {
+      if (!listening) {
+        clearTimers();
+        try {
+          wss.close();
+        } catch {
+          /* nicht gestartet */
+        }
+        reject(err);
+      } else {
+        console.error('WebSocket-Serverfehler:', err);
+      }
+    });
     wss.on('listening', () => {
+      listening = true;
       const address = wss.address();
       const port = typeof address === 'object' && address ? address.port : opts.port;
       resolve({
@@ -188,11 +329,16 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         manager,
         close: () =>
           new Promise<void>((done) => {
-            clearInterval(tickTimer);
-            clearInterval(sweepTimer);
-            clearInterval(pingTimer);
-            for (const ws of wss.clients) ws.terminate();
-            wss.close(() => done());
+            clearTimers();
+            for (const ws of wss.clients) ws.close(1001, 'server shutting down');
+            // Wer die Close-Handshake nicht beantwortet, wird nach kurzer Frist getrennt
+            const force = setTimeout(() => {
+              for (const ws of wss.clients) ws.terminate();
+            }, 500);
+            wss.close(() => {
+              clearTimeout(force);
+              done();
+            });
           }),
       });
     });

@@ -23,6 +23,8 @@ import { SERVER_CONFIG } from './config';
 /** Übertragungsweg zu einem Spieler. Der Raum kennt keine Sockets. */
 export interface Conn {
   send(msg: ServerMessage): void;
+  /** Verbindung beenden (optional; der Raum selbst nutzt es nicht) */
+  close?(code: number, reason: string): void;
 }
 
 export interface Member {

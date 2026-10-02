@@ -1,5 +1,5 @@
 import { ROOM_CODE_CHARS, ROOM_CODE_LENGTH } from '@pfandraiders/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RoomManager } from '../src/rooms';
 
 const conn = { send() {} };
@@ -53,5 +53,51 @@ describe('RoomManager', () => {
     t = 2000;
     m.sweep();
     expect(m.size).toBe(0);
+  });
+
+  it('one failing room neither stops the others nor survives 3 consecutive failures', () => {
+    const onError = vi.fn();
+    const m = new RoomManager({ maxRooms: 5, onError });
+    const closed = vi.fn();
+    const c1 = { send: vi.fn(), close: closed };
+    const bad = m.create('A', c1);
+    const good = m.create('B', conn);
+    if (!bad.ok || !good.ok) throw new Error('create failed');
+    bad.value.room.tick = () => {
+      throw new Error('boom');
+    };
+    const goodTick = vi.spyOn(good.value.room, 'tick');
+    m.tickAll();
+    m.tickAll();
+    expect(goodTick).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(m.size).toBe(2);
+    m.tickAll();
+    expect(m.size).toBe(1);
+    expect(m.get(bad.value.room.code)).toBeUndefined();
+    expect(m.get(good.value.room.code)).toBeDefined();
+    expect(c1.send).toHaveBeenCalledWith(expect.objectContaining({ t: 'error', code: 'bad_message' }));
+    expect(closed).toHaveBeenCalledWith(1011, expect.any(String));
+  });
+
+  it('resets the failure count after a successful tick', () => {
+    const m = new RoomManager({ maxRooms: 5, onError: () => {} });
+    const r = m.create('A', conn);
+    if (!r.ok) throw new Error('create failed');
+    const room = r.value.room;
+    const real = room.tick.bind(room);
+    let fail = true;
+    room.tick = () => {
+      if (fail) throw new Error('boom');
+      real();
+    };
+    m.tickAll();
+    m.tickAll();
+    fail = false;
+    m.tickAll();
+    fail = true;
+    m.tickAll();
+    m.tickAll();
+    expect(m.size).toBe(1);
   });
 });
