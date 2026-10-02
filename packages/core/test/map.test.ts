@@ -57,4 +57,16 @@ describe('collision', () => {
     expect(boxBlocked(map, 18, 24, 5)).toBe(true); // linke Kante x=13 liegt in der Wand
     expect(boxBlocked(map, 24, 18, 5)).toBe(true);
   });
+  it('reads npc spawn tiles as walkable floor', () => {
+    const map = parseMap(['####', '#N@#', '####']);
+    expect(map.npcSpawns).toEqual([{ x: 24, y: 24 }]);
+    expect(map.spawns).toEqual([{ x: 40, y: 24 }]);
+    expect(map.solid[1 * 4 + 1]).toBe(false);
+    expect(map.zones).toEqual([]);
+  });
+
+  it('passes zones through', () => {
+    const zones = [{ id: 'z', name: 'Zone', area: { x0: 0, y0: 0, x1: 32, y1: 32 } }];
+    expect(parseMap(['@'], zones).zones).toEqual(zones);
+  });
 });

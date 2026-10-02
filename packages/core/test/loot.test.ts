@@ -27,4 +27,16 @@ describe('rollContents', () => {
     const b = { rngState: 5 };
     expect(rollContents(a, 'park')).toEqual(rollContents(b, 'park'));
   });
+
+  it('multiplies the rolled counts', () => {
+    const a = { rngState: 11 };
+    const b = { rngState: 11 };
+    const single = rollContents(a, 'park');
+    const triple = rollContents(b, 'park', 3);
+    expect(triple).toEqual({
+      plastic: single.plastic * 3,
+      glass: single.glass * 3,
+      crate: single.crate * 3,
+    });
+  });
 });

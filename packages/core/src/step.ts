@@ -1,10 +1,13 @@
 import { CONFIG } from './config';
 import { deposit, isNear, tryBuy } from './economy';
+import { updateHealth } from './health';
 import { walk } from './movement';
+import { updateNpcs } from './npc';
 import { cancelSearch, refillSpot, updateSearch } from './search';
 import { cancelSteal, updateSteal } from './theft';
 import { NO_INPUT } from './types';
 import type { GameState, Input, Player } from './types';
+import { updateZones } from './zones';
 
 /**
  * Ein Simulationsschritt. Verändert `state` direkt und gibt ihn zurück.
@@ -24,6 +27,8 @@ export function step(
   }
 
   for (const spot of state.spots) refillSpot(state, spot, dt);
+  updateZones(state, dt);
+  updateNpcs(state, dt);
 
   state.timeLeftMs -= dt;
   if (state.timeLeftMs <= 0) {
@@ -39,6 +44,12 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   const stealPressed = input.steal && !p.stealHeld;
   p.stealHeld = input.steal;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
+
+  if (updateHealth(p, dt)) {
+    // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgeführt)
+    p.mode = 'unconscious';
+    return;
+  }
 
   if (input.buy !== null) tryBuy(state, p, input.buy);
 

@@ -1,7 +1,7 @@
 import { emptyBottles } from './bottles';
 import { CONFIG } from './config';
 import { rollContents } from './loot';
-import { nextRandom } from './rng';
+import { nextRandom, randInt } from './rng';
 import type { GameState, MapData, Player, Point, Spot, SpotDef } from './types';
 
 export interface GameOptions {
@@ -24,11 +24,20 @@ export function createGame(
     map,
     players: {},
     spots: [],
+    npcs: [],
+    nextNpcId: 0,
+    nextNpcMs: CONFIG.npc.firstSpawnMs,
+    zones: [],
   };
   playerIds.forEach((id, i) => {
     state.players[id] = newPlayer(id, map.spawns[i % map.spawns.length]);
   });
   for (const def of map.spots) state.spots.push(newSpot(state, def));
+  state.zones = map.zones.map((def) => ({
+    def,
+    phase: 'idle' as const,
+    timerMs: randInt(state, ...CONFIG.zone.firstIdleMs),
+  }));
   return state;
 }
 
@@ -49,6 +58,9 @@ function newPlayer(id: string, at: Point): Player {
     stealTargetId: null,
     stealProgressMs: 0,
     shieldMs: 0,
+    health: CONFIG.health.max,
+    unconsciousMs: 0,
+    spawn: { x: at.x, y: at.y },
   };
 }
 

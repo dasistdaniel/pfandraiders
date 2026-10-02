@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
 import { alertText, hintLines, playerName, resultLines, statusLines } from '../src/text';
 
-const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q' };
-const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/' };
+const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' };
+const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/', treat: ';', food: "'" };
 
 // p1 (24,24) steht 16 px vom Shop (40,24). p2 liegt weit weg am Ende des Ganges.
 function shopGame(): GameState {
@@ -29,13 +29,14 @@ describe('statusLines', () => {
     expect(lines[1]).toContain('Hände 3/3');
     expect(lines[1]).toContain('Pl2');
     expect(lines[1]).toContain('Gl1');
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toBe('Leben 100/100');
   });
 
   it('shows the item name when carrying one', () => {
     const s = shopGame();
     s.players.p1.item = 'bolt_cutters';
-    expect(statusLines(s, s.players.p1)[2]).toBe('Item: Bolzenschneider');
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 100/100   Item: Bolzenschneider');
   });
 });
 
@@ -108,7 +109,7 @@ describe('alertText', () => {
     const s = shopGame();
     expect(alertText(s, s.players.p1)).toBe('');
     s.players.p1.shieldMs = 2500;
-    expect(alertText(s, s.players.p1)).toBe('Bestohlen! Schutz 3 s');
+    expect(alertText(s, s.players.p1)).toBe('Schutz 3 s');
   });
 });
 
@@ -149,5 +150,108 @@ describe('labels for other devices', () => {
     const s = shopGame();
     s.phase = 'ended';
     expect(resultLines(s, KEYS2).at(-1)).toBe('Neue Runde: R oder Enter');
+  });
+});
+
+describe('health and shop', () => {
+  it('shows health rounded up, also with fractions', () => {
+    const s = shopGame();
+    s.players.p1.health = 87.2;
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 88/100');
+  });
+
+  it('offers food and the treat at the shop with the device keys', () => {
+    const s = shopGame();
+    const lines = hintLines(s, s.players.p1, KEYS);
+    expect(lines).toContain('[4] Essen +30 Leben 1,00 €');
+    expect(lines).toContain('[3] Leckerli 1,00 €');
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain(`[${KEYS2.food}] Essen +30 Leben 1,00 €`);
+  });
+
+  it('hides the treat offer when the item slot is taken but still offers food', () => {
+    const s = shopGame();
+    s.players.p1.item = 'bolt_cutters';
+    const lines = hintLines(s, s.players.p1, KEYS);
+    expect(lines).toContain('Item-Slot belegt');
+    expect(lines.some((l) => l.startsWith('[3]'))).toBe(false);
+    expect(lines.some((l) => l.startsWith('[4]'))).toBe(true);
+  });
+});
+
+describe('more alerts', () => {
+  it('shows the remaining unconscious time', () => {
+    const s = shopGame();
+    s.players.p1.unconsciousMs = 4200;
+    expect(alertText(s, s.players.p1)).toContain('Bewusstlos! Noch 5 s');
+  });
+
+  it('warns during a police check', () => {
+    const s = shopGame();
+    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, targetId: 'p1', cooldownMs: 0, distractedMs: 0, checkMs: 300 });
+    expect(alertText(s, s.players.p1)).toContain('KONTROLLE! Lauf weg!');
+  });
+
+  it('announces zones and shows the active bonus time', () => {
+    const s = createGame(1, parseMap(['#####', '#@..#', '#####'], [
+      { id: 'a', name: 'Stadion', area: { x0: 0, y0: 0, x1: 10, y1: 10 } },
+      { id: 'b', name: 'Konzert', area: { x0: 0, y0: 0, x1: 10, y1: 10 } },
+    ]), ['p1']);
+    s.zones[0].phase = 'announced';
+    s.zones[0].timerMs = 14500;
+    s.zones[1].phase = 'active';
+    s.zones[1].timerMs = 31000;
+    const text = alertText(s, s.players.p1);
+    expect(text).toContain('Stadion in 15 s!');
+    expect(text).toContain('Konzert: mehr Pfand! Noch 31 s');
+  });
+
+  it('puts personal alerts before zone lines', () => {
+    const s = createGame(1, parseMap(['#####', '#@..#', '#####'], [
+      { id: 'a', name: 'Stadion', area: { x0: 0, y0: 0, x1: 10, y1: 10 } },
+    ]), ['p1']);
+    s.zones[0].phase = 'announced';
+    s.zones[0].timerMs = 5000;
+    s.players.p1.shieldMs = 2000;
+    const lines = alertText(s, s.players.p1).split('\n');
+    expect(lines[0]).toBe('Schutz 2 s');
+    expect(lines[1]).toBe('Stadion in 5 s!');
+  });
+});
+
+describe('final review fixes', () => {
+  const ZONES = [
+    { id: 'a', name: 'Stadion', area: { x0: 0, y0: 0, x1: 10, y1: 10 } },
+    { id: 'b', name: 'Konzert', area: { x0: 0, y0: 0, x1: 10, y1: 10 } },
+  ];
+
+  it('shows no alerts after the round has ended', () => {
+    const s = createGame(1, parseMap(['#####', '#@..#', '#####'], ZONES), ['p1']);
+    s.zones[0].phase = 'active';
+    s.zones[0].timerMs = 23000;
+    s.players.p1.unconsciousMs = 7000;
+    s.players.p1.shieldMs = 2000;
+    s.phase = 'ended';
+    expect(alertText(s, s.players.p1)).toBe('');
+  });
+
+  it('gives no hints to an unconscious player', () => {
+    const s = shopGame();
+    s.players.p1.unconsciousMs = 3000;
+    expect(hintLines(s, s.players.p1, KEYS)).toEqual([]);
+  });
+
+  it('shows at most three alert lines, personal ones first', () => {
+    const s = createGame(1, parseMap(['#####', '#@..#', '#####'], ZONES), ['p1', 'p2']);
+    s.players.p1.unconsciousMs = 4000;
+    s.players.p2.stealTargetId = 'p1';
+    s.players.p2.stealProgressMs = 40;
+    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, targetId: 'p1', cooldownMs: 0, distractedMs: 0, checkMs: 300 });
+    s.zones[0].phase = 'announced';
+    s.zones[0].timerMs = 5000;
+    s.zones[1].phase = 'active';
+    s.zones[1].timerMs = 9000;
+    const lines = alertText(s, s.players.p1).split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe('Bewusstlos! Noch 4 s');
   });
 });

@@ -1,5 +1,5 @@
 import { TILE } from './config';
-import type { MapData, Point, SpotDef, SpotType } from './types';
+import type { MapData, Point, SpotDef, SpotType, ZoneDef } from './types';
 
 const SPOT_CHARS: Record<string, SpotType> = {
   b: 'bus_stop',
@@ -9,13 +9,14 @@ const SPOT_CHARS: Record<string, SpotType> = {
   p: 'park',
 };
 
-export function parseMap(rows: string[]): MapData {
+export function parseMap(rows: string[], zones: ZoneDef[] = []): MapData {
   const cols = rows[0].length;
   const solid: boolean[] = [];
   const spots: SpotDef[] = [];
   const dropoffs: Point[] = [];
   const shops: Point[] = [];
   const spawns: Point[] = [];
+  const npcSpawns: Point[] = [];
 
   rows.forEach((row, r) => {
     if (row.length !== cols) {
@@ -29,12 +30,13 @@ export function parseMap(rows: string[]): MapData {
       if (ch === '@') spawns.push(center);
       else if (ch === 'D') dropoffs.push(center);
       else if (ch === 'S') shops.push(center);
+      else if (ch === 'N') npcSpawns.push(center);
       else if (ch in SPOT_CHARS) spots.push({ id: spots.length, type: SPOT_CHARS[ch], ...center });
       else throw new Error(`unknown map char '${ch}' at row ${r}, col ${c}`);
     }
   });
 
-  return { cols, rows: rows.length, solid, spots, dropoffs, shops, spawns };
+  return { cols, rows: rows.length, solid, spots, dropoffs, shops, spawns, npcSpawns, zones };
 }
 
 /** Wand oder außerhalb der Karte */

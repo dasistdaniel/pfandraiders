@@ -26,7 +26,9 @@ describe('city map', () => {
     expect(CITY_MAP.spawns.length).toBe(4);
     expect(CITY_MAP.dropoffs.length).toBe(1);
     expect(CITY_MAP.shops.length).toBe(1);
-    expect(CITY_MAP.spots.length).toBe(13);
+    expect(CITY_MAP.spots.length).toBe(17);
+    expect(CITY_MAP.npcSpawns.length).toBe(4);
+    expect(CITY_MAP.zones.map((z) => z.id)).toEqual(['stadium', 'concert']);
   });
 
   it('is enclosed by walls', () => {
@@ -44,10 +46,25 @@ describe('city map', () => {
   it('lets a player walk from the first spawn to every spot, dropoff and shop', () => {
     const start = CITY_MAP.spawns[0];
     const reach = reachableTiles(CITY_MAP, start.x, start.y);
-    const targets = [...CITY_MAP.spots, ...CITY_MAP.dropoffs, ...CITY_MAP.shops, ...CITY_MAP.spawns];
+    const targets = [
+      ...CITY_MAP.spots,
+      ...CITY_MAP.dropoffs,
+      ...CITY_MAP.shops,
+      ...CITY_MAP.spawns,
+      ...CITY_MAP.npcSpawns,
+    ];
     for (const t of targets) {
       const tile = Math.floor(t.y / TILE) * CITY_MAP.cols + Math.floor(t.x / TILE);
       expect(reach.has(tile), `unreachable target at ${t.x},${t.y}`).toBe(true);
+    }
+  });
+
+  it('puts at least three spots into each event zone', () => {
+    for (const zone of CITY_MAP.zones) {
+      const inside = CITY_MAP.spots.filter(
+        (s) => s.x >= zone.area.x0 && s.x < zone.area.x1 && s.y >= zone.area.y0 && s.y < zone.area.y1,
+      );
+      expect(inside.length, zone.id).toBeGreaterThanOrEqual(3);
     }
   });
 });

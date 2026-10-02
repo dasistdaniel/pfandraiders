@@ -70,4 +70,23 @@ describe('createGame', () => {
   it('refuses duplicate player ids', () => {
     expect(() => createGame(1, CITY_MAP, ['a', 'a'])).toThrow(/duplicate/);
   });
+
+  it('starts players healthy and records their spawn point', () => {
+    const s = createGame(1, CITY_MAP, ['a', 'b']);
+    expect(s.players.a).toMatchObject({ health: CONFIG.health.max, unconsciousMs: 0 });
+    expect(s.players.a.spawn).toEqual(CITY_MAP.spawns[0]);
+    expect(s.players.b.spawn).toEqual(CITY_MAP.spawns[1]);
+  });
+
+  it('starts with no npcs, a first npc timer and idle zones with their first pause', () => {
+    const s = createGame(3, CITY_MAP, ['a']);
+    expect(s.npcs).toEqual([]);
+    expect(s.nextNpcMs).toBe(CONFIG.npc.firstSpawnMs);
+    expect(s.zones.map((z) => z.def.id)).toEqual(['stadium', 'concert']);
+    for (const z of s.zones) {
+      expect(z.phase).toBe('idle');
+      expect(z.timerMs).toBeGreaterThanOrEqual(CONFIG.zone.firstIdleMs[0]);
+      expect(z.timerMs).toBeLessThanOrEqual(CONFIG.zone.firstIdleMs[1]);
+    }
+  });
 });

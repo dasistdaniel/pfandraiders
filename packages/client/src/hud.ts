@@ -29,7 +29,7 @@ export class PlayerHud {
     this.status = scene.add.text(4, 4, '', { ...FONT, ...wrap });
     this.hint = scene.add.text(4, view.h - 4, '', { ...FONT, ...wrap }).setOrigin(0, 1);
     this.alert = scene.add
-      .text(view.w / 2, ALERT_Y, '', { ...FONT, color: '#ff5252', align: 'center' })
+      .text(view.w / 2, ALERT_Y, '', { ...FONT, color: '#ff5252', align: 'center', wordWrap: { width: view.w - 8 } })
       .setOrigin(0.5, 0);
     this.banner = scene.add
       .text(view.w / 2, view.h / 2, '', {

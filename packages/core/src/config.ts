@@ -41,7 +41,53 @@ export const CONFIG = {
   },
   items: {
     bolt_cutters: { name: 'Bolzenschneider', price: 600 },
+    dog_treat: { name: 'Leckerli', price: 100 },
   } as Record<ItemId, { name: string; price: number }>,
+  health: {
+    max: 100,
+    /** alle so viele ms verliert ein Spieler 1 Leben durch Hunger */
+    hungerEveryMs: 8000,
+    food: { price: 100, heal: 30 },
+    unconsciousMs: 10000,
+    /** Leben nach dem Respawn */
+    reviveHealth: 60,
+    /** Anteil des Geldes, der beim Umfallen verloren geht (abgerundet) */
+    moneyLossFraction: 0.25,
+    /** Schutz gegen Diebstahl nach dem Respawn */
+    spawnShieldMs: 3000,
+  },
+  npc: {
+    maxCount: 3,
+    firstSpawnMs: 15000,
+    spawnEveryMs: [20000, 40000] as Range,
+    dogChance: 0.6,
+    dog: {
+      speed: 70,
+      lifeMs: 30000,
+      senseRadius: 160,
+      biteRadius: 12,
+      biteDamage: 15,
+      biteCooldownMs: 1500,
+      distractedMs: 8000,
+    },
+    police: {
+      speed: 55,
+      lifeMs: 20000,
+      senseRadius: 140,
+      controlRadius: 22,
+      checkMs: 2000,
+      fraction: 0.5,
+    },
+  },
+  zone: {
+    announceMs: 20000,
+    activeMs: 60000,
+    firstIdleMs: [60000, 120000] as Range,
+    idleMs: [90000, 150000] as Range,
+    multiplier: 3,
+    /** Nachfüllzeit eines Spots in einer aktiven Zone */
+    refillMs: 12000,
+  },
   /** Fundtabelle: pro Spot-Typ und Flaschenart [min, max] */
   spotTypes: {
     bus_stop: { plastic: [0, 2], glass: [0, 1], crate: [0, 0] },

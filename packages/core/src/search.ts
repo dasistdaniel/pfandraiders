@@ -2,6 +2,7 @@ import { totalBottles, transferBottles } from './bottles';
 import { CONFIG } from './config';
 import { capacityOf, distance } from './economy';
 import { rollContents } from './loot';
+import { spotMultiplier, spotRefillMs } from './zones';
 import type { GameState, Player, Spot } from './types';
 
 /** Nächster nicht leerer Spot in Reichweite, sonst null. Gleichstand: kleinste id. */
@@ -47,7 +48,7 @@ export function updateSearch(state: GameState, p: Player, dtMs: number): boolean
 
   if (p.searchProgressMs >= CONFIG.searchMs) {
     transferBottles(spot.contents, p.bottles, capacityOf(p));
-    if (totalBottles(spot.contents) === 0) spot.refillInMs = CONFIG.refillMs;
+    if (totalBottles(spot.contents) === 0) spot.refillInMs = spotRefillMs(state, spot);
     cancelSearch(p);
   }
   return true;
@@ -58,7 +59,7 @@ export function refillSpot(state: GameState, spot: Spot, dtMs: number): void {
   if (totalBottles(spot.contents) > 0) return;
   spot.refillInMs -= dtMs;
   if (spot.refillInMs <= 0) {
-    spot.contents = rollContents(state, spot.type);
+    spot.contents = rollContents(state, spot.type, spotMultiplier(state, spot));
     spot.refillInMs = 0;
   }
 }

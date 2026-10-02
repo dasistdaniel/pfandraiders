@@ -10,6 +10,8 @@ const NONE = {
   steal: false,
   buyUpgrade: false,
   buyItem: false,
+  buyTreat: false,
+  buyFood: false,
 };
 
 describe('buildInput', () => {
@@ -40,5 +42,22 @@ describe('buildInput', () => {
 
   it('prefers the upgrade when both buy keys come in the same frame', () => {
     expect(buildInput({ ...NONE, buyUpgrade: true, buyItem: true })).toMatchObject({ buy: 'upgrade' });
+  });
+
+  it('maps the treat and food keys', () => {
+    expect(buildInput({ ...NONE, buyTreat: true })).toMatchObject({ buy: 'dog_treat' });
+    expect(buildInput({ ...NONE, buyFood: true })).toMatchObject({ buy: 'food' });
+  });
+
+  it('prefers upgrade, then bolt cutters, then treat, then food when several come in one frame', () => {
+    const all = { ...NONE, buyUpgrade: true, buyItem: true, buyTreat: true, buyFood: true };
+    expect(buildInput(all)).toMatchObject({ buy: 'upgrade' });
+    expect(buildInput({ ...all, buyUpgrade: false })).toMatchObject({ buy: 'bolt_cutters' });
+    expect(buildInput({ ...all, buyUpgrade: false, buyItem: false })).toMatchObject({ buy: 'dog_treat' });
+  });
+
+  it('lets the treat win over food when both come in one frame', () => {
+    expect(buildInput({ ...NONE, buyTreat: true, buyFood: true })).toMatchObject({ buy: 'dog_treat' });
+    expect(buildInput({ ...NONE, buyFood: true })).toMatchObject({ buy: 'food' });
   });
 });

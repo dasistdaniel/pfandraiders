@@ -55,6 +55,17 @@ export function tryBuyItem(state: GameState, p: Player, item: ItemId): boolean {
   return true;
 }
 
+/** Kauft Essen: Shop in Reichweite und genug Geld. Heilt bis zum Maximum. */
+export function tryEat(state: GameState, p: Player): boolean {
+  if (!isNear(state.map.shops, p)) return false;
+  if (p.money < CONFIG.health.food.price) return false;
+  p.money -= CONFIG.health.food.price;
+  p.health = Math.min(CONFIG.health.max, p.health + CONFIG.health.food.heal);
+  return true;
+}
+
 export function tryBuy(state: GameState, p: Player, cmd: BuyCommand): boolean {
-  return cmd === 'upgrade' ? tryUpgrade(state, p) : tryBuyItem(state, p, cmd);
+  if (cmd === 'upgrade') return tryUpgrade(state, p);
+  if (cmd === 'food') return tryEat(state, p);
+  return tryBuyItem(state, p, cmd);
 }
