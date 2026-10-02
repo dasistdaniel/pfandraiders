@@ -1,14 +1,14 @@
-# Pfandsammler Phase 1 (Kern lokal, 1 Spieler) Implementation Plan
+# PfandRaiders Phase 1 (Kern lokal, 1 Spieler) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ein im Browser spielbares Ein-Spieler-Pfandsammler: laufen, Spots 3 s durchsuchen, Flaschen abgeben, Container-Upgrades kaufen, 10-Minuten-Runde mit Ergebnis. Platzhalter-Grafik (Farbblöcke).
+**Goal:** Ein im Browser spielbares Ein-Spieler-PfandRaiders: laufen, Spots 3 s durchsuchen, Flaschen abgeben, Container-Upgrades kaufen, 10-Minuten-Runde mit Ergebnis. Platzhalter-Grafik (Farbblöcke).
 
-**Architecture:** Monorepo mit zwei Paketen. `@pfand/core` ist reines TypeScript ohne Browser/Netzwerk und enthält alle Regeln als deterministische Funktion `step(state, inputs, dtMs)`. `@pfand/client` ist Phaser 3 und rendert nur den Zustand. Der Client spricht über die Schnittstelle `GameConnection` mit dem Spielkern; Phase 1 hat nur `LocalConnection`. Der Zustand ist schon für mehrere Spieler gebaut (`players` als Map), damit Phase 2 (Splitscreen) keinen Umbau braucht.
+**Architecture:** Monorepo mit zwei Paketen. `@pfandraiders/core` ist reines TypeScript ohne Browser/Netzwerk und enthält alle Regeln als deterministische Funktion `step(state, inputs, dtMs)`. `@pfandraiders/client` ist Phaser 3 und rendert nur den Zustand. Der Client spricht über die Schnittstelle `GameConnection` mit dem Spielkern; Phase 1 hat nur `LocalConnection`. Der Zustand ist schon für mehrere Spieler gebaut (`players` als Map), damit Phase 2 (Splitscreen) keinen Umbau braucht.
 
 **Tech Stack:** TypeScript 5, npm workspaces, Vitest 3, Vite 6, Phaser 3.
 
-**Spec:** `docs/superpowers/specs/2026-10-02-pfandsammler-design.md` (Abschnitte 1–4, 6 Phase 1, 8, 10)
+**Spec:** `docs/superpowers/specs/2026-10-02-pfandraiders-design.md` (Abschnitte 1–4, 6 Phase 1, 8, 10)
 
 ## Global Constraints
 
@@ -87,14 +87,14 @@ Konvention in allen Tests: Hilfsfunktionen aus `packages/core/test/helpers.ts`. 
 `package.json`:
 ```json
 {
-  "name": "pfandsammler",
+  "name": "pfandraiders",
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "dev": "npm run dev -w @pfand/client",
-    "build": "npm run build -w @pfand/client"
+    "dev": "npm run dev -w @pfandraiders/client",
+    "build": "npm run build -w @pfandraiders/client"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
@@ -124,7 +124,7 @@ Konvention in allen Tests: Hilfsfunktionen aus `packages/core/test/helpers.ts`. 
 `packages/core/package.json`:
 ```json
 {
-  "name": "@pfand/core",
+  "name": "@pfandraiders/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -348,7 +348,7 @@ describe('bottles', () => {
 
 - [ ] **Step 5: Tests laufen lassen, Fehlschlag prüfen**
 
-Run: `npm test -w @pfand/core`
+Run: `npm test -w @pfandraiders/core`
 Expected: FAIL, "Failed to resolve import ../src/rng" bzw. "../src/bottles".
 
 - [ ] **Step 6: Minimal implementieren**
@@ -419,7 +419,7 @@ export * from './bottles';
 
 - [ ] **Step 7: Tests und Typecheck laufen lassen**
 
-Run: `npm test -w @pfand/core && npm run typecheck -w @pfand/core`
+Run: `npm test -w @pfandraiders/core && npm run typecheck -w @pfandraiders/core`
 Expected: PASS (8 Tests), Typecheck ohne Ausgabe.
 
 - [ ] **Step 8: Commit**
@@ -571,7 +571,7 @@ describe('city map', () => {
 
 - [ ] **Step 2: Tests laufen lassen, Fehlschlag prüfen**
 
-Run: `npm test -w @pfand/core -- test/map.test.ts test/city.test.ts`
+Run: `npm test -w @pfandraiders/core -- test/map.test.ts test/city.test.ts`
 Expected: FAIL, "Failed to resolve import ../src/map".
 
 - [ ] **Step 3: Implementieren**
@@ -675,7 +675,7 @@ export * from './maps/city';
 
 - [ ] **Step 4: Tests und Typecheck laufen lassen**
 
-Run: `npm test -w @pfand/core && npm run typecheck -w @pfand/core`
+Run: `npm test -w @pfandraiders/core && npm run typecheck -w @pfandraiders/core`
 Expected: PASS. Schlägt der Test "has the expected content" wegen Zeilenlänge fehl, die betroffene Zeile in `city.ts` auf exakt 32 Zeichen korrigieren (der Fehler nennt die Zeilennummer).
 
 - [ ] **Step 5: Commit**
@@ -864,7 +864,7 @@ describe('createGame', () => {
 
 - [ ] **Step 3: Tests laufen lassen, Fehlschlag prüfen**
 
-Run: `npm test -w @pfand/core -- test/loot.test.ts test/game.test.ts`
+Run: `npm test -w @pfandraiders/core -- test/loot.test.ts test/game.test.ts`
 Expected: FAIL, "Failed to resolve import ../src/loot".
 
 - [ ] **Step 4: Implementieren**
@@ -959,7 +959,7 @@ export * from './game';
 
 - [ ] **Step 5: Tests und Typecheck laufen lassen**
 
-Run: `npm test -w @pfand/core -- test/loot.test.ts test/game.test.ts`
+Run: `npm test -w @pfandraiders/core -- test/loot.test.ts test/game.test.ts`
 Expected: PASS. (Der Typecheck des ganzen Pakets schlägt hier noch fehl, weil `helpers.ts` das noch fehlende `step` importiert. Das wird in Task 4 behoben. Typecheck deshalb erst ab Task 4 wieder ausführen.)
 
 - [ ] **Step 6: Commit**
@@ -1096,7 +1096,7 @@ describe('round timer', () => {
 
 - [ ] **Step 2: Tests laufen lassen, Fehlschlag prüfen**
 
-Run: `npm test -w @pfand/core -- test/movement.test.ts test/timer.test.ts`
+Run: `npm test -w @pfandraiders/core -- test/movement.test.ts test/timer.test.ts`
 Expected: FAIL, "Failed to resolve import ../src/step".
 
 - [ ] **Step 3: Implementieren**
@@ -1164,7 +1164,7 @@ export * from './step';
 
 - [ ] **Step 4: Tests und Typecheck laufen lassen**
 
-Run: `npm test -w @pfand/core && npm run typecheck -w @pfand/core`
+Run: `npm test -w @pfandraiders/core && npm run typecheck -w @pfandraiders/core`
 Expected: PASS, Typecheck sauber (auch `helpers.ts` kompiliert jetzt).
 
 - [ ] **Step 5: Commit**
@@ -1314,7 +1314,7 @@ describe('searching', () => {
 
 - [ ] **Step 2: Tests laufen lassen, Fehlschlag prüfen**
 
-Run: `npm test -w @pfand/core -- test/search.test.ts`
+Run: `npm test -w @pfandraiders/core -- test/search.test.ts`
 Expected: FAIL (Suche passiert nicht, bzw. fehlende Module).
 
 - [ ] **Step 3: `economy.ts` (Teil 1) und `search.ts` schreiben**
@@ -1445,7 +1445,7 @@ export * from './search';
 
 - [ ] **Step 5: Tests und Typecheck laufen lassen**
 
-Run: `npm test -w @pfand/core && npm run typecheck -w @pfand/core`
+Run: `npm test -w @pfandraiders/core && npm run typecheck -w @pfandraiders/core`
 Expected: PASS (alle bisherigen Tests inklusive `search.test.ts`).
 
 - [ ] **Step 6: Commit**
@@ -1627,7 +1627,7 @@ describe('ranking', () => {
 
 - [ ] **Step 2: Tests laufen lassen, Fehlschlag prüfen**
 
-Run: `npm test -w @pfand/core -- test/economy.test.ts test/ranking.test.ts`
+Run: `npm test -w @pfandraiders/core -- test/economy.test.ts test/ranking.test.ts`
 Expected: FAIL, "nextUpgrade is not a function" bzw. fehlendes Modul `../src/ranking`.
 
 - [ ] **Step 3: `economy.ts` erweitern**
@@ -1728,7 +1728,7 @@ export * from './ranking';
 
 - [ ] **Step 6: Tests und Typecheck laufen lassen**
 
-Run: `npm test -w @pfand/core && npm run typecheck -w @pfand/core`
+Run: `npm test -w @pfandraiders/core && npm run typecheck -w @pfandraiders/core`
 Expected: PASS, alle Core-Tests.
 
 - [ ] **Step 7: Commit**
@@ -1797,7 +1797,7 @@ describe('determinism', () => {
 
 - [ ] **Step 2: Test laufen lassen**
 
-Run: `npm test -w @pfand/core -- test/determinism.test.ts`
+Run: `npm test -w @pfandraiders/core -- test/determinism.test.ts`
 Expected: PASS. Schlägt der erste Test fehl, steckt irgendwo `Math.random`, `Date` oder eine Objektreihenfolge-Abhängigkeit im Core. Ursache beheben, nicht den Test lockern.
 
 - [ ] **Step 3: Commit**
@@ -1818,7 +1818,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 - Test: `packages/client/test/format.test.ts`, `packages/client/test/input.test.ts`, `packages/client/test/connection.test.ts`
 
 **Interfaces:**
-- Consumes: `@pfand/core` (`Input`, `NO_INPUT`, `GameState`, `step`, `createGame`, `parseMap`).
+- Consumes: `@pfandraiders/core` (`Input`, `NO_INPUT`, `GameState`, `step`, `createGame`, `parseMap`).
 - Produces: `formatMoney(cents)`, `formatTime(ms)`, `KeyState`, `buildInput(keys)`, `GameConnection`, `LocalConnection`, `LOCAL_STEP_MS`.
 
 - [ ] **Step 1: Paketdateien anlegen**
@@ -1826,7 +1826,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 `packages/client/package.json`:
 ```json
 {
-  "name": "@pfand/client",
+  "name": "@pfandraiders/client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -1838,7 +1838,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pfand/core": "*",
+    "@pfandraiders/core": "*",
     "phaser": "^3.90.0"
   }
 }
@@ -1854,7 +1854,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```
 
 Run: `npm install`
-Expected: installiert Phaser, verlinkt `@pfand/core` als Workspace, keine Fehler.
+Expected: installiert Phaser, verlinkt `@pfandraiders/core` als Workspace, keine Fehler.
 
 - [ ] **Step 2: Failing Tests schreiben**
 
@@ -1910,7 +1910,7 @@ describe('buildInput', () => {
 
 `packages/client/test/connection.test.ts`:
 ```ts
-import { createGame, NO_INPUT, parseMap } from '@pfand/core';
+import { createGame, NO_INPUT, parseMap } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import { LOCAL_STEP_MS, LocalConnection } from '../src/connection';
 
@@ -1961,7 +1961,7 @@ describe('LocalConnection', () => {
 
 - [ ] **Step 3: Tests laufen lassen, Fehlschlag prüfen**
 
-Run: `npm test -w @pfand/client`
+Run: `npm test -w @pfandraiders/client`
 Expected: FAIL, "Failed to resolve import ../src/format" usw.
 
 - [ ] **Step 4: Implementieren**
@@ -1986,7 +1986,7 @@ export function formatTime(ms: number): string {
 
 `packages/client/src/input.ts`:
 ```ts
-import type { Input } from '@pfand/core';
+import type { Input } from '@pfandraiders/core';
 
 export interface KeyState {
   left: boolean;
@@ -2014,8 +2014,8 @@ export function buildInput(k: KeyState): Input {
 
 `packages/client/src/connection.ts`:
 ```ts
-import { step } from '@pfand/core';
-import type { GameState, Input } from '@pfand/core';
+import { step } from '@pfandraiders/core';
+import type { GameState, Input } from '@pfandraiders/core';
 
 /** Fester Simulationsschritt im lokalen Modus */
 export const LOCAL_STEP_MS = 16;
@@ -2085,7 +2085,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 - Create: `packages/client/vite.config.ts`, `packages/client/index.html`, `packages/client/src/main.ts`, `packages/client/src/scenes/GameScene.ts`, `README.md`
 
 **Interfaces:**
-- Consumes: alles aus `@pfand/core` und Task 8.
+- Consumes: alles aus `@pfandraiders/core` und Task 8.
 - Produces: lauffähige Seite. Optionaler URL-Parameter `?round=<Sekunden>` setzt die Rundenlänge (zum schnellen Testen des Rundenendes) und `?seed=<Zahl>` den Seed.
 
 Für diesen Task gibt es keine Unit-Tests (reines Rendering). Die Prüfung ist der Handtest am Ende.
@@ -2109,7 +2109,7 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pfandsammler</title>
+    <title>PfandRaiders</title>
     <style>
       html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
       #game { width: 100%; height: 100%; }
@@ -2160,8 +2160,8 @@ import {
   ranking,
   TILE,
   totalBottles,
-} from '@pfand/core';
-import type { GameState, MapData, Player } from '@pfand/core';
+} from '@pfandraiders/core';
+import type { GameState, MapData, Player } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import { formatMoney, formatTime } from '../format';
 import { buildInput } from '../input';
@@ -2322,7 +2322,7 @@ export class GameScene extends Phaser.Scene {
 
 `README.md`:
 ```markdown
-# Pfandsammler
+# PfandRaiders
 
 Retro-Top-Down-Spiel: Pfandflaschen sammeln, abgeben, Container ausbauen. Design: `docs/superpowers/specs/`, Pläne: `docs/superpowers/plans/`.
 

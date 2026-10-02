@@ -1,4 +1,4 @@
-import type { Input } from '@pfand/core';
+import type { Input } from '@pfandraiders/core';
 
 export interface KeyState {
   left: boolean;

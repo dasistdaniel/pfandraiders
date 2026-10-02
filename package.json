@@ -1,12 +1,12 @@
 {
-  "name": "pfandsammler",
+  "name": "pfandraiders",
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "dev": "npm run dev -w @pfand/client",
-    "build": "npm run build -w @pfand/client"
+    "dev": "npm run dev -w @pfandraiders/client",
+    "build": "npm run build -w @pfandraiders/client"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

@@ -1,5 +1,5 @@
-import { step } from '@pfand/core';
-import type { GameState, Input } from '@pfand/core';
+import { step } from '@pfandraiders/core';
+import type { GameState, Input } from '@pfandraiders/core';
 
 /** Fester Simulationsschritt im lokalen Modus */
 export const LOCAL_STEP_MS = 16;

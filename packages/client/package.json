@@ -1,5 +1,5 @@
 {
-  "name": "@pfand/client",
+  "name": "@pfandraiders/client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pfand/core": "*",
+    "@pfandraiders/core": "*",
     "phaser": "^3.90.0"
   }
 }

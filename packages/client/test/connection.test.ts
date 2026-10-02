@@ -1,4 +1,4 @@
-import { createGame, NO_INPUT, parseMap } from '@pfand/core';
+import { createGame, NO_INPUT, parseMap } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import { LOCAL_STEP_MS, LocalConnection } from '../src/connection';
 

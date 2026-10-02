@@ -12,8 +12,8 @@ import {
   ranking,
   TILE,
   totalBottles,
-} from '@pfand/core';
-import type { GameState, MapData, Player } from '@pfand/core';
+} from '@pfandraiders/core';
+import type { GameState, MapData, Player } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import { formatMoney, formatTime } from '../format';
 import { buildInput } from '../input';

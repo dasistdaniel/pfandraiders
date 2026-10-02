@@ -1,4 +1,4 @@
-# Pfandsammler
+# PfandRaiders
 
 Retro-Top-Down-Spiel: Pfandflaschen sammeln, abgeben, Container ausbauen. Design: `docs/superpowers/specs/`, Pläne: `docs/superpowers/plans/`.
 
