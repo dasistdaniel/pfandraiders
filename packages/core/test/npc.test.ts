@@ -90,6 +90,18 @@ describe('dog', () => {
     expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
   });
 
+  it('ignores players with protection and bites them once the protection is over', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    s.players.p1.shieldMs = 100;
+    const dog = addNpc(s, 'dog', 30, 24);
+    runSteps(s, {}, 3, 20); // Schutz läuft noch
+    expect(dog.targetId).toBeNull();
+    expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
+    runFor(s, {}, 400); // Schutz vorbei
+    expect(dog.targetId).toBe('p1');
+    expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
+  });
+
   it('does not target unconscious players', () => {
     const s = quiet(newGame(openRows(30, 5)));
     damage(s.players.p1, 1000);

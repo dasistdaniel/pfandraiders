@@ -49,7 +49,8 @@ function updateDog(state: GameState, npc: Npc, dtMs: number): void {
     npc.distractedMs = Math.max(0, npc.distractedMs - dtMs);
     return;
   }
-  const target = pickTarget(state, npc, cfg.senseRadius, () => true);
+  // Wer Schutz hat (nach Respawn oder Diebstahl), wird vom Hund in Ruhe gelassen.
+  const target = pickTarget(state, npc, cfg.senseRadius, (p) => p.shieldMs === 0);
   if (!target) return;
   if (distance(npc, target) > cfg.biteRadius) {
     moveToward(state, npc, target, cfg.speed, dtMs);
