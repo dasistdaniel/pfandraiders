@@ -12,6 +12,10 @@ export interface KeyState {
   buyUpgrade: boolean;
   /** true nur im Frame, in dem die Taste neu gedrÃ¼ckt wurde */
   buyItem: boolean;
+  /** true nur im Frame, in dem die Taste neu gedrückt wurde */
+  buyTreat: boolean;
+  /** true nur im Frame, in dem die Taste neu gedrückt wurde */
+  buyFood: boolean;
 }
 
 function axis(negative: boolean, positive: boolean): -1 | 0 | 1 {
@@ -24,6 +28,14 @@ export function buildInput(k: KeyState): Input {
     moveY: axis(k.up, k.down),
     action: k.action,
     steal: k.steal,
-    buy: k.buyUpgrade ? 'upgrade' : k.buyItem ? 'bolt_cutters' : null,
+    buy: k.buyUpgrade
+      ? 'upgrade'
+      : k.buyItem
+        ? 'bolt_cutters'
+        : k.buyTreat
+          ? 'dog_treat'
+          : k.buyFood
+            ? 'food'
+            : null,
   };
 }

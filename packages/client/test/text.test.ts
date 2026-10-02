@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
 import { alertText, hintLines, playerName, resultLines, statusLines } from '../src/text';
 
-const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q' };
-const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/' };
+const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' };
+const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/', treat: ';', food: "'" };
 
 // p1 (24,24) steht 16 px vom Shop (40,24). p2 liegt weit weg am Ende des Ganges.
 function shopGame(): GameState {

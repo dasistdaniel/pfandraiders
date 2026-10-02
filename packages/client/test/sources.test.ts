@@ -13,6 +13,8 @@ const IDLE: PadSnapshot = {
   right: false,
   up: false,
   down: false,
+  l1: false,
+  r1: false,
 };
 
 describe('padToHeld', () => {
@@ -25,6 +27,11 @@ describe('padToHeld', () => {
     expect(padToHeld({ ...IDLE, a: true })).toMatchObject({ action: true, buyUpgrade: false, buyItem: false });
     expect(padToHeld({ ...IDLE, x: true })).toMatchObject({ buyUpgrade: true });
     expect(padToHeld({ ...IDLE, y: true })).toMatchObject({ buyItem: true });
+  });
+
+  it('maps the shoulder buttons: RB treat, LB food', () => {
+    expect(padToHeld({ ...IDLE, r1: true })).toMatchObject({ buyTreat: true, buyFood: false });
+    expect(padToHeld({ ...IDLE, l1: true })).toMatchObject({ buyFood: true, buyTreat: false });
   });
 
   it('maps the d-pad', () => {
@@ -66,6 +73,8 @@ describe('EdgeTracker', () => {
     steal: false,
     buyUpgrade: false,
     buyItem: false,
+    buyTreat: false,
+    buyFood: false,
     ...over,
   });
 
@@ -84,6 +93,14 @@ describe('EdgeTracker', () => {
       buyUpgrade: false,
       buyItem: true,
     });
+  });
+
+  it('reports treat and food only on the frame they go down', () => {
+    const t = new EdgeTracker();
+    expect(t.apply(held({ buyTreat: true })).buyTreat).toBe(true);
+    expect(t.apply(held({ buyTreat: true })).buyTreat).toBe(false);
+    expect(t.apply(held({ buyFood: true })).buyFood).toBe(true);
+    expect(t.apply(held({ buyFood: true })).buyFood).toBe(false);
   });
 
   it('passes movement and action through unchanged', () => {

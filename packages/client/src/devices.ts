@@ -13,6 +13,8 @@ export interface KeyboardLayout {
   steal: string;
   buyUpgrade: string;
   buyItem: string;
+  buyTreat: string;
+  buyFood: string;
   labels: KeyLabels;
 }
 
@@ -28,7 +30,9 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     steal: 'Q',
     buyUpgrade: 'ONE',
     buyItem: 'TWO',
-    labels: { action: 'E', upgrade: '1', item: '2', steal: 'Q' },
+    buyTreat: 'THREE',
+    buyFood: 'FOUR',
+    labels: { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' },
   },
   {
     name: 'Tastatur 2 (Pfeile, Enter)',
@@ -40,7 +44,9 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     steal: 'FORWARD_SLASH',
     buyUpgrade: 'COMMA',
     buyItem: 'PERIOD',
-    labels: { action: 'Enter', upgrade: ',', item: '.', steal: '/' },
+    buyTreat: 'SEMICOLON',
+    buyFood: 'QUOTES',
+    labels: { action: 'Enter', upgrade: ',', item: '.', steal: '/', treat: ';', food: "'" },
   },
 ];
 
@@ -78,6 +84,8 @@ class KeyboardSource implements InputSource {
       layout.steal,
       layout.buyUpgrade,
       layout.buyItem,
+      layout.buyTreat,
+      layout.buyFood,
     ];
     this.keys = keyboard.addKeys(names.join(',')) as Record<string, Key>;
   }
@@ -94,6 +102,8 @@ class KeyboardSource implements InputSource {
       steal: k[l.steal].isDown,
       buyUpgrade: Phaser.Input.Keyboard.JustDown(k[l.buyUpgrade]),
       buyItem: Phaser.Input.Keyboard.JustDown(k[l.buyItem]),
+      buyTreat: Phaser.Input.Keyboard.JustDown(k[l.buyTreat]),
+      buyFood: Phaser.Input.Keyboard.JustDown(k[l.buyFood]),
     };
   }
 
@@ -106,7 +116,7 @@ type Pad = Phaser.Input.Gamepad.Gamepad;
 
 class GamepadSource implements InputSource {
   readonly label: string;
-  readonly labels: KeyLabels = { action: 'A', upgrade: 'X', item: 'Y', steal: 'B' };
+  readonly labels: KeyLabels = { action: 'A', upgrade: 'X', item: 'Y', steal: 'B', treat: 'RB', food: 'LB' };
   private readonly edges = new EdgeTracker();
   private prevA = false;
 
@@ -134,6 +144,8 @@ class GamepadSource implements InputSource {
         right: pad.right,
         up: pad.up,
         down: pad.down,
+        l1: pad.L1 > 0.5,
+        r1: pad.R1 > 0.5,
       }),
     );
   }
@@ -158,6 +170,8 @@ const IDLE_PAD = {
   right: false,
   up: false,
   down: false,
+  l1: false,
+  r1: false,
 };
 
 /** Baut die Eingabequelle für ein Gerät. Muss in der Szene aufgerufen werden, die sie nutzt. */
