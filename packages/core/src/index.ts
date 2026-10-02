@@ -14,3 +14,4 @@ export * from './search';
 export * from './theft';
 export * from './health';
 export * from './zones';
+export * from './npc';

@@ -2,6 +2,7 @@ import { CONFIG } from './config';
 import { deposit, isNear, tryBuy } from './economy';
 import { updateHealth } from './health';
 import { walk } from './movement';
+import { updateNpcs } from './npc';
 import { cancelSearch, refillSpot, updateSearch } from './search';
 import { cancelSteal, updateSteal } from './theft';
 import { NO_INPUT } from './types';
@@ -27,6 +28,7 @@ export function step(
 
   for (const spot of state.spots) refillSpot(state, spot, dt);
   updateZones(state, dt);
+  updateNpcs(state, dt);
 
   state.timeLeftMs -= dt;
   if (state.timeLeftMs <= 0) {
