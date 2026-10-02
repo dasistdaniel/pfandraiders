@@ -1,4 +1,4 @@
-# Pfandsammler – Design-Spec
+# PfandRaiders – Design-Spec
 
 Stand: 2026-10-02. Status: Entwurf zur Prüfung. Noch kein Code.
 
