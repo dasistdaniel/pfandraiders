@@ -3,7 +3,7 @@ import { CONFIG } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
 import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
-import { alertText, hintLines, resultLines, statusLines } from './text';
+import { alertText, playerName, hintLines, resultLines, statusLines } from './text';
 
 const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
 const BAR_WIDTH = 40;
@@ -24,7 +24,9 @@ export class PlayerHud {
   private readonly barBg: Phaser.GameObjects.Rectangle;
   private readonly bar: Phaser.GameObjects.Rectangle;
 
-  constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private readonly labels: KeyLabels) {
+  constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private readonly labels: KeyLabels,
+    private readonly nameOf: (id: string) => string = playerName,
+  ) {
     const wrap = { wordWrap: { width: view.w - 8 } };
     this.status = scene.add.text(4, 4, '', { ...FONT, ...wrap });
     this.hint = scene.add.text(4, view.h - 4, '', { ...FONT, ...wrap }).setOrigin(0, 1);
@@ -76,6 +78,6 @@ export class PlayerHud {
 
     const ended = state.phase === 'ended';
     this.banner.setVisible(ended);
-    this.banner.setText(ended ? resultLines(state, this.labels).join('\n') : '');
+    this.banner.setText(ended ? resultLines(state, this.labels, this.nameOf).join('\n') : '');
   }
 }

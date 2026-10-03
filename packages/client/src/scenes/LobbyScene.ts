@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { KEYBOARD_LAYOUTS, PLAYER_COLORS } from '../devices';
 import type { DeviceRef, PlayerSlot } from '../devices';
 import { GAME_H, GAME_W } from '../layout';
+import { showOnlineMenu } from '../onlineMenu';
+import { resolveServerUrl } from '../serverUrl';
 
 const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
 const MAX_PLAYERS = 4;
@@ -23,14 +25,22 @@ export class LobbyScene extends Phaser.Scene {
   private joinKeys: Phaser.Input.Keyboard.Key[] = [];
   private startKey!: Phaser.Input.Keyboard.Key;
   private padPrev: Record<number, { a: boolean; start: boolean }> = {};
+  private onlineKey!: Phaser.Input.Keyboard.Key;
+  private menuOpen = false;
+  private notice = '';
 
   constructor() {
     super('lobby');
   }
 
+  init(data?: { notice?: string }): void {
+    this.notice = data?.notice ?? '';
+  }
+
   create(): void {
     this.slots = [];
     this.padPrev = {};
+    this.menuOpen = false;
     const params = new URLSearchParams(window.location.search);
 
     // Testhilfen: ?solo=1 startet sofort mit Tastatur 1, ?players=N startet N Spieler ohne Lobby.
@@ -47,11 +57,24 @@ export class LobbyScene extends Phaser.Scene {
 
     this.joinKeys = KEYBOARD_LAYOUTS.map((l) => this.input.keyboard!.addKey(l.action));
     this.startKey = this.input.keyboard!.addKey('SPACE');
+    this.onlineKey = this.input.keyboard!.addKey('O');
     this.text = this.add.text(GAME_W / 2, GAME_H / 2, '', { ...FONT, align: 'center' }).setOrigin(0.5);
   }
 
   update(): void {
     if (!this.text) return; // Testhilfe-Pfad: create() hat schon zur Spielszene gewechselt
+    if (this.menuOpen) return;
+    if (Phaser.Input.Keyboard.JustDown(this.onlineKey)) {
+      const url = resolveServerUrl(window.location.search, import.meta.env.VITE_SERVER_URL as string | undefined);
+      this.menuOpen = true;
+      this.input.keyboard!.enabled = false; // Tasten gehören dem Eingabefeld
+      void showOnlineMenu(url).then((conn) => {
+        this.menuOpen = false;
+        this.input.keyboard!.enabled = true;
+        if (conn) this.scene.start('game', { online: conn });
+      });
+      return;
+    }
     KEYBOARD_LAYOUTS.forEach((_, layout) => {
       if (Phaser.Input.Keyboard.JustDown(this.joinKeys[layout])) {
         this.join({ kind: 'keyboard', layout });
@@ -88,7 +111,9 @@ export class LobbyScene extends Phaser.Scene {
       const slot = this.slots[i];
       lines.push(slot ? `P${i + 1}: ${describe(slot.device)}` : `P${i + 1}: (frei)`);
     }
+    lines.push('', 'Online spielen: Taste O');
     lines.push('', this.slots.length > 0 ? 'Start: Leertaste oder Start-Taste' : 'Mindestens ein Spieler muss beitreten');
+    if (this.notice) lines.push('', this.notice);
     return lines;
   }
 }
