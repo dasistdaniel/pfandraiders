@@ -1,0 +1,12 @@
+Tiny Characters Set
+by Fleurman
+https://opengameart.org/content/tiny-characters-set
+License: CC0 1.0 (public domain dedication)
+
+Based on "RPG character sprites" by GrafxKid (CC0)
+https://opengameart.org/content/rpg-character-sprites
+
+Files: m01.png .. m12.png (Males/M_01..M_12), f01.png .. f12.png (Females/F_01..F_12),
+renamed only, pixels unchanged. Each sheet is 64x51 px = 4 columns x 3 rows of 16x17 px frames:
+column = direction (0 front/down, 1 side facing right, 2 back/up, 3 side facing left),
+row = walk frame (0 standing, 1 step, 2 other step).

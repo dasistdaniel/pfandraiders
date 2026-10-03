@@ -1,9 +1,17 @@
 import type { Mode } from '@pfandraiders/core';
 import type { PlayerFrame } from './sprites/characters';
+import { charDir, type CharDir } from './playerChars';
 
 export const MOVE_EPSILON = 0.05;
 export const WALK_FRAME_MS = 150;
 export const ACTION_FRAME_MS = 250;
+/** Gehzyklus der Bogenfiguren: 4 Schritte zu je WALK_FRAME_MS (siehe charFrameIndex). */
+export const WALK_STEPS = 4;
+/**
+ * Suchen/Klauen im Stand: Wechsel zwischen Stand (Schritt 0) und Schritt (1) der Vorderansicht alle ACTION_FRAME_MS.
+ * Schritt 0 und 2 wären im Bogen dasselbe Standbild, daher 0 und 1.
+ */
+export const ACTION_STEPS = [0, 1] as const;
 /** Hoehe des Auf-und-ab beim Gehen in Weltpixeln (2 Bildschirmpixel bei Zoom 2). */
 export const BOB_PX = 1;
 
@@ -41,7 +49,34 @@ export function bobOffset(walkMs: number, moving: boolean): number {
   return ab(ms, WALK_FRAME_MS) === 'a' ? 0 : -BOB_PX;
 }
 
+/** Schritt 0..3 im Gehzyklus der Bogenfiguren; NaN, Unendlich und negativ gelten als 0. */
+export function walkStepIndex(walkMs: number): number {
+  const ms = Number.isFinite(walkMs) && walkMs > 0 ? walkMs : 0;
+  return Math.floor(ms / WALK_FRAME_MS) % WALK_STEPS;
+}
+
+/**
+ * Ein Frame Spielerpose. `pose` ist das Bild der gezeichneten Figur (Rückfall), `dir` und `step` wählen das Bild
+ * der Bogenfigur (charFrameIndex). Bewusstlos: Stand vorn (die Szene dreht es um 90 Grad).
+ */
 export function stepPose(
+  prev: PoseState,
+  x: number,
+  y: number,
+  mode: Mode,
+  dtMs: number,
+): { state: PoseState; pose: Pose; moving: boolean; dir: CharDir; step: number } {
+  const r = stepDrawnPose(prev, x, y, mode, dtMs);
+  const { state, moving } = r;
+  if (mode === 'unconscious') return { ...r, dir: 'down', step: 0 };
+  if (moving) return { ...r, dir: charDir(state.facing, state.flipX), step: walkStepIndex(state.walkMs) };
+  if (mode === 'searching' || mode === 'stealing') {
+    return { ...r, dir: 'down', step: ACTION_STEPS[ab(state.walkMs, ACTION_FRAME_MS) === 'a' ? 0 : 1] };
+  }
+  return { ...r, dir: charDir(state.facing, state.flipX), step: 0 };
+}
+
+function stepDrawnPose(
   prev: PoseState,
   x: number,
   y: number,

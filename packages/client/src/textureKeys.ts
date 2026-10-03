@@ -13,5 +13,7 @@ export const objectTexture = (set: TilesetId, name: 'dropoff' | 'shop'): string 
 export const mapTexture = (map: MapId, layer: 'ground-below' | 'above'): string => `map:${map}:${layer}`;
 export const playerTexture = (color: number, frame: PlayerFrame): string =>
   `player:${color.toString(16).padStart(6, '0')}:${frame}`;
+/** Geladener Figurenbogen (Spritesheet 16x17) aus assets/characters, z. B. char:m01. */
+export const charTexture = (character: string): string => `char:${character}`;
 export const dogTexture = (f: 'a' | 'b'): string => `dog:${f}`;
 export const policeTexture = (f: 'a' | 'b'): string => `police:${f}`;
