@@ -23,6 +23,8 @@ function addNpc(s: GameState, kind: NpcKind, x: number, y: number) {
     targetId: null as string | null,
     cooldownMs: 0,
     distractedMs: 0,
+    restId: null as string | null,
+    restMs: 0,
     checkMs: 0,
   };
   s.npcs.push(npc);
@@ -47,15 +49,78 @@ describe('dog', () => {
     expect(dog.targetId).toBeNull();
   });
 
-  it('bites in range, then waits for the cooldown before biting again', () => {
+  it('bites in range and then leaves that player alone (no second bite after the old cooldown)', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    addNpc(s, 'dog', 30, 24);
+    const dog = addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
     expect(s.players.p1.health).toBeCloseTo(CONFIG.health.max - CONFIG.npc.dog.biteDamage, 1);
-    runFor(s, {}, 1000); // noch in der Pause
-    expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 2 * CONFIG.npc.dog.biteDamage + 1);
-    runFor(s, {}, 700); // Pause vorbei
-    expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 2 * CONFIG.npc.dog.biteDamage + 1);
+    expect(dog.restId).toBe('p1');
+    expect(dog.restMs).toBeGreaterThan(CONFIG.npc.dog.biteRestMs - 100);
+    runFor(s, {}, 1700); // alte Pause vorbei, Beißpause nicht
+    expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - CONFIG.npc.dog.biteDamage - 1);
+  });
+
+  it('does not bite or approach the bitten player for the whole rest, then bites again', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const dog = addNpc(s, 'dog', 30, 24);
+    runSteps(s, {}, 3, 20);
+    const afterBite = s.players.p1.health;
+    runFor(s, {}, 9900 - 60);
+    expect(s.players.p1.health).toBeGreaterThan(afterBite - 2); // höchstens Hunger, kein Biss
+    expect(s.players.p1.health).toBeLessThan(afterBite + 1);
+    expect(dog.targetId).toBeNull();
+    runFor(s, {}, 400); // Beißpause (10 s) vorbei
+    expect(s.players.p1.health).toBeLessThan(afterBite - CONFIG.npc.dog.biteDamage + 2);
+    expect(dog.restId).toBe('p1'); // neuer Biss, neue Pause
+  });
+
+  it('does not move toward the rested player', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const dog = addNpc(s, 'dog', 30, 24);
+    runSteps(s, {}, 3, 20);
+    teleport(s, 'p1', { x: 120, y: 24 }); // im Sinnesradius, aber außer Reichweite
+    const x = dog.x;
+    runSteps(s, {}, 25, 20);
+    expect(dog.x).toBe(x);
+    expect(dog.targetId).toBeNull();
+    expect(dog.restId).toBe('p1');
+  });
+
+  it('keeps chasing and biting a second player during the first player rest', () => {
+    const s = quiet(newGame(openRows(30, 5), ['p1', 'p2']));
+    const dog = addNpc(s, 'dog', 30, 24);
+    teleport(s, 'p2', { x: 130, y: 24 });
+    runSteps(s, {}, 3, 20); // p1 gebissen
+    expect(dog.restId).toBe('p1');
+    const hp1 = s.players.p1.health;
+    runFor(s, {}, 1000); // p1 bleibt in Ruhe, der Hund läuft zu p2
+    expect(dog.targetId).toBe('p2');
+    expect(s.players.p1.health).toBeGreaterThan(hp1 - 2);
+    runFor(s, {}, 1000);
+    expect(s.players.p2.health).toBeLessThan(CONFIG.health.max - CONFIG.npc.dog.biteDamage + 2);
+  });
+
+  it('does not start a rest when a treat distracts the dog', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    s.players.p1.item = 'dog_treat';
+    const dog = addNpc(s, 'dog', 30, 24);
+    runSteps(s, {}, 3, 20);
+    expect(dog.restId).toBeNull();
+    expect(dog.restMs).toBe(0);
+    expect(dog.distractedMs).toBeGreaterThan(0);
+  });
+
+  it('keeps the rest while the player is unconscious and after the respawn', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const dog = addNpc(s, 'dog', 30, 24);
+    runSteps(s, {}, 3, 20);
+    s.players.p1.health = 1;
+    damage(s.players.p1, 5); // umfallen
+    expect(s.players.p1.unconsciousMs).toBeGreaterThan(0);
+    runFor(s, {}, 1000);
+    expect(dog.restId).toBe('p1');
+    expect(dog.restMs).toBeLessThan(CONFIG.npc.dog.biteRestMs - 900);
+    expect(dog.restMs).toBeGreaterThan(0);
   });
 
   it('interrupts the search of the bitten player', () => {
@@ -98,7 +163,6 @@ describe('dog', () => {
     expect(dog.targetId).toBeNull();
     expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
     runFor(s, {}, 400); // Schutz vorbei
-    expect(dog.targetId).toBe('p1');
     expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
   });
 

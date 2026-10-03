@@ -45,12 +45,16 @@ function pickTarget(
 function updateDog(state: GameState, npc: Npc, dtMs: number): void {
   const cfg = CONFIG.npc.dog;
   npc.cooldownMs = Math.max(0, npc.cooldownMs - dtMs);
+  if (npc.restMs > 0) {
+    npc.restMs = Math.max(0, npc.restMs - dtMs);
+    if (npc.restMs === 0) npc.restId = null;
+  }
   if (npc.distractedMs > 0) {
     npc.distractedMs = Math.max(0, npc.distractedMs - dtMs);
     return;
   }
   // Wer Schutz hat (nach Respawn oder Diebstahl), wird vom Hund in Ruhe gelassen.
-  const target = pickTarget(state, npc, cfg.senseRadius, (p) => p.shieldMs === 0);
+  const target = pickTarget(state, npc, cfg.senseRadius, (p) => p.shieldMs === 0 && p.id !== npc.restId);
   if (!target) return;
   if (distance(npc, target) > cfg.biteRadius) {
     moveToward(state, npc, target, cfg.speed, dtMs);
@@ -63,6 +67,8 @@ function updateDog(state: GameState, npc: Npc, dtMs: number): void {
     npc.distractedMs = cfg.distractedMs;
   } else {
     damage(target, cfg.biteDamage);
+    npc.restId = target.id; // nach dem Biss Ruhe vor genau diesem Spieler
+    npc.restMs = cfg.biteRestMs;
   }
 }
 
@@ -101,6 +107,8 @@ function trySpawn(state: GameState): void {
     targetId: null,
     cooldownMs: 0,
     distractedMs: 0,
+    restId: null,
+    restMs: 0,
     checkMs: 0,
   });
 }
