@@ -1,0 +1,194 @@
+import { CITY_MAP, CONFIG, createGame } from '@pfandraiders/core';
+import type { GameState, Npc } from '@pfandraiders/core';
+import { describe, expect, it } from 'vitest';
+import { detectSounds, snapshotForSound } from '../src/soundEvents';
+
+function fresh(): GameState {
+  return createGame(1, CITY_MAP, ['a', 'b']);
+}
+
+/** Kopie des Zustands, auf die der Test Änderungen anwendet. */
+function next(prev: GameState, edit: (s: GameState) => void): GameState {
+  const s = snapshotForSound(prev);
+  edit(s);
+  return s;
+}
+
+function npc(over: Partial<Npc>): Npc {
+  return {
+    id: 99, kind: 'dog', x: 0, y: 0, lifeMs: 1000, targetId: null, cooldownMs: 0, distractedMs: 0, checkMs: 0,
+    ...over,
+  };
+}
+
+describe('detectSounds', () => {
+  it('is silent without a previous state and when nothing changed', () => {
+    const s = fresh();
+    expect(detectSounds(null, s, 'all')).toEqual([]);
+    expect(detectSounds(s, snapshotForSound(s), 'all')).toEqual([]);
+  });
+
+  it('plays pickup when bottles increase', () => {
+    const p = fresh();
+    const n = next(p, (s) => { s.players.a.bottles.plastic += 2; });
+    expect(detectSounds(p, n, 'all')).toEqual(['pickup']);
+  });
+
+  it('plays sell when money rises while bottles drop', () => {
+    const p = next(fresh(), (s) => { s.players.a.bottles.glass = 3; });
+    const n = next(p, (s) => { s.players.a.bottles.glass = 0; s.players.a.money += 45; });
+    expect(detectSounds(p, n, 'all')).toEqual(['sell']);
+  });
+
+  it('plays buy for upgrade, item and food', () => {
+    const p = next(fresh(), (s) => { s.players.a.money = 1000; });
+    expect(detectSounds(p, next(p, (s) => { s.players.a.containerLevel++; s.players.a.money -= 300; }), 'all')).toEqual(['buy']);
+    expect(detectSounds(p, next(p, (s) => { s.players.a.item = 'dog_treat'; s.players.a.money -= 100; }), 'all')).toEqual(['buy']);
+    const hungry = next(p, (s) => { s.players.a.health = 40; });
+    const fed = next(hungry, (s) => { s.players.a.money -= CONFIG.health.food.price; s.players.a.health += CONFIG.health.food.heal; });
+    expect(detectSounds(hungry, fed, 'all')).toEqual(['buy']);
+  });
+
+  it('does not play buy when the player loses money by being knocked out', () => {
+    const p = next(fresh(), (s) => { s.players.a.money = 1000; });
+    const n = next(p, (s) => { s.players.a.money = 750; s.players.a.health = 0; s.players.a.unconsciousMs = 10000; });
+    const r = detectSounds(p, n, 'all');
+    expect(r).toContain('knockout');
+    expect(r).not.toContain('buy');
+  });
+
+  it('plays stealStart for thief and victim only when audible', () => {
+    const p = fresh();
+    const n = next(p, (s) => { s.players.a.stealTargetId = 'b'; });
+    expect(detectSounds(p, n, 'all')).toEqual(['stealStart']);
+    expect(detectSounds(p, n, ['a'])).toEqual(['stealStart']);
+    expect(detectSounds(p, n, ['b'])).toEqual(['stealStart']);
+    expect(detectSounds(p, n, ['c'])).toEqual([]);
+    // läuft schon: kein erneuter Start
+    expect(detectSounds(n, snapshotForSound(n), 'all')).toEqual([]);
+  });
+
+  it('plays stealSuccess and no pickup for the thief', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.bottles.plastic = 4;
+      s.players.a.stealTargetId = 'b';
+    });
+    const n = next(p, (s) => {
+      s.players.b.bottles.plastic = 2;
+      s.players.b.shieldMs = CONFIG.steal.shieldMs;
+      s.players.a.bottles.plastic = 2;
+      s.players.a.stealTargetId = null;
+    });
+    expect(detectSounds(p, n, 'all')).toEqual(['stealSuccess']);
+    expect(detectSounds(p, n, ['b'])).toEqual(['stealSuccess']);
+    expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
+  });
+
+  it('recognises a bolt-cutter theft and keeps it silent for bystanders', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.bottles.glass = 3;
+      s.players.a.item = 'bolt_cutters';
+    });
+    const n = next(p, (s) => {
+      s.players.b.bottles.glass = 0;
+      s.players.b.shieldMs = 3000;
+      s.players.a.bottles.glass = 3;
+      s.players.a.item = null;
+    });
+    expect(detectSounds(p, n, 'all')).toEqual(['stealSuccess']);
+    expect(detectSounds(p, n, ['x'])).toEqual([]);
+  });
+
+  it('plays bite on a large health drop but not on hunger', () => {
+    const p = fresh();
+    expect(detectSounds(p, next(p, (s) => { s.players.a.health -= CONFIG.npc.dog.biteDamage; }), 'all')).toEqual(['bite']);
+    expect(detectSounds(p, next(p, (s) => { s.players.a.health -= 0.05; }), 'all')).toEqual([]);
+  });
+
+  it('plays bite and knockout when a bite knocks the player out near a dog', () => {
+    const p = next(fresh(), (s) => {
+      s.players.a.health = 5;
+      s.npcs = [npc({ x: s.players.a.x + 3, y: s.players.a.y })];
+    });
+    const n = next(p, (s) => { s.players.a.health = 0; s.players.a.unconsciousMs = 10000; });
+    expect(detectSounds(p, n, 'all').sort()).toEqual(['bite', 'knockout']);
+  });
+
+  it('plays only knockout when hunger knocks the player out', () => {
+    const p = next(fresh(), (s) => { s.players.a.health = 0.01; });
+    const n = next(p, (s) => { s.players.a.health = 0; s.players.a.unconsciousMs = 10000; });
+    expect(detectSounds(p, n, 'all')).toEqual(['knockout']);
+  });
+
+  it('plays policeCheck when a check starts', () => {
+    const p = next(fresh(), (s) => { s.npcs = [npc({ kind: 'police', targetId: 'a', checkMs: 0 })]; });
+    const n = next(p, (s) => { s.npcs[0].checkMs = 16; });
+    expect(detectSounds(p, n, 'all')).toEqual(['policeCheck']);
+    expect(detectSounds(p, n, ['b'])).toEqual([]);
+    expect(detectSounds(n, snapshotForSound(n), 'all')).toEqual([]);
+  });
+
+  it('plays zoneAnnounced for everyone when a zone leaves idle', () => {
+    const p = fresh();
+    const n = next(p, (s) => { s.zones[0].phase = 'announced'; });
+    expect(detectSounds(p, n, ['b'])).toEqual(['zoneAnnounced']);
+    const active = next(n, (s) => { s.zones[0].phase = 'active'; });
+    expect(detectSounds(n, active, 'all')).toEqual([]);
+  });
+
+  it('plays roundEnd once when the phase flips to ended', () => {
+    const p = fresh();
+    const n = next(p, (s) => { s.phase = 'ended'; s.timeLeftMs = 0; });
+    expect(detectSounds(p, n, ['b'])).toEqual(['roundEnd']);
+    expect(detectSounds(n, snapshotForSound(n), 'all')).toEqual([]);
+  });
+
+  it('ticks once per second in the last 10 seconds only while running', () => {
+    const base = fresh();
+    const at = (ms: number) => next(base, (s) => { s.timeLeftMs = ms; });
+    expect(detectSounds(at(30000), at(29984), 'all')).toEqual([]);
+    expect(detectSounds(at(11010), at(10990), 'all')).toEqual([]);
+    expect(detectSounds(at(10010), at(9990), 'all')).toEqual(['tick']);
+    expect(detectSounds(at(9500), at(9490), 'all')).toEqual([]);
+    expect(detectSounds(at(5010), at(4990), 'all')).toEqual(['tick']);
+    expect(detectSounds(at(1010), at(990), 'all')).toEqual(['tick']);
+    // Ende: roundEnd, kein Tick
+    const end = next(at(16), (s) => { s.timeLeftMs = 0; s.phase = 'ended'; });
+    expect(detectSounds(at(16), end, 'all')).toEqual(['roundEnd']);
+    // 16-ms-Schritte durch die letzten 10 s: genau 9 Ticks (10 s bis 1 s, der Übergang 1 -> 0 ist roundEnd)
+    let count = 0;
+    for (let t = 10000; t > 0; t -= 16) count += detectSounds(at(t), at(Math.max(0, t - 16)), 'all').length;
+    expect(count).toBeGreaterThanOrEqual(9);
+    expect(count).toBeLessThanOrEqual(10);
+  });
+
+  it('filters personal sounds to the audible players but not global ones', () => {
+    const p = fresh();
+    const n = next(p, (s) => {
+      s.players.a.bottles.plastic += 1;
+      s.zones[0].phase = 'announced';
+    });
+    expect(detectSounds(p, n, ['b'])).toEqual(['zoneAnnounced']);
+    expect(detectSounds(p, n, ['a']).sort()).toEqual(['pickup', 'zoneAnnounced']);
+  });
+
+  it('returns each id at most once', () => {
+    const p = fresh();
+    const n = next(p, (s) => {
+      s.players.a.bottles.plastic += 1;
+      s.players.b.bottles.glass += 1;
+    });
+    expect(detectSounds(p, n, 'all')).toEqual(['pickup']);
+  });
+});
+
+describe('snapshotForSound', () => {
+  it('is independent from later mutations of the source', () => {
+    const s = fresh();
+    const copy = snapshotForSound(s);
+    s.players.a.bottles.plastic = 9;
+    s.timeLeftMs = 1;
+    expect(copy.players.a.bottles.plastic).toBe(0);
+    expect(copy.timeLeftMs).not.toBe(1);
+  });
+});

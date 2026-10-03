@@ -63,8 +63,8 @@ export function showOnlineMenu(
   socketFactory: SocketFactory = (u) => new WebSocket(u) as unknown as ReturnType<SocketFactory>,
 ): Promise<OnlineConnection | null> {
   return new Promise((resolve) => {
-    const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:14px monospace;z-index:10');
-    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;min-width:280px;max-width:90vw');
+    const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
+    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;min-width:320px;max-width:90vw;box-sizing:border-box');
     root.appendChild(box);
     document.body.appendChild(root);
 
@@ -95,8 +95,8 @@ export function showOnlineMenu(
 
     const renderEntry = () => {
       box.replaceChildren();
-      box.appendChild(el('div', { textContent: 'Online spielen' }, 'font-size:18px;margin-bottom:8px'));
-      box.appendChild(el('div', { textContent: `Server: ${url}` }, 'color:#aaa;font-size:11px;margin-bottom:10px'));
+      box.appendChild(el('div', { textContent: 'Online spielen' }, 'font-size:22px;margin-bottom:8px'));
+      box.appendChild(el('div', { textContent: `Server: ${url}` }, 'color:#aaa;font-size:14px;margin-bottom:10px'));
       const name = el('input', { placeholder: 'Dein Name', maxLength: 16, value: safeGet(NAME_KEY) ?? '' }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit');
       const code = el('input', { placeholder: 'Raumcode', maxLength: 4 }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit;text-transform:uppercase');
       const create = el('button', { textContent: 'Raum erstellen' }, 'font:inherit;margin-right:8px');
@@ -150,8 +150,8 @@ export function showOnlineMenu(
 
     const renderLobby = () => {
       box.replaceChildren();
-      box.appendChild(el('div', { textContent: `Raum ${conn.room}` }, 'font-size:20px;letter-spacing:4px;margin-bottom:4px'));
-      box.appendChild(el('div', { textContent: 'Code weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:11px;margin-bottom:10px'));
+      box.appendChild(el('div', { textContent: `Raum ${conn.room}` }, 'font-size:26px;letter-spacing:4px;margin-bottom:4px'));
+      box.appendChild(el('div', { textContent: 'Code weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:14px;margin-bottom:10px'));
       const list = el('div', {}, 'margin-bottom:10px');
       const draw = (players: RosterEntry[]) => {
         list.replaceChildren();

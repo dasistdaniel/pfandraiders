@@ -5,7 +5,7 @@ import { GAME_H, GAME_W } from '../layout';
 import { showOnlineMenu } from '../onlineMenu';
 import { resolveServerUrl } from '../serverUrl';
 
-const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
+const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 const MAX_PLAYERS = 4;
 const PAD_START_BUTTON = 9;
 
