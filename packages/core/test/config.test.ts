@@ -32,3 +32,15 @@ describe('config sanity', () => {
     }
   });
 });
+
+describe('soft collision config', () => {
+  it('pins the soft core and the slide limit', () => {
+    expect(CONFIG.softHalf).toBe(3);
+    expect(CONFIG.slideMaxPx).toBe(6);
+  });
+
+  it('keeps the soft core smaller than a tile and the slide limit below the box width', () => {
+    expect(CONFIG.softHalf).toBeLessThan(TILE / 2);
+    expect(CONFIG.slideMaxPx).toBeLessThan(CONFIG.playerHalf * 2);
+  });
+});

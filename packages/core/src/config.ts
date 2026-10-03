@@ -13,6 +13,10 @@ export const CONFIG = {
   playerSpeed: 90,
   /** halbe Kantenlänge der Kollisionsbox */
   playerHalf: 5,
+  /** halbe Kantenlänge des festen Kerns einer weichen Kachel (Baum, Laterne) um deren Mitte */
+  softHalf: 3,
+  /** größter seitlicher Versatz, um den der Spieler an einer Kante vorbeigeschoben wird */
+  slideMaxPx: 6,
   interactRadius: 20,
   searchMs: 3000,
   refillMs: 45000,

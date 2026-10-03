@@ -48,6 +48,8 @@ export interface MapData {
   rows: number;
   /** flach, Index = row * cols + col */
   solid: boolean[];
+  /** weiche Kacheln (Baum, Laterne): blockieren nur im Kern (CONFIG.softHalf); fehlt = keine */
+  soft?: boolean[];
   spots: SpotDef[];
   dropoffs: Point[];
   shops: Point[];

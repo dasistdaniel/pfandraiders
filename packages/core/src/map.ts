@@ -1,4 +1,4 @@
-import { TILE } from './config';
+import { CONFIG, TILE } from './config';
 import type { MapData, Point, SpotDef, SpotType, ZoneDef } from './types';
 
 const SPOT_CHARS: Record<string, SpotType> = {
@@ -49,10 +49,29 @@ export function isSolidAt(map: MapData, px: number, py: number): boolean {
 
 /** Quadrat mit halber Kantenlänge `half` um (x, y). Gilt für half < TILE / 2. */
 export function boxBlocked(map: MapData, x: number, y: number, half: number): boolean {
-  return (
+  if (
     isSolidAt(map, x - half, y - half) ||
     isSolidAt(map, x + half, y - half) ||
     isSolidAt(map, x - half, y + half) ||
     isSolidAt(map, x + half, y + half)
-  );
+  ) {
+    return true;
+  }
+  const soft = map.soft;
+  if (!soft || soft.length === 0) return false;
+  // Weiche Kachel: blockiert nur, wenn die Box das Quadrat um die Kachelmitte echt überlappt.
+  const k = CONFIG.softHalf;
+  const c0 = Math.floor((x - half) / TILE);
+  const c1 = Math.floor((x + half) / TILE);
+  const r0 = Math.floor((y - half) / TILE);
+  const r1 = Math.floor((y + half) / TILE);
+  for (let r = Math.max(r0, 0); r <= Math.min(r1, map.rows - 1); r++) {
+    for (let c = Math.max(c0, 0); c <= Math.min(c1, map.cols - 1); c++) {
+      if (!soft[r * map.cols + c]) continue;
+      const cx = c * TILE + TILE / 2;
+      const cy = r * TILE + TILE / 2;
+      if (x - half < cx + k && x + half > cx - k && y - half < cy + k && y + half > cy - k) return true;
+    }
+  }
+  return false;
 }

@@ -60,6 +60,20 @@ export function parseTiledMap(json: unknown): MapData {
   if (!Array.isArray(data) || data.length !== cols * rows) fail('walls data length does not match width*height');
   const solid = data.map((g) => finite(g, 'wall tile') !== 0);
 
+  // Optionale Ebene "soft": weiche Kacheln (nur der Kern blockiert); fehlt sie, gibt es kein soft-Feld.
+  let soft: boolean[] | undefined;
+  const softLayer = json.layers.find((x) => isRecord(x) && x.name === 'soft');
+  if (softLayer) {
+    if (!isRecord(softLayer) || softLayer.type !== 'tilelayer') fail('"soft" must be a tilelayer');
+    const sd = softLayer.data;
+    if (!Array.isArray(sd) || sd.length !== cols * rows) fail('soft data length does not match width*height');
+    soft = sd.map((g, i) => {
+      const on = finite(g, 'soft tile') !== 0;
+      if (on && solid[i]) fail(`tile ${i} is both wall and soft`);
+      return on;
+    });
+  }
+
   const w = cols * TILE;
   const h = rows * TILE;
   const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h;
@@ -109,7 +123,9 @@ export function parseTiledMap(json: unknown): MapData {
     zones.push({ id, name: typeof z.name === 'string' ? z.name : id, area: { x0, y0, x1, y1 } });
   }
 
-  return { cols, rows, solid, spots, dropoffs, shops, spawns, npcSpawns, zones };
+  const map: MapData = { cols, rows, solid, spots, dropoffs, shops, spawns, npcSpawns, zones };
+  if (soft) map.soft = soft;
+  return map;
 }
 
 const VISUAL_LAYERS = ['ground', 'below', 'above'] as const;
