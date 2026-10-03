@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { TILE } from '../src/config';
-import { isSolidAt } from '../src/map';
+import { CONFIG, TILE } from '../src/config';
+import { boxBlocked, isSolidAt } from '../src/map';
 import { CITY_PLAN, CITY_ZONES } from '../src/maps/cityPlan';
 import { CITY_TILED_MAP } from '../src/maps/city';
 
 const COLS = 64;
 const ROWS = 40;
 const BUILDINGS = 'RYEX';
-const SOLID_CHARS = 'RYEXWtocl';
+const SOLID_CHARS = 'RYEXWoc';
+const SOFT_CHARS = 'tl';
 const WALK_CHARS = '=+.,@DSNbngmp';
 const SPOT_CHARS = 'bngmp';
 const ROAD_CHARS = '=+N';
@@ -82,7 +83,7 @@ describe('city plan: shape', () => {
   it('uses only legend characters', () => {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        expect(SOLID_CHARS + WALK_CHARS, `char at row ${r}, col ${c}`).toContain(at(r, c));
+        expect(SOLID_CHARS + SOFT_CHARS + WALK_CHARS, `char at row ${r}, col ${c}`).toContain(at(r, c));
       }
     }
   });
@@ -165,8 +166,33 @@ describe('city plan: content', () => {
 
   it('has lamps and trees', () => {
     expect(cellsOf('l').length).toBeGreaterThanOrEqual(10);
+    expect(cellsOf('l').length).toBeLessThanOrEqual(16);
     expect(cellsOf('t').length).toBeGreaterThanOrEqual(20);
     expect(cellsOf('o').length).toBeGreaterThan(0);
+  });
+});
+
+describe('city plan: soft obstacles', () => {
+  it('makes every tree and lamp soft and not solid, and nothing else soft', () => {
+    const { cols, solid, soft } = CITY_TILED_MAP;
+    expect(soft).toBeDefined();
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const i = r * cols + c;
+        const isSoftChar = SOFT_CHARS.includes(at(r, c));
+        expect(soft![i], `soft ${at(r, c)} at ${r},${c}`).toBe(isSoftChar);
+        if (isSoftChar) expect(solid[i], `solid ${at(r, c)} at ${r},${c}`).toBe(false);
+      }
+    }
+  });
+
+  it('lets the player walk right next to a tree trunk but not into its core', () => {
+    const m = CITY_TILED_MAP;
+    const { r, c } = cellsOf('t')[0];
+    const cx = c * TILE + TILE / 2;
+    const cy = r * TILE + TILE / 2;
+    expect(boxBlocked(m, cx, cy, CONFIG.playerHalf)).toBe(true);
+    expect(boxBlocked(m, cx - CONFIG.softHalf - CONFIG.playerHalf, cy, CONFIG.playerHalf)).toBe(false);
   });
 });
 

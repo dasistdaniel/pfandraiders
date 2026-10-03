@@ -37,6 +37,8 @@ Es gibt zwei Karten. `city` ist die Standardkarte, eine Stadt mit 64 x 40 Kachel
 
 Die Stadt wird aus einem ASCII-Plan erzeugt: `packages/core/src/maps/cityPlan.ts` (Legende im Kopf der Datei) wird mit `npx tsx packages/core/scripts/generateCity.ts` zur Tiled-Datei `city.tiled.json` mit Regel- und Grafikebenen. Nach Änderungen am Plan die Datei neu erzeugen; ein Test prüft, dass beide übereinstimmen und dass jeder Punkt von jedem Startpunkt aus erreichbar ist.
 
+Bäume und Laternen sind weiche Hindernisse (Ebene `soft`): sie blockieren nur einen kleinen Kern in der Kachelmitte, man läuft also dicht daneben vorbei. Außerdem rutscht der Spieler an Ecken, die ihn nur wenige Pixel überlappen (bis `CONFIG.slideMaxPx`), automatisch um die Kante herum, statt hängen zu bleiben.
+
 ## Grafik
 
 Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat, Shop) nutzt die freien Kacheln "Roguelike Modern City" von [Kenney](https://kenney.nl) (CC0, Lizenzdatei unter `packages/client/src/assets/kenney/`). Spieler, Hunde und Polizisten sind selbst gezeichnet (`packages/client/src/sprites/`). Welche Zelle des Kachelbogens für welches Bild genutzt wird, steht als reine Tabelle in `packages/client/src/kenneyMap.ts`. Fehlt der Bogen, fällt das Spiel auf die selbst gezeichneten Muster zurück.
