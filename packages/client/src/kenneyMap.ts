@@ -23,9 +23,9 @@ export const KENNEY_TILES: Record<TileKey, Cell> = {
   floor_0: { col: 2, row: 24 },
   floor_1: { col: 3, row: 24 },
   floor_2: { col: 2, row: 24 },
-  wall_top_0: { col: 1, row: 1 },
-  wall_top_1: { col: 2, row: 2 },
-  wall_top_2: { col: 1, row: 2 },
+  wall_top_0: { col: 4, row: 0 },
+  wall_top_1: { col: 6, row: 0 },
+  wall_top_2: { col: 7, row: 0 },
   wall_front: { col: 1, row: 7 },
 };
 

@@ -27,6 +27,10 @@ Aktion: Suchen (halten), Pfand abgeben (drücken am Pfandautomaten). Klauen: Kla
 
 Leben sinken durch Hunger (1 pro 8 s), Hundebisse (15) und das Umfallen kostet Flaschen, Item und 25 % des Geldes; nach 10 s steht man am Startpunkt wieder auf. Essen im Shop (1,00 €) heilt 30. Hunde beißen zu (danach lassen sie genau diesen Spieler 10 s in Ruhe) und lassen sich mit einem Leckerli (1,00 €, wird automatisch eingesetzt, teilt den Item-Slot mit dem Bolzenschneider) ablenken. Polizisten konfiszieren nach 2 s Kontrolle die Hälfte der Flaschen, wer wegläuft, entgeht ihr. Stadion und Konzert laden regelmäßig zu Events ein: 20 s vorher gibt es einen Hinweis, dann liegt dort 60 s lang dreifach so viel Pfand und Spots füllen sich schneller nach.
 
+## Grafik
+
+Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat, Shop) nutzt die freien Kacheln "Roguelike Modern City" von [Kenney](https://kenney.nl) (CC0, Lizenzdatei unter `packages/client/src/assets/kenney/`). Spieler, Hunde und Polizisten sind selbst gezeichnet (`packages/client/src/sprites/`). Welche Zelle des Kachelbogens für welches Bild genutzt wird, steht als reine Tabelle in `packages/client/src/kenneyMap.ts`. Fehlt der Bogen, fällt das Spiel auf die selbst gezeichneten Muster zurück.
+
 ## Testhilfen per URL
 
 `?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden), `?seed=123` (feste Zufallsbefüllung), `?events=now` (NPCs und Zonen sofort statt nach Minuten).
