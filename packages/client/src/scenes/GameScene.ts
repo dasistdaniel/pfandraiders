@@ -18,6 +18,7 @@ import { viewportsFor, WORLD_ZOOM } from '../layout';
 import type { OnlineConnection } from '../online';
 import type { InputSource } from '../sources';
 import { playerName } from '../text';
+import { ReconnectPlan } from '../reconnect';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
@@ -54,6 +55,10 @@ export class GameScene extends Phaser.Scene {
   /** Zustand des vorigen Frames für Sound-Ereignisse, null = noch keiner (erster Frame ohne Sounds) */
   private prevSoundState: GameState | null = null;
   private ownSoundIds: string[] | 'all' = 'all';
+  /** Nur online: läuft, solange die Verbindung weg ist und wir automatisch neu verbinden. */
+  private plan: ReconnectPlan | null = null;
+  private overlay: Phaser.GameObjects.Text | null = null;
+  private enterKey!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super('game');
@@ -70,6 +75,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.endedForMs = 0;
+    this.plan = null;
+    this.overlay = null;
     this.padBPrev = {};
     this.prevSoundState = null;
     let state: GameState;
@@ -86,10 +93,14 @@ export class GameScene extends Phaser.Scene {
       ];
       // Neue Runde (Server schickt erneut `start`) und Verbindungsverlust
       online.onStart = () => this.scene.restart({ online });
-      online.onClosed = () => this.scene.start('lobby', { notice: 'Verbindung zum Server verloren.' });
-      if (online.status === 'closed') {
-        // Das close-Ereignis kam schon vor dem Szenenwechsel an
-        this.scene.start('lobby', { notice: 'Verbindung zum Server verloren.' });
+      online.onClosed = () => this.beginReconnect();
+      online.onError = (code) => {
+        // Nur während des Wiederverbindens: endgültige Fehler beenden den Versuch
+        if (this.plan?.fatal(code)) this.leaveToMenu('Platz im Raum nicht mehr verfügbar.');
+      };
+      if (online.status === 'closed' && !online.room) {
+        // Ohne Raum gibt es nichts, wohin wir zurückkehren könnten
+        this.scene.start('menu', { notice: 'Verbindung zum Server verloren.' });
         return;
       }
     } else {
@@ -182,10 +193,36 @@ export class GameScene extends Phaser.Scene {
       });
     });
 
+    if (online) {
+      // Wiederverbindungs-Hinweis: Text nur in der UI-Kamera des lokalen Spielers (Viewport-Mitte)
+      const v = views[0];
+      this.overlay = this.add
+        .text(v.w / 2, v.h / 2, '', {
+          fontFamily: 'monospace',
+          fontSize: '16px',
+          color: '#ffffff',
+          backgroundColor: '#000000cc',
+          padding: { x: 10, y: 8 },
+          align: 'center',
+          wordWrap: { width: v.w - 32 },
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(30)
+        .setVisible(false);
+      cams.forEach((cam) => cam.ignore(this.overlay!));
+      this.uiCams.forEach((ui, j) => {
+        if (j !== 0) ui.ignore(this.overlay!);
+      });
+    }
+
     this.restartKey = this.input.keyboard!.addKey('R');
+    this.enterKey = this.input.keyboard!.addKey('ENTER');
     this.menuKey = this.input.keyboard!.addKey('ESC');
     this.muteKey = this.input.keyboard!.addKey('M');
     this.ownSoundIds = this.online ? [this.online.you] : 'all';
+    // Verbindung schon vor dem Szenenwechsel weg (Rennen zwischen Menü und Spielszene)
+    if (online && online.status === 'closed') this.beginReconnect();
     // Tastatur und Maus schaltet der Modul-Listener frei, das Gamepad hier
     const unlock = (): void => sfx.unlock();
     this.input.gamepad?.on('down', unlock);
@@ -206,6 +243,7 @@ export class GameScene extends Phaser.Scene {
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
     const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
     const menuPressed = Phaser.Input.Keyboard.JustDown(this.menuKey) || this.padBPressed();
+    if (this.plan && this.tickReconnect(delta, menuPressed)) return;
     if (state.phase === 'ended') this.endedForMs += delta;
     if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && menuPressed) {
       if (this.online) {
@@ -216,7 +254,7 @@ export class GameScene extends Phaser.Scene {
       this.scene.start('menu');
       return;
     }
-    if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && (restartPressed || confirmPressed)) {
+    if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && !this.plan && (restartPressed || confirmPressed)) {
       if (this.online) {
         this.online.requestStart(); // nur der Host löst aus, alle bekommen danach `start`
       } else {
@@ -249,6 +287,61 @@ export class GameScene extends Phaser.Scene {
       this.warnings.get(p.id)?.setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, p.id));
     }
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
+  }
+
+  /** Verbindung verloren: Wiederverbindungsplan anlegen (oder direkt ins Menü, wenn kein Beitritt bekannt ist). */
+  private beginReconnect(): void {
+    const online = this.online;
+    if (!online || this.plan) return;
+    if (!online.room || !online.you || !online.token) {
+      this.leaveToMenu('Verbindung zum Server verloren.');
+      return;
+    }
+    this.plan = new ReconnectPlan();
+    this.overlay?.setVisible(true);
+    this.updateOverlay();
+  }
+
+  /** Absichtlich zurück ins Menü: das Schließen darf keinen neuen Wiederverbindungsplan auslösen. */
+  private leaveToMenu(notice?: string): void {
+    if (this.online) {
+      this.online.onClosed = null;
+      this.online.onStart = null;
+      this.online.onError = null;
+      this.online.close();
+    }
+    this.scene.start('menu', notice ? { notice } : undefined);
+  }
+
+  private updateOverlay(): void {
+    const plan = this.plan;
+    if (!plan || !this.overlay) return;
+    this.overlay.setText(
+      plan.phase === 'asking'
+        ? 'Verbindung weiterhin gestört. Weiter versuchen? Enter = Ja, Esc = Menü'
+        : `Verbindung verloren, verbinde neu… (${Math.ceil(plan.remainingMs() / 1000)} s)`,
+    );
+  }
+
+  /** Ein Frame Wiederverbindung. Gibt true zurück, wenn die Szene verlassen wurde. */
+  private tickReconnect(delta: number, menuPressed: boolean): boolean {
+    const plan = this.plan;
+    const online = this.online;
+    if (!plan || !online) return false;
+    if (menuPressed) {
+      this.leaveToMenu();
+      return true;
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.enterKey) && plan.phase === 'asking') plan.continueTrying();
+    if (plan.update(delta) === 'attempt' && online.status === 'closed') {
+      try {
+        online.reopen();
+      } catch {
+        // Öffnen gescheitert: der Plan zählt weiter und versucht es erneut
+      }
+    }
+    this.updateOverlay();
+    return false;
   }
 
   /** Flanke von Gamepad-B; beim ersten Blick auf ein Pad nur den Zustand merken (gehaltene Taste zählt nicht). */
