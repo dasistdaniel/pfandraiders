@@ -9,12 +9,49 @@ const free = (map: MapData, x: number, y: number): boolean => !boxBlocked(map, x
  * Vorwärtsschritt frei ist. Der Weg dorthin muss Pixel für Pixel frei sein, damit man sich nie
  * durch eine Lücke zwängt, die schmaler ist als die Box. 0 = kein Versatz gefunden.
  */
-function slideOffset(map: MapData, p: Player, fx: number, fy: number, perpX: boolean, sign: number): number {
+/** So weit voraus (px) muss der Weg nach dem Versatz frei sein: ein ganzes Hindernis (Box + weicher Kern). */
+const LOOKAHEAD = 18;
+
+function clearAhead(map: MapData, x: number, y: number, ux: number, uy: number): boolean {
+  for (let k = 1; k <= LOOKAHEAD; k += 1) if (!free(map, x + ux * k, y + uy * k)) return false;
+  return true;
+}
+
+function slideOffset(
+  map: MapData,
+  p: Player,
+  fx: number,
+  fy: number,
+  perpX: boolean,
+  sign: number,
+  ux: number,
+  uy: number,
+): number {
+  const ox = (t: number) => (perpX ? sign * t : 0);
+  const oy = (t: number) => (perpX ? 0 : sign * t);
+  const MARGIN = 0.5; // der Durchgang braucht etwas Luft, sonst wäre er genau so breit wie die Box (zwängen)
   for (let s = 1; s <= CONFIG.slideMaxPx; s++) {
-    const ox = perpX ? sign * s : 0;
-    const oy = perpX ? 0 : sign * s;
-    if (!free(map, p.x + ox, p.y + oy)) return 0;
-    if (free(map, fx + ox, fy + oy)) return s;
+    if (!free(map, fx + ox(s), fy + oy(s))) {
+      // noch nicht vorbei: der Weg dorthin muss frei bleiben
+      if (!free(map, p.x + ox(s), p.y + oy(s))) return 0;
+      continue;
+    }
+    // genau auf die Kante verfeinern (zwischen s - 1 und s), damit der Spieler nicht überschießt
+    let lo = s - 1;
+    let hi = s;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (free(map, fx + ox(mid), fy + oy(mid))) hi = mid;
+      else lo = mid;
+    }
+    const o = hi;
+    const ok =
+      free(map, p.x + ox(o), p.y + oy(o)) &&
+      free(map, p.x + ox(o + MARGIN), p.y + oy(o + MARGIN)) &&
+      free(map, fx + ox(o + MARGIN), fy + oy(o + MARGIN)) &&
+      clearAhead(map, fx + ox(o + MARGIN), fy + oy(o + MARGIN), ux, uy);
+    if (ok) return o;
+    if (!free(map, p.x + ox(s), p.y + oy(s))) return 0;
   }
   return 0;
 }
@@ -50,10 +87,12 @@ export function walk(map: MapData, p: Player, input: Input, dtMs: number): void 
   let bestSign = 0;
   let bestPerpX = false;
   const consider = (perpX: boolean, preferred: number) => {
+    const ux = perpX ? 0 : Math.sign(dx);
+    const uy = perpX ? Math.sign(dy) : 0;
     const fx = perpX ? p.x : p.x + dx;
     const fy = perpX ? p.y + dy : p.y;
-    const pos = slideOffset(map, p, fx, fy, perpX, 1);
-    const neg = slideOffset(map, p, fx, fy, perpX, -1);
+    const pos = slideOffset(map, p, fx, fy, perpX, 1, ux, uy);
+    const neg = slideOffset(map, p, fx, fy, perpX, -1, ux, uy);
     let s = 0;
     let sign = 0;
     if (pos > 0 && (neg === 0 || pos < neg)) [s, sign] = [pos, 1];

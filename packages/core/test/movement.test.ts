@@ -83,18 +83,18 @@ describe('corner sliding', () => {
     it(`slides around a corner that overlaps by 3 px (wall ${side})`, () => {
       expect(runPast(3, wallBelow).players.p1.x).toBeGreaterThan(160);
     });
-    it(`slides around a corner that overlaps by 6 px (wall ${side})`, () => {
-      expect(runPast(6, wallBelow).players.p1.x).toBeGreaterThan(160);
+    it(`slides around a corner that overlaps by 9 px (wall ${side})`, () => {
+      expect(runPast(9, wallBelow).players.p1.x).toBeGreaterThan(160);
     });
-    it(`does not slide around a corner that overlaps by 7 px (wall ${side})`, () => {
-      const p = runPast(7, wallBelow).players.p1;
+    it(`does not slide around a corner that overlaps by 10 px (wall ${side})`, () => {
+      const p = runPast(10, wallBelow).players.p1;
       expect(p.x).toBeLessThanOrEqual(6 * T - HALF);
-      expect(p.y).toBe(wallBelow ? 4 * T - HALF + 7 - 0.5 : 4 * T + HALF - 7 + 0.5);
+      expect(p.y).toBe(wallBelow ? 4 * T - HALF + 10 - 0.5 : 4 * T + HALF - 10 + 0.5);
     });
   }
 
   it('never ends up inside a wall while sliding', () => {
-    for (const k of [1, 3, 6, 7]) {
+    for (const k of [1, 3, 9, 10]) {
       const s = newGame(world([4, 6], [4, 7]));
       s.players.p1.x = 40;
       s.players.p1.y = 4 * T - HALF + k - 0.5;
@@ -108,7 +108,7 @@ describe('corner sliding', () => {
   it('moves at most one step sideways per tick and not forward while nudging', () => {
     const s = newGame(world([4, 6]));
     s.players.p1.x = 6 * T - HALF - 0.5;
-    s.players.p1.y = 4 * T - HALF + 6 - 0.5;
+    s.players.p1.y = 4 * T - HALF + 9 - 0.5;
     const x0 = s.players.p1.x;
     const y0 = s.players.p1.y;
     runSteps(s, { p1: input({ moveX: 1 }) }, 1, 20);
@@ -157,6 +157,21 @@ describe('corner sliding', () => {
     w.players.p1.y = 72;
     runSteps(w, { p1: input({ moveX: 1 }) }, 100, 20);
     expect(w.players.p1.x).toBeGreaterThan(160);
+  });
+
+  it('walks straight past a soft tile hit dead-centre, horizontally and vertically', () => {
+    for (const dir of [{ moveX: 1 }, { moveX: -1 }, { moveY: 1 }, { moveY: -1 }]) {
+      const s = newGame(world());
+      s.map.soft = new Array<boolean>(s.map.cols * s.map.rows).fill(false);
+      s.map.soft[4 * s.map.cols + 7] = true; // Mitte (120, 72)
+      const horizontal = dir.moveX !== undefined;
+      const sign = horizontal ? dir.moveX! : dir.moveY!;
+      s.players.p1.x = horizontal ? 120 - sign * 32 : 120;
+      s.players.p1.y = horizontal ? 72 : 72 - sign * 32;
+      runSteps(s, { p1: input(dir) }, 100, 20);
+      const along = horizontal ? s.players.p1.x : s.players.p1.y;
+      expect(sign * (along - (horizontal ? 120 : 72)), JSON.stringify(dir)).toBeGreaterThan(12);
+    }
   });
 
   it('slides past a tree core (soft tile)', () => {

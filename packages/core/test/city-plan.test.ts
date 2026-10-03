@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG, TILE } from '../src/config';
+import { createGame } from '../src/game';
 import { boxBlocked, isSolidAt } from '../src/map';
+import { walk } from '../src/movement';
+import { NO_INPUT } from '../src/types';
 import { CITY_PLAN, CITY_ZONES } from '../src/maps/cityPlan';
 import { CITY_TILED_MAP } from '../src/maps/city';
 
@@ -193,6 +196,41 @@ describe('city plan: soft obstacles', () => {
     const cy = r * TILE + TILE / 2;
     expect(boxBlocked(m, cx, cy, CONFIG.playerHalf)).toBe(true);
     expect(boxBlocked(m, cx - CONFIG.softHalf - CONFIG.playerHalf, cy, CONFIG.playerHalf)).toBe(false);
+  });
+});
+
+describe('city plan: soft obstacles do not block a straight approach', () => {
+  it('lets the player walk straight past every free soft tile from all four sides', () => {
+    const m = CITY_TILED_MAP;
+    const half = CONFIG.playerHalf;
+    let checked = 0;
+    for (let r = 0; r < m.rows; r++) {
+      for (let c = 0; c < m.cols; c++) {
+        const idx = r * m.cols + c;
+        if (!m.soft![idx]) continue;
+        const cx = c * TILE + TILE / 2;
+        const cy = r * TILE + TILE / 2;
+        const others = { ...m, soft: m.soft!.map((v, i) => v && i !== idx) };
+        for (const [ux, uy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          // Weg von 32 px vor der Mitte bis 12 px dahinter muss frei von Wänden und fremden Kernen sein
+          let free = true;
+          for (let d = -32; d <= 12 && free; d++) free = !boxBlocked(others, cx + ux * d, cy + uy * d, half);
+          if (!free) continue;
+          const state = createGame(1, m, ['p1']);
+          const p = state.players.p1;
+          p.x = cx - ux * 32;
+          p.y = cy - uy * 32;
+          let reached = false;
+          for (let i = 0; i < 150 && !reached; i++) {
+            walk(m, p, { ...NO_INPUT, moveX: ux, moveY: uy }, 20);
+            reached = ux * (p.x - cx) + uy * (p.y - cy) >= 12;
+          }
+          expect(reached, `soft tile at ${r},${c} approached by ${ux},${uy}`).toBe(true);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
   });
 });
 

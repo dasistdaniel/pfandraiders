@@ -15,8 +15,12 @@ export const CONFIG = {
   playerHalf: 5,
   /** halbe Kantenlänge des festen Kerns einer weichen Kachel (Baum, Laterne) um deren Mitte */
   softHalf: 3,
-  /** größter seitlicher Versatz, um den der Spieler an einer Kante vorbeigeschoben wird */
-  slideMaxPx: 6,
+  /**
+   * größter seitlicher Versatz, um den der Spieler an einer Kante vorbeigeschoben wird.
+   * Muss >= playerHalf + softHalf + 1 sein, sonst blockiert ein weicher Kern bei mittigem Anlauf
+   * (Kantenberührung zählt als blockiert, daher das +1).
+   */
+  slideMaxPx: 9,
   interactRadius: 20,
   searchMs: 3000,
   refillMs: 45000,

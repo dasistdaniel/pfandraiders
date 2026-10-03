@@ -36,7 +36,11 @@ describe('config sanity', () => {
 describe('soft collision config', () => {
   it('pins the soft core and the slide limit', () => {
     expect(CONFIG.softHalf).toBe(3);
-    expect(CONFIG.slideMaxPx).toBe(6);
+    expect(CONFIG.slideMaxPx).toBe(9);
+  });
+
+  it('lets the player slide off a soft core hit dead-centre', () => {
+    expect(CONFIG.slideMaxPx).toBeGreaterThanOrEqual(CONFIG.playerHalf + CONFIG.softHalf + 1);
   });
 
   it('keeps the soft core smaller than a tile and the slide limit below the box width', () => {
