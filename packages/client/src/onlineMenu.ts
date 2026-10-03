@@ -66,6 +66,8 @@ export function showOnlineMenu(
     const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
     const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;min-width:320px;max-width:90vw;box-sizing:border-box');
     root.appendChild(box);
+    // Phaser hängt am window und verschluckt gefangene Tasten (E, O, Leertaste ...), also hier stoppen
+    for (const type of ['keydown', 'keyup', 'keypress']) root.addEventListener(type, (e) => e.stopPropagation());
     document.body.appendChild(root);
 
     const conn = new OnlineConnection(url, socketFactory);
