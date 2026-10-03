@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialPose, npcFrame, stepPose } from '../src/pose';
+import { BOB_PX, WALK_FRAME_MS, bobOffset, initialPose, npcFrame, stepPose } from '../src/pose';
 
 describe('stepPose', () => {
   it('starts facing down and idles as down_a', () => {
@@ -128,5 +128,51 @@ describe('npcFrame', () => {
 
   it('tolerates NaN dt', () => {
     expect(npcFrame(initialPose(0, 0), 1, 0, NaN).state.walkMs).toBe(0);
+  });
+});
+
+describe('bobOffset', () => {
+  it('is 0 when not moving, whatever walkMs says', () => {
+    expect(bobOffset(0, false)).toBe(0);
+    expect(bobOffset(WALK_FRAME_MS, false)).toBe(0);
+  });
+
+  it('is 0 on frame a and -BOB_PX on frame b', () => {
+    expect(BOB_PX).toBe(1);
+    expect(bobOffset(0, true)).toBe(0);
+    expect(bobOffset(WALK_FRAME_MS - 1, true)).toBe(0);
+    expect(bobOffset(WALK_FRAME_MS + 1, true)).toBe(-1);
+  });
+
+  it('switches exactly at WALK_FRAME_MS and repeats each cycle', () => {
+    expect(bobOffset(WALK_FRAME_MS, true)).toBe(-1);
+    expect(bobOffset(2 * WALK_FRAME_MS, true)).toBe(0);
+    expect(bobOffset(3 * WALK_FRAME_MS, true)).toBe(-1);
+    expect(bobOffset(10 * WALK_FRAME_MS, true)).toBe(0);
+  });
+
+  it('treats NaN, Infinity and negative walkMs as 0', () => {
+    expect(bobOffset(NaN, true)).toBe(0);
+    expect(bobOffset(Infinity, true)).toBe(0);
+    expect(bobOffset(-WALK_FRAME_MS, true)).toBe(0);
+  });
+});
+
+describe('moving flag', () => {
+  it('stepPose: true on movement beyond epsilon, false standing and below epsilon', () => {
+    expect(stepPose(initialPose(0, 0), 1, 0, 'walking', 16).moving).toBe(true);
+    expect(stepPose(initialPose(0, 0), 0, 0, 'walking', 16).moving).toBe(false);
+    expect(stepPose(initialPose(0, 0), 0.01, 0, 'walking', 16).moving).toBe(false);
+  });
+
+  it('stepPose: false while searching, stealing or unconscious, even when position changes', () => {
+    expect(stepPose(initialPose(0, 0), 0, 0, 'searching', 16).moving).toBe(false);
+    expect(stepPose(initialPose(0, 0), 0, 0, 'stealing', 16).moving).toBe(false);
+    expect(stepPose(initialPose(0, 0), 5, 0, 'unconscious', 16).moving).toBe(false);
+  });
+
+  it('npcFrame: true when moved, false when standing', () => {
+    expect(npcFrame(initialPose(0, 0), 1, 0, 16).moving).toBe(true);
+    expect(npcFrame(initialPose(0, 0), 0, 0, 16).moving).toBe(false);
   });
 });

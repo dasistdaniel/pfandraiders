@@ -107,6 +107,10 @@ export interface Npc {
   cooldownMs: number;
   /** Hund: Restzeit, in der ein Leckerli ihn beschäftigt */
   distractedMs: number;
+  /** Hund: dieser Spieler wurde gerade gebissen und wird ignoriert, solange restMs läuft */
+  restId: string | null;
+  /** Hund: Restzeit der Beißpause gegenüber restId */
+  restMs: number;
   /** Polizei: wie lange die laufende Kontrolle schon dauert */
   checkMs: number;
 }

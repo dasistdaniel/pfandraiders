@@ -5,7 +5,7 @@ import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
-import { initialPose, npcFrame, stepPose } from '../pose';
+import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
 import type { PoseState } from '../pose';
 import { ensurePlayerTextures } from '../textures';
 import { dogTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
@@ -39,6 +39,8 @@ export class GameScene extends Phaser.Scene {
   private bodies = new Map<string, Phaser.GameObjects.Image>();
   private poses = new Map<string, PoseState>();
   private npcPoses = new Map<number, PoseState>();
+  /** Unsichtbare, nicht wippende Kamera-Ziele, damit die Kamera beim Gehen nicht ruckelt. */
+  private followTargets = new Map<string, Phaser.GameObjects.Zone>();
   private warnings = new Map<string, Phaser.GameObjects.Text>();
   private playerColors = new Map<string, number>();
   private spotSprites: Phaser.GameObjects.Image[] = [];
@@ -159,6 +161,7 @@ export class GameScene extends Phaser.Scene {
       const body = this.add.image(p.x, p.y, playerTexture(color, 'down_a'));
       body.setDepth(5);
       this.bodies.set(p.id, body);
+      this.followTargets.set(p.id, this.add.zone(p.x, p.y, 1, 1));
       this.poses.set(p.id, initialPose(p.x, p.y));
       this.warnings.set(
         p.id,
@@ -176,7 +179,7 @@ export class GameScene extends Phaser.Scene {
     cams.forEach((cam, i) => {
       cam.setZoom(WORLD_ZOOM);
       cam.setBounds(0, 0, state.map.cols * TILE, state.map.rows * TILE);
-      cam.startFollow(this.bodies.get(this.slots[i].id)!, true, 0.15, 0.15);
+      cam.startFollow(this.followTargets.get(this.slots[i].id)!, true, 0.15, 0.15);
     });
 
     // Alles bisher Erzeugte ist Weltobjekt. Die UI-Kameras (Zoom 1, gleicher Viewport) zeigen nur HUDs.
@@ -286,10 +289,11 @@ export class GameScene extends Phaser.Scene {
     for (const p of Object.values(state.players)) {
       const body = this.bodies.get(p.id);
       if (!body) continue; // Spieler, die nach dem Start nicht in der Liste waren
-      body.setPosition(p.x, p.y);
+      this.followTargets.get(p.id)?.setPosition(p.x, p.y);
       const color = this.playerColors.get(p.id) ?? 0xffffff;
-      const { state: poseState, pose } = stepPose(this.poses.get(p.id) ?? initialPose(p.x, p.y), p.x, p.y, p.mode, delta);
+      const { state: poseState, pose, moving } = stepPose(this.poses.get(p.id) ?? initialPose(p.x, p.y), p.x, p.y, p.mode, delta);
       this.poses.set(p.id, poseState);
+      body.setPosition(p.x, p.y + bobOffset(poseState.walkMs, moving));
       body.setTexture(playerTexture(color, pose.frame)).setFlipX(pose.flipX);
       body.setAlpha(p.mode === 'unconscious' ? 0.6 : 1);
       this.warnings.get(p.id)?.setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, p.id));
@@ -410,9 +414,9 @@ export class GameScene extends Phaser.Scene {
         for (const ui of this.uiCams) ui.ignore(sprite); // Weltobjekt: nicht in den UI-Kameras
         this.npcSprites.set(npc.id, sprite);
       }
-      sprite.setPosition(npc.x, npc.y);
       const nf = npcFrame(this.npcPoses.get(npc.id)!, npc.x, npc.y, delta);
       this.npcPoses.set(npc.id, nf.state);
+      sprite.setPosition(npc.x, npc.y + bobOffset(nf.state.walkMs, nf.moving));
       sprite.setTexture(npc.kind === 'dog' ? dogTexture(nf.frame) : policeTexture(nf.frame)).setFlipX(nf.flipX);
       sprite.setAlpha(npc.distractedMs > 0 ? 0.5 : 1);
     }

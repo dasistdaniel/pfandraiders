@@ -195,7 +195,7 @@ describe('more alerts', () => {
 
   it('warns during a police check', () => {
     const s = shopGame();
-    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, targetId: 'p1', cooldownMs: 0, distractedMs: 0, checkMs: 300 });
+    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, targetId: 'p1', cooldownMs: 0, distractedMs: 0, restId: null, restMs: 0, checkMs: 300 });
     expect(alertText(s, s.players.p1)).toContain('KONTROLLE! Lauf weg!');
   });
 
@@ -253,7 +253,7 @@ describe('final review fixes', () => {
     s.players.p1.unconsciousMs = 4000;
     s.players.p2.stealTargetId = 'p1';
     s.players.p2.stealProgressMs = 40;
-    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, targetId: 'p1', cooldownMs: 0, distractedMs: 0, checkMs: 300 });
+    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, targetId: 'p1', cooldownMs: 0, distractedMs: 0, restId: null, restMs: 0, checkMs: 300 });
     s.zones[0].phase = 'announced';
     s.zones[0].timerMs = 5000;
     s.zones[1].phase = 'active';

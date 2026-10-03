@@ -69,6 +69,8 @@ export const CONFIG = {
       biteDamage: 15,
       biteCooldownMs: 1500,
       distractedMs: 8000,
+      /** Nach einem Biss lässt der Hund genau diesen Spieler so lange in Ruhe */
+      biteRestMs: 10000,
     },
     police: {
       speed: 55,
