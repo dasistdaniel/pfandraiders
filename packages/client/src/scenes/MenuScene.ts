@@ -4,7 +4,7 @@ import { GAME_H, GAME_W } from '../layout';
 import { controlLines, MenuModel } from '../menuModel';
 import type { MenuItem } from '../menuModel';
 import { showOnlineMenu } from '../onlineMenu';
-import { sfx } from '../sfx';
+import { music, sfx } from '../sfx';
 import { resolveServerUrl } from '../serverUrl';
 import { PAD_LABELS } from '../sources';
 import { stepVolume } from '../settings';
@@ -34,6 +34,7 @@ const MAIN_ITEMS: MenuItem[] = [
 
 const SETTINGS_ITEMS: MenuItem[] = [
   { id: 'volume', label: 'Lautstärke' },
+  { id: 'music', label: 'Musik' },
   { id: 'mute', label: 'Ton' },
   { id: 'controls', label: 'Steuerung anzeigen' },
   { id: 'back', label: 'Zurück' },
@@ -71,6 +72,10 @@ export class MenuScene extends Phaser.Scene {
     this.padPrev = {};
     this.itemTexts = [];
     this.model = new MenuModel(MAIN_ITEMS);
+    // Ruhige Fassung: langsam, ohne Beat; läuft weiter, falls sie schon spielt
+    music.setMode('menu');
+    music.setProgress(0);
+    music.start();
 
     this.add.tileSprite(0, 0, GAME_W, GAME_H, tileTexture('city', 'floor_0')).setOrigin(0).setTileScale(2);
     this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.65).setOrigin(0);
@@ -174,12 +179,13 @@ export class MenuScene extends Phaser.Scene {
         if (this.busy) return;
         this.model.select(i);
         this.render();
-        if (this.model.activate() === 'volume') {
+        const id = this.model.activate();
+        if (id === 'volume' || id === 'music') {
           // Linke Hälfte der Zeile leiser, rechte lauter
           this.adjustVolume(pointer.x < t.x ? -1 : 1);
           return;
         }
-        this.activate(this.model.activate());
+        this.activate(id);
       });
       return t;
     });
@@ -188,6 +194,7 @@ export class MenuScene extends Phaser.Scene {
 
   private labelFor(item: MenuItem): string {
     if (item.id === 'volume') return `Lautstärke: ◄ ${sfx.volume} % ►`;
+    if (item.id === 'music') return `Musik: ◄ ${music.volume} % ►`;
     if (item.id === 'mute') return `Ton: ${sfx.muted ? 'aus' : 'an'}`;
     return item.label;
   }
@@ -227,7 +234,7 @@ export class MenuScene extends Phaser.Scene {
         this.goBack();
         break;
       default:
-        break; // 'volume' ändert sich nur mit links/rechts
+        break; // 'volume' und 'music' ändern sich nur mit links/rechts
     }
   }
 
@@ -244,10 +251,19 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private adjustVolume(dir: -1 | 1): void {
-    if (this.page !== 'settings' || this.model.activate() !== 'volume') return;
-    const next = stepVolume(sfx.volume, dir);
-    if (next === sfx.volume) return;
-    sfx.setVolume(next);
+    if (this.page !== 'settings') return;
+    const id = this.model.activate();
+    if (id === 'volume') {
+      const next = stepVolume(sfx.volume, dir);
+      if (next === sfx.volume) return;
+      sfx.setVolume(next);
+    } else if (id === 'music') {
+      const next = stepVolume(music.volume, dir);
+      if (next === music.volume) return;
+      music.setVolume(next);
+    } else {
+      return;
+    }
     sfx.play('pickup');
     this.render();
   }

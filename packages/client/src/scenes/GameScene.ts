@@ -12,7 +12,7 @@ import { dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, sp
 import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
-import { sfx } from '../sfx';
+import { music, sfx, unlockAudio } from '../sfx';
 import { detectSounds, snapshotForSound } from '../soundEvents';
 import { buildInput } from '../input';
 import { viewportsFor, WORLD_ZOOM } from '../layout';
@@ -69,6 +69,8 @@ export class GameScene extends Phaser.Scene {
   private connectingMs = 0;
   private joinedSeen = false;
   private enterKey!: Phaser.Input.Keyboard.Key;
+  /** Rundenlänge für den Musikfortschritt: größte gesehene Restzeit (online erst ab dem ersten Zustand bekannt). */
+  private roundTotalMs = 0;
 
   constructor() {
     super('game');
@@ -92,6 +94,7 @@ export class GameScene extends Phaser.Scene {
     this.joinedSeen = false;
     this.padBPrev = {};
     this.prevSoundState = null;
+    this.roundTotalMs = 0;
     let state: GameState;
     this.playerColors = new Map();
     let localParams: URLSearchParams | null = null;
@@ -242,7 +245,7 @@ export class GameScene extends Phaser.Scene {
     // Verbindung schon vor dem Szenenwechsel weg (Rennen zwischen Menü und Spielszene)
     if (online && online.status === 'closed') this.beginReconnect();
     // Tastatur und Maus schaltet der Modul-Listener frei, das Gamepad hier
-    const unlock = (): void => sfx.unlock();
+    const unlock = (): void => unlockAudio();
     this.input.gamepad?.on('down', unlock);
     this.events.once('shutdown', () => {
       this.input.gamepad?.off('down', unlock);
@@ -257,6 +260,7 @@ export class GameScene extends Phaser.Scene {
     this.conn.update(delta);
 
     const state = this.conn.getState();
+    this.updateMusic(state);
     // JustDown und confirmPressed jeden Frame abfragen und so Druck aus der Spielphase verwerfen,
     // sonst löst ein alter Tastendruck beim Rundenende sofort einen Neustart aus.
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
@@ -308,6 +312,14 @@ export class GameScene extends Phaser.Scene {
       this.warnings.get(p.id)?.setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, p.id));
     }
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
+  }
+
+  /** Musik folgt der Runde: schneller und dichter gegen Ende, nach Rundenende leise und ruhig. */
+  private updateMusic(state: GameState): void {
+    if (Number.isFinite(state.timeLeftMs) && state.timeLeftMs > this.roundTotalMs) this.roundTotalMs = state.timeLeftMs;
+    const progress = this.roundTotalMs > 0 ? 1 - state.timeLeftMs / this.roundTotalMs : 0;
+    music.setProgress(progress);
+    music.setMode(state.phase === 'ended' ? 'ended' : 'game');
   }
 
   /** Verbindung verloren: Wiederverbindungsplan anlegen (oder direkt ins Menü, wenn kein Beitritt bekannt ist). */

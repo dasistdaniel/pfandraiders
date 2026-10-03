@@ -92,6 +92,8 @@ export class SoundFx {
   private noiseBuffer: AudioBuffer | null = null;
   muted: boolean;
   volume: number;
+  /** Wird nach jedem Umschalten der Stummschaltung aufgerufen (z. B. für die Musik). */
+  onMuteChange: ((muted: boolean) => void) | null = null;
 
   constructor(
     private readonly createContext: () => AudioContext | null = defaultContext,
@@ -119,6 +121,11 @@ export class SoundFx {
     if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
   }
 
+  /** Der freigeschaltete AudioContext (null vor der ersten Nutzergeste oder ohne WebAudio). */
+  getContext(): AudioContext | null {
+    return this.ctx;
+  }
+
   /** Lautstärke in Prozent (0 bis 100): wirkt sofort und wird gespeichert. */
   setVolume(v: number): void {
     this.volume = clampVolume(v);
@@ -133,6 +140,11 @@ export class SoundFx {
   toggleMute(): boolean {
     this.muted = !this.muted;
     saveMuted(this.muted);
+    try {
+      this.onMuteChange?.(this.muted);
+    } catch {
+      // Zuhörer dürfen das Umschalten nie verhindern
+    }
     return this.muted;
   }
 

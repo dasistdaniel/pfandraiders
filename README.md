@@ -13,6 +13,8 @@ Retro-Top-Down-Spiel: Pfandflaschen sammeln, abgeben, Container ausbauen. Design
 
 Das Hauptmenü bietet Lokal spielen, Online spielen und Einstellungen (Lautstärke per Pfeiltasten, A/D oder Mausklick links/rechts der Zeile, Ton an/aus, Steuerungsübersicht). Bedienung: Pfeile oder W/S wählen, Enter/E/Leertaste bestätigt, Esc geht zurück; Gamepad: Steuerkreuz, A, B. Die Lautstärke wird im Browser gespeichert.
 
+Musik: Im Hintergrund läuft eine im Browser erzeugte, ruhige Chiptune-Musik. Sie wird im Lauf der Runde schneller und dichter, nach Rundenende leiser. Ihre Lautstärke stellt man in den Einstellungen unter „Musik“ ein (Standard 40 %), M bzw. „Ton aus“ schaltet sie mit stumm.
+
 Lokal mit 1 bis 4 Spielern, jeder mit eigener Kamera. Im lokalen Spiel (Menüpunkt "Lokal spielen") treten Spieler in der Lobby mit der Aktionstaste ihres Geräts bei, Start mit Leertaste oder Start-Taste des Gamepads, Zurück ins Menü mit Esc oder Gamepad B.
 
 | Gerät | Laufen | Aktion | Klauen | Container-Upgrade | Bolzenschneider | Leckerli | Essen |
