@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import cityJson from '../src/maps/city.tiled.json';
 import { CITY_PLAN, CITY_ZONES } from '../src/maps/cityPlan';
-import { CITY_VISUALS } from '../src/maps/city';
+import { getCityVisuals } from '../src/maps/city';
 import { MAP_DEFS, MAP_VISUALS } from '../src/maps';
 import { parseTiledVisuals, SHEET_CELLS } from '../src/tiled';
 import type { TiledMap } from '../src/tiled';
@@ -156,9 +156,22 @@ describe('city visuals: committed JSON and registry', () => {
   });
 
   it('registers the city visuals', () => {
-    expect(CITY_VISUALS).toEqual(parseTiledVisuals(cityJson));
-    expect(MAP_VISUALS.city).toBe(CITY_VISUALS);
-    expect(MAP_DEFS.city.visuals).toBe(CITY_VISUALS);
+    expect(getCityVisuals()).toEqual(parseTiledVisuals(cityJson));
+    expect(MAP_VISUALS.city).toBe(getCityVisuals());
+    expect(MAP_DEFS.city.visuals).toBe(getCityVisuals());
     expect(MAP_DEFS.retro.visuals).toBeNull();
+  });
+
+  it('parses the visuals lazily and only once', () => {
+    // MAP_DEFS lässt sich lesen (Karte, Tileset), ohne die Ebenen anzufassen
+    expect(MAP_DEFS.city.map.cols).toBe(COLS);
+    expect(MAP_DEFS.city.tileset).toBe('city');
+    expect(Object.keys(MAP_DEFS)).toEqual(['city', 'retro']);
+    const a = MAP_DEFS.city.visuals;
+    const b = MAP_DEFS.city.visuals;
+    expect(a).not.toBeNull();
+    expect(b).toBe(a);
+    expect(MAP_VISUALS.city).toBe(a);
+    expect(getCityVisuals()).toBe(a);
   });
 });

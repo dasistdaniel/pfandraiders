@@ -7,8 +7,9 @@ import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
 import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
 import type { PoseState } from '../pose';
-import { ensurePlayerTextures } from '../textures';
-import { dogTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
+import { bakeMapLayers, ensurePlayerTextures } from '../textures';
+import { dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
+import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
 import { sfx } from '../sfx';
@@ -33,8 +34,10 @@ const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', resol
 export class GameScene extends Phaser.Scene {
   private slots: PlayerSlot[] = [];
   private conn!: GameConnection;
-  /** Kennung der gespielten Karte (online vom Server, lokal aus ?map=). Das Tileset hat noch keine Wirkung. */
+  /** Kennung der gespielten Karte (online vom Server, lokal aus ?map=). */
   private mapId: MapId = DEFAULT_MAP_ID;
+  /** Kachelsatz der Karte (aus MAP_DEFS), bestimmt die Texturschlüssel von Karte, Spots und Markern. */
+  private tileset: TilesetId = DEFAULT_MAP_ID;
   private online: OnlineConnection | null = null;
   private sources: InputSource[] = [];
   private huds: PlayerHud[] = [];
@@ -130,6 +133,7 @@ export class GameScene extends Phaser.Scene {
       this.conn = new LocalConnection(state, ids);
       for (const s of this.slots) this.playerColors.set(s.id, s.color);
     }
+    this.tileset = MAP_DEFS[this.mapId].tileset;
     this.sources = this.slots.map((s) => createSource(this, s.device));
 
     this.spotSprites = [];
@@ -157,7 +161,7 @@ export class GameScene extends Phaser.Scene {
       });
     }
     for (const spot of state.spots) {
-      this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(spot.type, true)));
+      this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(this.tileset, spot.type, true)));
       this.spotFull.push(true);
     }
     for (const p of Object.values(state.players)) {
@@ -287,7 +291,7 @@ export class GameScene extends Phaser.Scene {
       const full = totalBottles(spot.contents) > 0;
       if (this.spotFull[i] === full) return;
       this.spotFull[i] = full;
-      this.spotSprites[i].setTexture(spotTexture(spot.type, full));
+      this.spotSprites[i].setTexture(spotTexture(this.tileset, spot.type, full));
     });
     this.renderZones(state.zones);
     this.renderNpcs(state.npcs, delta);
@@ -434,9 +438,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawMap(map: MapData): void {
-    for (let r = 0; r < map.rows; r++) {
-      for (let c = 0; c < map.cols; c++) {
-        this.add.image(c * TILE + TILE / 2, r * TILE + TILE / 2, tileTexture(tileKey(map, c, r))).setDepth(0);
+    if (this.tileset === 'city') {
+      // Die Stadt ist ein einziges gebackenes Bild (Boden + Details) plus eine Ebene darüber (Baumkronen, Tiefe 6).
+      bakeMapLayers(this, this.mapId);
+      this.add.image(0, 0, mapTexture(this.mapId, 'ground-below')).setOrigin(0).setDepth(0);
+      if (this.textures.exists(mapTexture(this.mapId, 'above'))) {
+        this.add.image(0, 0, mapTexture(this.mapId, 'above')).setOrigin(0).setDepth(6);
+      }
+    } else {
+      for (let r = 0; r < map.rows; r++) {
+        for (let c = 0; c < map.cols; c++) {
+          this.add.image(c * TILE + TILE / 2, r * TILE + TILE / 2, tileTexture(this.tileset, tileKey(map, c, r))).setDepth(0);
+        }
       }
     }
     for (const d of map.dropoffs) this.marker(d.x, d.y, 'dropoff', 'PFAND');
@@ -444,7 +457,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private marker(x: number, y: number, object: 'dropoff' | 'shop', label: string): void {
-    this.add.image(x, y, objectTexture(object));
+    this.add.image(x, y, objectTexture(this.tileset, object));
     this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1);
   }
 }
