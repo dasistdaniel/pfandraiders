@@ -47,25 +47,25 @@ Umgebungsvariablen des Servers:
 
 In der Lobby öffnet die Taste `O` das Online-Menü (Raum erstellen oder mit Code beitreten). Die Server-Adresse kommt aus `?server=ws://…`, sonst aus der Build-Variable `VITE_SERVER_URL`, sonst `ws://localhost:8080`. Nach einem Verbindungsabbruch das Menü erneut öffnen und mit demselben Namen und Code beitreten (Frist 30 s). Das Token liegt nur im sessionStorage, die Wiederverbindung klappt also beim Neuladen oder in einem duplizierten Tab, nicht in einem ganz neuen Tab.
 
-Weitere Grenzen im Server: Pro IP-Adresse sind höchstens 10 gleichzeitige Verbindungen erlaubt (Option `maxPerIp`), ein Socket ohne Raum wird nach 30 s geschlossen (`idleMs`). Als IP gilt der erste Eintrag des Headers `X-Forwarded-For`, sonst die Socket-Adresse. Der Header wird vertraut, weil nur Caddy den Server erreicht (der Container hat keinen Host-Port). Origins in `ALLOWED_ORIGINS` werden normalisiert (Kleinschreibung, ohne Schrägstrich am Ende).
+Weitere Grenzen im Server: Pro IP-Adresse sind höchstens 10 gleichzeitige Verbindungen erlaubt (Option `maxPerIp`), ein Socket ohne Raum wird nach 30 s geschlossen (`idleMs`). Als IP gilt der erste Eintrag des Headers `X-Forwarded-For`, sonst die Socket-Adresse. Der Header wird vertraut, weil nur der Reverse Proxy (Nginx Proxy Manager) den Server erreicht (der Container hat keinen Host-Port). Origins in `ALLOWED_ORIGINS` werden normalisiert (Kleinschreibung, ohne Schrägstrich am Ende).
 
 Bauen: `npm run build:server` erzeugt `packages/server/dist/server.cjs` (eine einzelne Datei, läuft mit `node server.cjs` ohne `node_modules`).
 
-Auf dem VPS (Docker, Caddy übernimmt HTTPS):
+Auf dem VPS (Docker, der Nginx Proxy Manager übernimmt HTTPS; das externe Docker-Netz `proxy-net` muss existieren):
 
     cd deploy
-    DOMAIN=play.example.org ALLOWED_ORIGINS=https://dasistdaniel.github.io docker compose up -d --build
+    ALLOWED_ORIGINS=https://dasistdaniel.github.io docker compose up -d --build
 
 Der Client für GitHub Pages wird mit der Repository-Variable `SERVER_URL` gebaut (zum Beispiel `wss://play.example.org`).
 
 Handarbeit:
 
-1. DNS-Eintrag der Domain auf den VPS zeigen lassen.
-2. Ports 80 und 443 am VPS öffnen.
-3. In den Repository-Einstellungen unter Pages die Quelle auf "GitHub Actions" stellen.
+1. Im Nginx Proxy Manager einen Proxy Host anlegen: Domain `play.example.org`, Scheme `http`, Forward Hostname `pfandraiders-server`, Port `8080`, **Websockets Support** an. Im Tab SSL ein Let's-Encrypt-Zertifikat anfordern und `Force SSL` aktivieren.
+2. DNS-Eintrag der Domain auf den VPS zeigen lassen.
+3. In den Repository-Einstellungen unter Pages die Quelle auf "GitHub Actions" stellen und die Variable `SERVER_URL` setzen.
 
 Grenzen (nicht für großen öffentlichen Betrieb gedacht):
 
-- Es gibt keine Limits pro IP-Adresse.
+- Das Limit pro IP-Adresse gilt nur pro Server-Prozess und hängt am Header `X-Forwarded-For`.
 - Eine leere Lobby bleibt offen, solange ein Client verbunden ist.
 - Das Raumcode-Raten ist nur pro Verbindung begrenzt, nicht global.
