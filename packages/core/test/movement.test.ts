@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { boxBlocked } from '../src/map';
+import type { Input } from '../src/types';
 import { step } from '../src/step';
 import { input, newGame, openRows, runSteps } from './helpers';
 
@@ -160,7 +161,7 @@ describe('corner sliding', () => {
   });
 
   it('walks straight past a soft tile hit dead-centre, horizontally and vertically', () => {
-    const dirs: { moveX?: number; moveY?: number }[] = [{ moveX: 1 }, { moveX: -1 }, { moveY: 1 }, { moveY: -1 }];
+    const dirs: Partial<Input>[] = [{ moveX: 1 }, { moveX: -1 }, { moveY: 1 }, { moveY: -1 }];
     for (const dir of dirs) {
       const s = newGame(world());
       s.map.soft = new Array<boolean>(s.map.cols * s.map.rows).fill(false);
