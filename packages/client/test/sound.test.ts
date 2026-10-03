@@ -85,4 +85,31 @@ describe('SoundFx', () => {
     }
     expect(ctx.createBufferSource).toHaveBeenCalledTimes(1); // nur bite
   });
+  it('uses master gain 0.15 * 0.7 at the default volume', () => {
+    const ctx = fakeContext();
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => 0, false);
+    fx.unlock();
+    const master = ctx.createGain.mock.results[0].value;
+    expect(fx.volume).toBe(70);
+    expect(master.gain.value).toBeCloseTo(0.15 * 0.7);
+  });
+
+  it('setVolume(0) silences the master gain and play stays harmless', () => {
+    const ctx = fakeContext();
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => 0, false);
+    fx.unlock();
+    fx.setVolume(0);
+    const master = ctx.createGain.mock.results[0].value;
+    expect(master.gain.value).toBe(0);
+    expect(() => fx.play('pickup')).not.toThrow();
+  });
+
+  it('setVolume before unlock applies after unlock', () => {
+    const ctx = fakeContext();
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => 0, false);
+    fx.setVolume(50);
+    fx.unlock();
+    const master = ctx.createGain.mock.results[0].value;
+    expect(master.gain.value).toBeCloseTo(0.15 * 0.5);
+  });
 });
