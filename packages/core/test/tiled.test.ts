@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseTiledMap } from '../src/tiled';
+import { SHEET_CELLS, parseTiledMap, parseTiledVisuals } from '../src/tiled';
+import { MAP_DEFS, MAP_VISUALS } from '../src/maps';
 
 function pt(id: number, type: string, x: number, y: number, props: Record<string, string> = {}) {
   return {
@@ -156,5 +157,68 @@ describe('parseTiledMap', () => {
     o.properties.push({ name: '__proto__', type: 'string', value: 'x' });
     b.layers[1].objects = [o];
     expect(parseTiledMap(b).spots).toEqual([{ id: 0, type: 'bin', x: 20, y: 20 }]);
+  });
+});
+
+describe('parseTiledVisuals', () => {
+  const N = 12;
+  const tl = (name: string, data: unknown[]) => ({ type: 'tilelayer', name, width: 4, height: 3, data });
+  const withLayers = (...extra: unknown[]) => {
+    const b = base();
+    b.layers.push(...(extra as never[]));
+    return b;
+  };
+  const seq = (k: number) => Array.from({ length: N }, (_, i) => (i + k) % (SHEET_CELLS + 1));
+
+  it('returns null without visual layers', () => {
+    expect(parseTiledVisuals(base())).toBeNull();
+  });
+  it('reads all three layers', () => {
+    const v = parseTiledVisuals(withLayers(tl('ground', seq(1)), tl('below', seq(2)), tl('above', seq(3))));
+    expect(v).toEqual({ cols: 4, rows: 3, ground: seq(1), below: seq(2), above: seq(3) });
+  });
+  it('zero-fills missing layers', () => {
+    const v = parseTiledVisuals(withLayers(tl('ground', seq(1))));
+    expect(v?.below).toEqual(new Array(N).fill(0));
+    expect(v?.above).toEqual(new Array(N).fill(0));
+    expect(v?.ground).toEqual(seq(1));
+  });
+  it('accepts 0 and SHEET_CELLS', () => {
+    const d = new Array(N).fill(0);
+    d[3] = SHEET_CELLS;
+    expect(parseTiledVisuals(withLayers(tl('ground', d)))?.ground[3]).toBe(SHEET_CELLS);
+  });
+  it('throws on wrong length', () => {
+    expect(() => parseTiledVisuals(withLayers(tl('ground', [1, 2])))).toThrow(/invalid tiled map/);
+  });
+  it('throws when data is not an array', () => {
+    expect(() => parseTiledVisuals(withLayers({ type: 'tilelayer', name: 'below', data: 'x' }))).toThrow(/invalid tiled map/);
+  });
+  for (const bad of [-1, SHEET_CELLS + 1, 1.5, NaN, Infinity, 'a', null]) {
+    it(`throws on cell ${String(bad)}`, () => {
+      const d = new Array<unknown>(N).fill(0);
+      d[5] = bad;
+      expect(() => parseTiledVisuals(withLayers(tl('above', d)))).toThrow(/invalid tiled map/);
+    });
+  }
+  it('throws when a layer of that name has the wrong type', () => {
+    expect(() => parseTiledVisuals(withLayers({ type: 'objectgroup', name: 'ground', objects: [] }))).toThrow(/invalid tiled map/);
+  });
+  it('is not disturbed by a layer named __proto__', () => {
+    expect(parseTiledVisuals(withLayers(tl('__proto__', seq(1))))).toBeNull();
+    const v = parseTiledVisuals(withLayers(tl('__proto__', seq(1)), tl('ground', seq(2))));
+    expect(v?.ground).toEqual(seq(2));
+  });
+  it('rejects non-objects and bad sizes', () => {
+    expect(() => parseTiledVisuals(null)).toThrow(/invalid tiled map/);
+    expect(() => parseTiledVisuals({ width: 0, height: 1, layers: [] })).toThrow(/invalid tiled map/);
+    expect(() => parseTiledVisuals({ width: 1, height: 1, layers: 'x' })).toThrow(/invalid tiled map/);
+  });
+  it('parseTiledMap ignores visual layers', () => {
+    expect(parseTiledMap(withLayers(tl('ground', seq(1)))).cols).toBe(4);
+  });
+  it('retro map has no visuals', () => {
+    expect(MAP_DEFS.retro.visuals).toBeNull();
+    expect(MAP_VISUALS.retro).toBeNull();
   });
 });

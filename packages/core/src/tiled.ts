@@ -14,6 +14,14 @@ export interface TiledMap {
   tilewidth: number; tileheight: number; layers: TiledLayer[];
 }
 
+/** Größe des Kachelbilds, auf das sich die Zellnummern der Grafikebenen beziehen (gid = Zeile * SHEET_COLS + Spalte + 1). */
+export const SHEET_COLS = 37;
+export const SHEET_ROWS = 28;
+export const SHEET_CELLS = SHEET_COLS * SHEET_ROWS;
+
+/** Grafikebenen einer Karte; Einträge 0 (leer) bis SHEET_CELLS. */
+export interface MapVisuals { cols: number; rows: number; ground: number[]; below: number[]; above: number[] }
+
 const SPOT_TYPES: readonly SpotType[] = ['bus_stop', 'bench', 'bush', 'bin', 'park'];
 
 function fail(msg: string): never {
@@ -102,4 +110,38 @@ export function parseTiledMap(json: unknown): MapData {
   }
 
   return { cols, rows, solid, spots, dropoffs, shops, spawns, npcSpawns, zones };
+}
+
+const VISUAL_LAYERS = ['ground', 'below', 'above'] as const;
+
+/**
+ * Liest die Grafikebenen `ground`, `below`, `above` (tilelayer). Gibt `null` zurück, wenn keine
+ * der drei existiert; fehlt nur eine, ist sie mit Nullen belegt. Wirft bei kaputten Ebenen.
+ */
+export function parseTiledVisuals(json: unknown): MapVisuals | null {
+  if (!isRecord(json)) fail('not an object');
+  const cols = finite(json.width, 'width');
+  const rows = finite(json.height, 'height');
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 1 || rows < 1) fail('bad size');
+  if (!Array.isArray(json.layers)) fail('layers must be an array');
+  const layers: unknown[] = json.layers;
+
+  const read = (name: string): number[] | null => {
+    const l = layers.find((x) => isRecord(x) && x.name === name);
+    if (!l || !isRecord(l)) return null;
+    if (l.type !== 'tilelayer') fail(`"${name}" must be a tilelayer`);
+    const data = l.data;
+    if (!Array.isArray(data) || data.length !== cols * rows) fail(`${name} data length does not match width*height`);
+    return data.map((g) => {
+      if (typeof g !== 'number' || !Number.isInteger(g) || g < 0 || g > SHEET_CELLS) {
+        fail(`${name} tile must be an integer from 0 to ${SHEET_CELLS}`);
+      }
+      return g;
+    });
+  };
+
+  const [ground, below, above] = VISUAL_LAYERS.map(read);
+  if (!ground && !below && !above) return null;
+  const empty = () => new Array<number>(cols * rows).fill(0);
+  return { cols, rows, ground: ground ?? empty(), below: below ?? empty(), above: above ?? empty() };
 }
