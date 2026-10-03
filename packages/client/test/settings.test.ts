@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_VOLUME, loadVolume, saveVolume, stepVolume, type KeyValueStore } from '../src/settings';
+import {
+  DEFAULT_MUSIC_VOLUME,
+  DEFAULT_VOLUME,
+  loadMusicVolume,
+  loadVolume,
+  saveMusicVolume,
+  saveVolume,
+  stepVolume,
+  type KeyValueStore,
+} from '../src/settings';
 
 function memStore(initial?: string): KeyValueStore & { map: Map<string, string> } {
   const map = new Map<string, string>();
@@ -71,5 +80,52 @@ describe('stepVolume', () => {
   });
   it('returns the default for NaN', () => {
     expect(stepVolume(NaN, 1)).toBe(DEFAULT_VOLUME);
+  });
+});
+
+function musicStore(initial?: string): KeyValueStore & { map: Map<string, string> } {
+  const s = memStore();
+  if (initial !== undefined) s.map.set('pfandraiders.musicVolume', initial);
+  return s;
+}
+
+describe('loadMusicVolume', () => {
+  it('defaults to 40 and is independent of the effects volume', () => {
+    expect(DEFAULT_MUSIC_VOLUME).toBe(40);
+    expect(loadMusicVolume(musicStore())).toBe(40);
+    expect(loadMusicVolume(memStore('90'))).toBe(40);
+  });
+  it('reads a stored value', () => {
+    expect(loadMusicVolume(musicStore('0'))).toBe(0);
+    expect(loadMusicVolume(musicStore('100'))).toBe(100);
+    expect(loadMusicVolume(musicStore('12.6'))).toBe(13);
+  });
+  it.each(['abc', '', 'NaN', '-5', '150'])('falls back to the default for %j', (raw) => {
+    expect(loadMusicVolume(musicStore(raw))).toBe(DEFAULT_MUSIC_VOLUME);
+  });
+  it('survives a throwing store and a missing localStorage', () => {
+    const store: KeyValueStore = { getItem: () => { throw new Error('locked'); }, setItem: vi.fn() };
+    expect(loadMusicVolume(store)).toBe(DEFAULT_MUSIC_VOLUME);
+    expect(loadMusicVolume()).toBe(DEFAULT_MUSIC_VOLUME);
+  });
+});
+
+describe('saveMusicVolume', () => {
+  it('writes rounded and clamped values under its own key', () => {
+    const s = memStore();
+    saveMusicVolume(42.4, s);
+    expect(s.map.get('pfandraiders.musicVolume')).toBe('42');
+    expect(s.map.has('pfandraiders.volume')).toBe(false);
+    saveMusicVolume(250, s);
+    expect(s.map.get('pfandraiders.musicVolume')).toBe('100');
+    saveMusicVolume(-3, s);
+    expect(s.map.get('pfandraiders.musicVolume')).toBe('0');
+    saveMusicVolume(NaN, s);
+    expect(s.map.get('pfandraiders.musicVolume')).toBe('0');
+  });
+  it('swallows storage errors', () => {
+    const store: KeyValueStore = { getItem: () => null, setItem: () => { throw new Error('full'); } };
+    expect(() => saveMusicVolume(50, store)).not.toThrow();
+    expect(() => saveMusicVolume(50)).not.toThrow();
   });
 });
