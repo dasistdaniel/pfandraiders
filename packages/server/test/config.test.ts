@@ -16,6 +16,10 @@ describe('parseGraceMs', () => {
     expect(parseGraceMs('4999', fb)).toBe(fb);
     expect(parseGraceMs('1e3', fb)).toBe(fb);
   });
+  it('falls back above one hour', () => {
+    expect(parseGraceMs('3600001', fb)).toBe(fb);
+    expect(parseGraceMs('3600000', fb)).toBe(3_600_000);
+  });
   it('accepts valid values and trims whitespace', () => {
     expect(parseGraceMs('5000', fb)).toBe(5000);
     expect(parseGraceMs('180000', fb)).toBe(180_000);

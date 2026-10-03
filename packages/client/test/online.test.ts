@@ -396,6 +396,19 @@ describe('OnlineConnection reopen', () => {
     expect(sockets[1].sent).toEqual([]);
   });
 
+  it('drops a buy command pressed during the outage', () => {
+    const { sockets, conn } = joinedSetup();
+    conn.update(10);
+    conn.setInput('p1', { ...NO_INPUT, buy: 'upgrade' });
+    conn.reopen();
+    sockets[1].open();
+    sockets[1].receive(startMessage(1, 40));
+    conn.update(10);
+    const inputs = sockets[1].sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
+    expect(inputs.length).toBeGreaterThan(0);
+    expect(inputs.every((m) => m.input.buy === null)).toBe(true);
+  });
+
   it('throws without a prior joined', () => {
     const { conn } = setup();
     expect(() => conn.reopen()).toThrow();

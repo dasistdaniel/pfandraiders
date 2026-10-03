@@ -73,8 +73,8 @@ export class LobbyScene extends Phaser.Scene {
     let startPressed = Phaser.Input.Keyboard.JustDown(this.startKey);
     for (const pad of this.input.gamepad?.gamepads ?? []) {
       if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
-      // Erster Blick: aus der Vorszene gehaltenes B zählt nicht als Druck
-      const prev = this.padPrev[pad.index] ?? { a: false, b: pad.B, start: false };
+      // Erster Blick: aus der Vorszene gehaltenes A oder B zählt nicht als Druck
+      const prev = this.padPrev[pad.index] ?? { a: pad.A, b: pad.B, start: false };
       if (pad.B && !prev.b) backPressed = true;
       const start = pad.buttons[PAD_START_BUTTON]?.pressed ?? false;
       if (pad.A && !prev.a) this.join({ kind: 'pad', index: pad.index });

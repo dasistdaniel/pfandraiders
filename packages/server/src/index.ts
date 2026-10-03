@@ -16,7 +16,7 @@ if (process.env.ROUND_MS) {
 const graceRaw = process.env.GRACE_MS;
 const graceMs = parseGraceMs(graceRaw, SERVER_CONFIG.graceMs);
 if (graceRaw?.trim() && graceMs === SERVER_CONFIG.graceMs && Number(graceRaw.trim()) !== graceMs) {
-  console.warn(`GRACE_MS=${graceRaw} ist ungültig (ganze Zahl, mindestens 5000), Standardwert ${SERVER_CONFIG.graceMs} wird genutzt.`);
+  console.warn(`GRACE_MS=${graceRaw} ist ungültig (ganze Zahl, 5000 bis 3600000), Standardwert ${SERVER_CONFIG.graceMs} wird genutzt.`);
 }
 
 // Letzte Rettung: loggen und weiterlaufen, damit ein Fehler nicht alle Räume beendet

@@ -60,6 +60,7 @@ export class GameScene extends Phaser.Scene {
   private overlay: Phaser.GameObjects.Text | null = null;
   private joinedWatch: JoinedWatch | null = null;
   private connectingMs = 0;
+  private joinedSeen = false;
   private enterKey!: Phaser.Input.Keyboard.Key;
 
   constructor() {
@@ -81,6 +82,7 @@ export class GameScene extends Phaser.Scene {
     this.overlay = null;
     this.joinedWatch = null;
     this.connectingMs = 0;
+    this.joinedSeen = false;
     this.padBPrev = {};
     this.prevSoundState = null;
     let state: GameState;
@@ -247,7 +249,8 @@ export class GameScene extends Phaser.Scene {
     // sonst löst ein alter Tastendruck beim Rundenende sofort einen Neustart aus.
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
     const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
-    const menuPressed = Phaser.Input.Keyboard.JustDown(this.menuKey) || this.padBPressed();
+    // Online nur Esc: das Gamepad-B gehört keinem lokalen Slot und soll nicht versehentlich verlassen
+    const menuPressed = Phaser.Input.Keyboard.JustDown(this.menuKey) || (!this.online && this.padBPressed());
     if (this.plan && this.tickReconnect(delta, menuPressed)) return;
     if (state.phase === 'ended') this.endedForMs += delta;
     if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && menuPressed) {
@@ -304,7 +307,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.plan = new ReconnectPlan();
     online.onJoined = () => {
-      if (this.plan) this.joinedWatch = new JoinedWatch();
+      if (!this.plan) return;
+      this.joinedSeen = true;
+      this.joinedWatch = new JoinedWatch();
     };
     this.overlay?.setVisible(true);
     this.updateOverlay();
@@ -342,15 +347,19 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
     if (Phaser.Input.Keyboard.JustDown(this.enterKey) && plan.phase === 'asking') plan.continueTrying();
+    if (online.status !== 'open') this.joinedWatch = null;
     if (this.joinedWatch?.update(delta)) {
       // Platz ist wieder da, aber es kam kein start: die Runde ist vorbei
       this.leaveToMenu('Die Runde ist inzwischen vorbei.');
       return true;
     }
-    this.connectingMs = online.status === 'connecting' ? this.connectingMs + delta : 0;
+    // Hängend: Verbindungsaufbau oder offenes Socket ohne `joined` dauert zu lange
+    const waiting = online.status === 'connecting' || (online.status === 'open' && !this.joinedSeen);
+    this.connectingMs = waiting ? this.connectingMs + delta : 0;
     const stalled = this.connectingMs > CONNECT_STALL_MS;
     if (plan.update(delta) === 'attempt' && (online.status === 'closed' || stalled)) {
       this.connectingMs = 0;
+      this.joinedSeen = false;
       this.joinedWatch = null;
       try {
         online.reopen();

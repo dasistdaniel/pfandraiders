@@ -40,6 +40,17 @@ function twoPlayers(opts: { roundMs?: number } = {}) {
 
 const MOVE_RIGHT: Input = { ...NO_INPUT, moveX: 1 };
 
+describe('empty room lifetime', () => {
+  it('is never shorter than the grace period plus 15 s', () => {
+    let time = 0;
+    const room = new Room('ABCD', { now: () => time, random: () => 0.5, graceMs: 60_000, emptyMs: 1000 });
+    time += 60_000 + 14_999;
+    expect(room.isDead()).toBe(false);
+    time += 1;
+    expect(room.isDead()).toBe(true);
+  });
+});
+
 describe('joining', () => {
   it('assigns increasing ids, colors and a token, and the first player is host', () => {
     const { room, ma, mb } = twoPlayers();
@@ -251,13 +262,13 @@ describe('leaving and reconnecting', () => {
 });
 
 describe('room lifetime', () => {
-  it('is dead after two minutes without any connected member', () => {
+  it('is dead after grace plus 15 s without any connected member', () => {
     const { room, advance, ma, mb } = twoPlayers();
     expect(room.isDead()).toBe(false);
     room.start('p1');
     room.leave(ma.conn!);
     room.leave(mb.conn!);
-    advance(119_000);
+    advance(134_000);
     expect(room.isDead()).toBe(false);
     advance(2_000);
     expect(room.isDead()).toBe(true);

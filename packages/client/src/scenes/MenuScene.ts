@@ -170,10 +170,15 @@ export class MenuScene extends Phaser.Scene {
         this.model.select(i);
         this.render();
       });
-      t.on('pointerdown', () => {
+      t.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
         if (this.busy) return;
         this.model.select(i);
         this.render();
+        if (this.model.activate() === 'volume') {
+          // Linke Hälfte der Zeile leiser, rechte lauter
+          this.adjustVolume(pointer.x < t.x ? -1 : 1);
+          return;
+        }
         this.activate(this.model.activate());
       });
       return t;
@@ -253,7 +258,10 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard!.enabled = false; // Tasten gehören dem Eingabefeld
     const done = (): void => {
       this.busy = false;
-      if (this.input.keyboard) this.input.keyboard.enabled = true;
+      if (this.input.keyboard) {
+        this.input.keyboard.resetKeys(); // im Eingabefeld gedrückte Tasten nicht als Menü-Eingabe werten
+        this.input.keyboard.enabled = true;
+      }
     };
     showOnlineMenu(url).then(
       (conn) => {

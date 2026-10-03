@@ -118,6 +118,7 @@ export class OnlineConnection implements GameConnection {
         // schon geschlossen
       }
     }
+    this.pendingBuy = null; // ein während des Ausfalls gedrückter Kauf darf nicht nachträglich greifen
     this.status = 'connecting';
     let socket: SocketLike;
     try {
