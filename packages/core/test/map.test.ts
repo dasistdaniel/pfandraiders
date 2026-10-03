@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CONFIG } from '../src/config';
 import { boxBlocked, isSolidAt, parseMap } from '../src/map';
 
 const ROWS = [
@@ -68,5 +69,45 @@ describe('collision', () => {
   it('passes zones through', () => {
     const zones = [{ id: 'z', name: 'Zone', area: { x0: 0, y0: 0, x1: 32, y1: 32 } }];
     expect(parseMap(['@'], zones).zones).toEqual(zones);
+  });
+});
+
+describe('soft tiles', () => {
+  // 3 x 3 Kacheln, weiche Kachel in der Mitte (Mitte bei 24, 24); Kern 21..27
+  const soft = [false, false, false, false, true, false, false, false, false];
+  const m = { ...parseMap(['...', '...', '...']), soft };
+  const H = CONFIG.softHalf;
+  const HALF = CONFIG.playerHalf;
+
+  it('keeps isSolidAt for full solids only', () => {
+    expect(isSolidAt(m, 24, 24)).toBe(false);
+  });
+
+  it('allows standing next to a soft tile and inside its tile but outside the core', () => {
+    expect(boxBlocked(m, 24 - H - HALF, 24, HALF)).toBe(false); // Kante genau am Kern
+    expect(boxBlocked(m, 24 - H - HALF - 1, 24, HALF)).toBe(false);
+    expect(boxBlocked(m, 24, 24 + H + HALF, HALF)).toBe(false);
+  });
+
+  it('blocks a box that overlaps the core', () => {
+    expect(boxBlocked(m, 24, 24, HALF)).toBe(true);
+    expect(boxBlocked(m, 24 - H - HALF + 0.5, 24, HALF)).toBe(true);
+    expect(boxBlocked(m, 24 + H + HALF - 0.5, 24 + 4, HALF)).toBe(true);
+  });
+
+  it('lets a box slide past the core', () => {
+    for (let x = 6; x <= 42; x += 1) expect(boxBlocked(m, x, 24 - H - HALF, HALF), `x=${x}`).toBe(false);
+  });
+
+  it('changes nothing without soft or with an empty soft array', () => {
+    const plain = parseMap(['...', '...', '...']);
+    expect(boxBlocked(plain, 24, 24, HALF)).toBe(false);
+    expect(boxBlocked({ ...plain, soft: [] }, 24, 24, HALF)).toBe(false);
+    expect(boxBlocked({ ...plain, soft: new Array(9).fill(false) }, 24, 24, HALF)).toBe(false);
+  });
+
+  it('keeps solid tiles fully solid', () => {
+    const s = { ...parseMap(['.#.']), soft: [false, false, false] };
+    expect(boxBlocked(s, 24 - 7, 8, 5)).toBe(true);
   });
 });

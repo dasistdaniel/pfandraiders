@@ -3,8 +3,10 @@ import { SHEET_COLS } from '../src/tiled';
 import type { TiledMap, TiledObject } from '../src/tiled';
 import type { ZoneDef } from '../src/types';
 
-/** Feste Kacheln des Stadtplans: Gebäude, Rand, Baum, Brunnen/Wasser, Auto, Laterne. */
-const SOLID_CHARS = new Set(['R', 'Y', 'E', 'X', 'W', 't', 'o', 'c', 'l']);
+/** Feste Kacheln des Stadtplans: Gebäude, Rand, Brunnen/Wasser, Auto. */
+const SOLID_CHARS = new Set(['R', 'Y', 'E', 'X', 'W', 'o', 'c']);
+/** Weiche Kacheln: Baum und Laterne blockieren nur ihren Kern (Ebene `soft`), nicht die ganze Kachel. */
+const SOFT_CHARS = new Set(['t', 'l']);
 /** Begehbare Kacheln ohne Objekt: Fahrbahn, Zebrastreifen, Gehweg/Platz, Gras. */
 const GROUND_CHARS = new Set(['=', '+', '.', ',']);
 const OBJECT_TYPES: Record<string, string> = { '@': 'spawn', D: 'dropoff', S: 'shop', N: 'npc_spawn' };
@@ -366,11 +368,12 @@ function planVisuals(rows: string[]): Visuals {
 
 /**
  * Wandelt den Stadtplan (Legende in `src/maps/cityPlan.ts`) in das Tiled-JSON-Format um:
- * Regel-Ebenen `walls`, `objects`, `zones` und Grafikebenen `ground`, `below`, `above`.
+ * Regel-Ebenen `walls`, `soft`, `objects`, `zones` und Grafikebenen `ground`, `below`, `above`.
  */
 export function planToTiled(rows: string[], zones: ZoneDef[]): TiledMap {
   const cols = rows[0].length;
   const data: number[] = [];
+  const softData: number[] = [];
   const objects: TiledObject[] = [];
   let id = 1;
 
@@ -378,12 +381,13 @@ export function planToTiled(rows: string[], zones: ZoneDef[]): TiledMap {
     if (row.length !== cols) throw new Error(`map row ${r} has length ${row.length}, expected ${cols}`);
     for (let c = 0; c < cols; c++) {
       const ch = row[c];
+      softData.push(SOFT_CHARS.has(ch) ? 1 : 0);
       if (SOLID_CHARS.has(ch)) {
         data.push(1);
         continue;
       }
       data.push(0);
-      if (GROUND_CHARS.has(ch)) continue;
+      if (GROUND_CHARS.has(ch) || SOFT_CHARS.has(ch)) continue;
       const base = {
         id: id++,
         name: '',
@@ -429,6 +433,7 @@ export function planToTiled(rows: string[], zones: ZoneDef[]): TiledMap {
     tileheight: TILE,
     layers: [
       tile('walls', data),
+      tile('soft', softData),
       tile('ground', ground),
       tile('below', below),
       tile('above', above),

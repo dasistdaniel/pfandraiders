@@ -222,3 +222,41 @@ describe('parseTiledVisuals', () => {
     expect(MAP_VISUALS.retro).toBeNull();
   });
 });
+
+describe('parseTiledMap: soft layer', () => {
+  const softLayer = (data: unknown[]) => ({ type: 'tilelayer', name: 'soft', width: 4, height: 3, data });
+  const withSoft = (data: unknown[]) => {
+    const a = base();
+    a.layers.push(softLayer(data));
+    return a;
+  };
+  const NONE = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+  it('reads the optional soft layer', () => {
+    const m = parseTiledMap(withSoft([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]));
+    expect(m.soft).toEqual([false, false, false, false, false, true, false, false, false, false, false, false]);
+    expect(m.solid[5]).toBe(false);
+  });
+
+  it('has no soft field without the layer', () => {
+    const m = parseTiledMap(base());
+    expect('soft' in m).toBe(false);
+    expect(m.soft).toBeUndefined();
+  });
+
+  it('rejects a wrong data length and non-numbers', () => {
+    expect(() => parseTiledMap(withSoft([0, 1]))).toThrow(/invalid tiled map: .*soft/);
+    expect(() => parseTiledMap(withSoft([...NONE.slice(1), 'x']))).toThrow(/invalid tiled map/);
+    expect(() => parseTiledMap(withSoft([...NONE.slice(1), null]))).toThrow(/invalid tiled map/);
+  });
+
+  it('rejects a tile that is both wall and soft', () => {
+    expect(() => parseTiledMap(withSoft([1, ...NONE.slice(1)]))).toThrow(/invalid tiled map: .*wall and soft/);
+  });
+
+  it('rejects a soft layer that is not a tilelayer', () => {
+    const a = base();
+    a.layers.push({ type: 'objectgroup', name: 'soft', objects: [] } as never);
+    expect(() => parseTiledMap(a)).toThrow(/invalid tiled map/);
+  });
+});

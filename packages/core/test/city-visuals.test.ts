@@ -25,6 +25,7 @@ function layerData(map: TiledMap, name: string): number[] {
 const generated = planToTiled(CITY_PLAN, CITY_ZONES);
 const ground = layerData(generated, 'ground');
 const below = layerData(generated, 'below');
+const softLayerData = layerData(generated, 'soft');
 const above = layerData(generated, 'above');
 
 function cellsOf(chars: string): { r: number; c: number }[] {
@@ -100,6 +101,21 @@ describe('city visuals: layers', () => {
     for (const { r, c } of cellsOf('t')) {
       expect(below[idx(r, c)], `trunk ${r},${c}`).not.toBe(0);
       if (r > 0) expect(above[idx(r - 1, c)], `crown ${r - 1},${c}`).not.toBe(0);
+    }
+  });
+
+  it('has a soft layer with 1 on trees and lamps only, none of them in walls, and a visual for every soft tile', () => {
+    const walls = layerData(generated, 'walls');
+    expect(softLayerData.length).toBe(COLS * ROWS);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const i = idx(r, c);
+        const isSoft = 'tl'.includes(at(r, c));
+        expect(softLayerData[i], `soft ${r},${c}`).toBe(isSoft ? 1 : 0);
+        if (!isSoft) continue;
+        expect(walls[i], `walls ${r},${c}`).toBe(0);
+        expect(below[i] !== 0 || above[i] !== 0, `visual ${r},${c}`).toBe(true);
+      }
     }
   });
 
