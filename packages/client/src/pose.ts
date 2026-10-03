@@ -4,6 +4,8 @@ import type { PlayerFrame } from './sprites/characters';
 export const MOVE_EPSILON = 0.05;
 export const WALK_FRAME_MS = 150;
 export const ACTION_FRAME_MS = 250;
+/** Hoehe des Auf-und-ab beim Gehen in Weltpixeln (2 Bildschirmpixel bei Zoom 2). */
+export const BOB_PX = 1;
 
 export type Facing = 'down' | 'up' | 'side';
 
@@ -32,13 +34,20 @@ function ab(ms: number, period: number): 'a' | 'b' {
   return Math.floor(ms / period) % 2 === 0 ? 'a' : 'b';
 }
 
+/** Vertikaler Versatz in Weltpixeln: Fuesse unten auf Frame a, Koerper BOB_PX hoeher auf Frame b. */
+export function bobOffset(walkMs: number, moving: boolean): number {
+  if (!moving) return 0;
+  const ms = Number.isFinite(walkMs) && walkMs > 0 ? walkMs : 0;
+  return ab(ms, WALK_FRAME_MS) === 'a' ? 0 : -BOB_PX;
+}
+
 export function stepPose(
   prev: PoseState,
   x: number,
   y: number,
   mode: Mode,
   dtMs: number,
-): { state: PoseState; pose: Pose } {
+): { state: PoseState; pose: Pose; moving: boolean } {
   const dt = safeDt(dtMs);
   const dx = x - prev.x;
   const dy = y - prev.y;
@@ -61,10 +70,10 @@ export function stepPose(
   if (mode === 'unconscious') walkMs = 0;
   const state: PoseState = { x, y, facing, flipX, walkMs };
 
-  if (mode === 'unconscious') return { state, pose: { frame: 'lying', flipX } };
-  if (moving) return { state, pose: { frame: `${facing}_${ab(walkMs, WALK_FRAME_MS)}`, flipX } };
-  if (acting) return { state, pose: { frame: `down_${ab(walkMs, ACTION_FRAME_MS)}`, flipX: false } };
-  return { state, pose: { frame: `${facing}_a`, flipX } };
+  if (mode === 'unconscious') return { state, pose: { frame: 'lying', flipX }, moving: false };
+  if (moving) return { state, pose: { frame: `${facing}_${ab(walkMs, WALK_FRAME_MS)}`, flipX }, moving };
+  if (acting) return { state, pose: { frame: `down_${ab(walkMs, ACTION_FRAME_MS)}`, flipX: false }, moving };
+  return { state, pose: { frame: `${facing}_a`, flipX }, moving };
 }
 
 export function npcFrame(
@@ -72,7 +81,7 @@ export function npcFrame(
   x: number,
   y: number,
   dtMs: number,
-): { state: PoseState; frame: 'a' | 'b'; flipX: boolean } {
+): { state: PoseState; frame: 'a' | 'b'; flipX: boolean; moving: boolean } {
   const dt = safeDt(dtMs);
   const dx = x - prev.x;
   const moving = Math.hypot(dx, y - prev.y) > MOVE_EPSILON;
@@ -84,5 +93,6 @@ export function npcFrame(
     state: { x, y, facing: prev.facing, flipX, walkMs },
     frame: moving ? ab(walkMs, WALK_FRAME_MS) : 'a',
     flipX,
+    moving,
   };
 }
