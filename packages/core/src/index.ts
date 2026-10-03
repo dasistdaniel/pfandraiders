@@ -3,6 +3,7 @@ export * from './types';
 export * from './rng';
 export * from './bottles';
 export * from './map';
+export * from './tiled';
 export * from './maps/city';
 export * from './loot';
 export * from './game';
