@@ -116,20 +116,25 @@ describe('city plan: content', () => {
     expect(spots).toBeLessThanOrEqual(48);
     const npcs = cellsOf('N').length;
     expect(npcs).toBeGreaterThanOrEqual(4);
-    expect(npcs).toBeLessThanOrEqual(6);
+    expect(npcs).toBeLessThanOrEqual(8);
   });
 
   it('uses every spot type', () => {
     for (const ch of SPOT_CHARS) expect(cellsOf(ch).length, `spot ${ch}`).toBeGreaterThan(0);
   });
 
-  it('puts NPC entrances at street ends next to the border', () => {
+  it('puts NPC entrances at street ends next to the border or on a side street near the main street', () => {
+    let inner = 0;
     for (const { r, c } of cellsOf('N')) {
       const nextToBorder = r === 1 || c === 1 || r === ROWS - 2 || c === COLS - 2;
-      expect(nextToBorder, `N at ${r},${c}`).toBe(true);
+      const nearCrossing =
+        !nextToBorder && ((r >= 13 && r <= 17) || (r >= 23 && r <= 27)) && [14, 15, 31, 32, 48, 49].includes(c);
+      if (nearCrossing) inner++;
+      expect(nextToBorder || nearCrossing, `N at ${r},${c}`).toBe(true);
       const road = NEIGHBOURS.some(([dr, dc]) => isWalk(r + dr, c + dc) && '=+'.includes(at(r + dr, c + dc)));
       expect(road, `N at ${r},${c} has no road next to it`).toBe(true);
     }
+    expect(inner, 'NPC entrances near the centre').toBeGreaterThanOrEqual(2);
   });
 
   it('places spawns on the main street sidewalks with room to move', () => {
@@ -273,6 +278,14 @@ describe('city zones', () => {
       for (let r = y0 / TILE; r < y1 / TILE; r++) {
         for (let c = x0 / TILE; c < x1 / TILE; c++) expect(isWalk(r, c), `${z.id} tile ${r},${c}`).toBe(true);
       }
+    }
+  });
+
+  it('hold at least 6 spots each', () => {
+    for (const z of CITY_ZONES) {
+      const { x0, y0, x1, y1 } = z.area;
+      const inside = CITY_TILED_MAP.spots.filter((p) => p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1);
+      expect(inside.length, z.id).toBeGreaterThanOrEqual(6);
     }
   });
 

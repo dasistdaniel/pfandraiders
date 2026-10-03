@@ -10,7 +10,8 @@ import type { ZoneDef } from '../types';
  *              W Randbebauung/Hecke (nur am Rand)  t Baum  o Brunnen/Wasser  l Laterne
  *              c Auto (immer als Paar: waagerecht `cc` oder senkrecht übereinander)
  *   begehbar:  = Fahrbahn  + Zebrastreifen  . Gehweg/Platz  , Gras
- *   Objekte:   @ Spawn  D Pfandautomat  S Shop  N NPC-Eingang (Hunde, Polizei)
+ *   Objekte:   @ Spawn  D Pfandautomat  S Shop  N NPC-Eingang (Hunde, Polizei; an Straßenenden am Rand
+ *              und auf zwei Querstraßen nahe der Hauptstraße)
  *              Spots: b Bushaltestelle  n Bank  g Busch  m Mülltonne  p Park
  *   Objekte und Spots stehen auf begehbarem Boden.
  *
@@ -29,17 +30,17 @@ export const CITY_PLAN: string[] = [
   'WRRRRR,tEEEE,.==.YYYYYY..EEEEE.==.XXXXXX..XXXXX.=c.YYYYYYYYYYYYW', //  3
   'WRRRRR,,EEEE,.==.YYYYYY.mEEEEE.==.XXXXXX..XXXXX.=c.YYYYYYYYYYYYW', //  4
   'W,g,,,,,,,,n,.=c.YYYYYY..EEEEE.==.XXXXXX.mXXXXX.==......S......W', //  5
-  'W.............=c...............==.XXXXXX..XXXXX.==l.m..........W', //  6
+  'W.............=c...............==.XXXXXX..XXXXX.==l.m........b.W', //  6
   'WEEEE,,RRRRR,.==l..D...l.......==...............==.............W', //  7
-  'WEEEE,tRRRRR,.==.t...n.......t.==.t..n..t.....t.==....n........W', //  8
+  'WEEEE,tRRRRR,.==.t...n.......t.==.t..n..t.....t.==....n.....n..W', //  8
   'WEEEE,,RRRRR,l==...............==l..............==.............W', //  9
   'WEEEE,,RRRRR,.==.EEEE..YYYYYYY.=c..XXXXXXXXXX...==..........m..W', // 10
-  'W,,m,,,,,,,,,.==.EEEE..YYYYYYY.=c..XXXXXXXXXX...==.............W', // 11
-  'W.....l.......==.EEEE..YYYYYYY.==..XXXXXXXXXX.g.==.l.........l.W', // 12
+  'W,,m,,,,,,,,,.==.EEEE..YYYYYYY.=c..XXXXXXXXXX...==......n......W', // 11
+  'W.....l.......==.EEEE..YYYYYYY.==..XXXXXXXXXX...==.l.........l.W', // 12
   'W,RRRRR,,EEE,.==.EEEE.tYYYYYYY.==..XXXXXXXXXX...==.t,,,,t,,,,,tW', // 13
-  'W,RRRRR,,EEE,.==.EEEE..YYYYYYY.==..XXXXXXXXXX...==.,,p,,,,,,,,,W', // 14
+  'W,RRRRR,,EEE,.==.EEEE..YYYYYYY.==..XXXXXXXXXX...==.,,,,,,,,,,,,W', // 14
   'W,RRRRR,,EEE,.==....m..........==..m............==.t,,,,t,,,,,tW', // 15
-  'W,,,,,,,,,,g,.==.......l...n..l==...l...t...l..l==.............W', // 16
+  'W,,,,,,,,,,g,.==.......l...n..lN=...l...t...l..l==.............W', // 16
   'Wt.t.t.t.t.t..==...............==...............==b............W', // 17
   'W...l..@..l.b.++....l...@..l...++.b..l..@..l....++....l..@..l..W', // 18
   'W====cc======+===========cc===+==========cc====+==========cc===W', // 19
@@ -47,15 +48,15 @@ export const CITY_PLAN: string[] = [
   'W========cc==+=======cc=======+=======cc=======+=====cc========W', // 21
   'W...l..@.ml...++.b..l...@..l...++....l..@..l..b.++....l..@..l..W', // 22
   'Wtt,,tt,,tt,..==..............b==...............==.t,,t,,,,t,,tW', // 23
-  'W,,,,,,,,,,,..==...t...l...t...==..l....t....l..==.,,,,,,p,,,,,W', // 24
+  'W,,,,,,,,,,,..==...t...l...t...==..l....t....l..N=.,,,,,,,,,,,,W', // 24
   'W,p,,n,,,,g,..==...............==.....n.........==.t,,,,,,,,,,tW', // 25
-  'W,,,,,,,,,,,..==l..n.......n...==l..t..oo...t...==.,,,,,,,,,,,,W', // 26
+  'W,,,,,,,,,,,..==l..n.......n...==l..t..oo...t...==.,,,,,,g,,,,,W', // 26
   'W,t,,ooo,,t,..==...............==......oo..D....=c.,,p,,,,,,,,,W', // 27
   'W,,,,ooo,,,,..==..m....S....m..==.........n.....=c.,,,,,,m,,,,,W', // 28
   'W,,,,,,,,p,,..=c...............==...m...........==.,,,,,,,,,p,,W', // 29
-  'W.............=c...............==...............==.,,,,,,,,,,,,W', // 30
+  'W.............=c...............==...............==.,,,,p,,,,,,,W', // 30
   'W,,,t,,,,t,,..==...t.......t..l==.YYYYY...EEEEE.==.,n,,,,,,,,,,W', // 31
-  'W,p,,,,n,,,,.l==...............==.YYYYY...EEEEE.==.,,,,,,,,,,,,W', // 32
+  'W,p,,,,n,,,,.l==...............==.YYYYY...EEEEE.==.,,,,,,,,,n,,W', // 32
   'W,,,,t,,,,,,..==.EEEEEE...RRRR.=c.YYYYY...EEEEE.==.,,,,,,,,,,,,W', // 33
   'W,,,,,,,,,,,..==.EEEEEE...RRRR.=c.YYYYY...EEEEE.==lt,,,,,,,,,,tW', // 34
   'W,,,t,,,,,,,..==.EEEEEE...RRRR.==.YYYYY...EEEEE.==.,,EEEEEEEE,,W', // 35
