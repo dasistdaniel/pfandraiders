@@ -92,3 +92,40 @@ export function resultLines(
   );
   return ['Runde vorbei!', ...places, '', `Neue Runde: R oder ${labels.action}`];
 }
+
+export interface ResultRow {
+  place: number;
+  id: string;
+  name: string;
+  money: number;
+  isWinner: boolean;
+  isViewer: boolean;
+}
+
+const MAX_NAME_LENGTH = 16;
+
+/** Ergebniszeilen in Ranglistenreihenfolge; gleiches Geld teilt sich den Platz (1, 1, 3). */
+export function resultRows(
+  state: GameState,
+  viewerId: string,
+  nameOf: (id: string) => string = playerName,
+): ResultRow[] {
+  const rows: ResultRow[] = [];
+  ranking(state).forEach((r, i) => {
+    const place = i > 0 && rows[i - 1].money === r.money ? rows[i - 1].place : i + 1;
+    rows.push({
+      place,
+      id: r.id,
+      name: nameOf(r.id).slice(0, MAX_NAME_LENGTH),
+      money: r.money,
+      isWinner: place === 1,
+      isViewer: r.id === viewerId,
+    });
+  });
+  return rows;
+}
+
+export function resultFooter(role: 'local' | 'host' | 'guest', labels: KeyLabels): string[] {
+  const first = role === 'guest' ? 'Warte auf den Host…' : `Neue Runde: R oder ${labels.action}`;
+  return [first, 'Menü: Esc'];
+}

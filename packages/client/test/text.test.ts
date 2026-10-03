@@ -2,7 +2,7 @@ import { CONFIG, createGame, parseMap } from '@pfandraiders/core';
 import type { GameState } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
-import { alertText, hintLines, playerName, resultLines, statusLines } from '../src/text';
+import { alertText, hintLines, playerName, resultFooter, resultLines, resultRows, statusLines } from '../src/text';
 
 const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' };
 const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/', treat: ';', food: "'" };
@@ -261,5 +261,71 @@ describe('final review fixes', () => {
     const lines = alertText(s, s.players.p1).split('\n');
     expect(lines).toHaveLength(3);
     expect(lines[0]).toBe('Bewusstlos! Noch 4 s');
+  });
+});
+
+function moneyGame(amounts: number[]): GameState {
+  const ids = amounts.map((_, i) => `p${i + 1}`);
+  const s = createGame(1, parseMap(['#########', '#@......#', '#########']), ids);
+  amounts.forEach((m, i) => {
+    s.players[ids[i]].money = m;
+  });
+  s.phase = 'ended';
+  return s;
+}
+
+describe('resultRows', () => {
+  it('handles a single player', () => {
+    const rows = resultRows(moneyGame([300]), 'p1');
+    expect(rows).toEqual([{ place: 1, id: 'p1', name: 'P1', money: 300, isWinner: true, isViewer: true }]);
+  });
+
+  it('orders two players by money', () => {
+    const rows = resultRows(moneyGame([500, 1230]), 'p1');
+    expect(rows.map((r) => [r.id, r.place, r.isWinner])).toEqual([
+      ['p2', 1, true],
+      ['p1', 2, false],
+    ]);
+  });
+
+  it('handles eight players', () => {
+    const rows = resultRows(moneyGame([1, 8, 3, 7, 2, 6, 4, 5]), 'p3');
+    expect(rows).toHaveLength(8);
+    expect(rows.map((r) => r.place)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(rows[0].id).toBe('p2');
+  });
+
+  it('shares places on a tie and skips the next one', () => {
+    const rows = resultRows(moneyGame([500, 500, 100]), 'p3');
+    expect(rows.map((r) => r.place)).toEqual([1, 1, 3]);
+    expect(rows.map((r) => r.isWinner)).toEqual([true, true, false]);
+  });
+
+  it('gives everyone place 1 when all have zero', () => {
+    const rows = resultRows(moneyGame([0, 0, 0]), 'p1');
+    expect(rows.every((r) => r.place === 1 && r.isWinner)).toBe(true);
+  });
+
+  it('marks the viewer exactly once, never for an unknown id', () => {
+    const s = moneyGame([5, 4, 3]);
+    expect(resultRows(s, 'p2').filter((r) => r.isViewer).map((r) => r.id)).toEqual(['p2']);
+    expect(resultRows(s, 'nobody').some((r) => r.isViewer)).toBe(false);
+  });
+
+  it('truncates long names to 16 characters', () => {
+    const rows = resultRows(moneyGame([1]), 'p1', () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    expect(rows[0].name).toBe('ABCDEFGHIJKLMNOP');
+  });
+});
+
+describe('resultFooter', () => {
+  it('shows restart and menu for local and host', () => {
+    const expected = ['Neue Runde: R oder E', 'Menü: Esc'];
+    expect(resultFooter('local', KEYS)).toEqual(expected);
+    expect(resultFooter('host', KEYS)).toEqual(expected);
+  });
+
+  it('tells guests to wait', () => {
+    expect(resultFooter('guest', KEYS)).toEqual(['Warte auf den Host…', 'Menü: Esc']);
   });
 });

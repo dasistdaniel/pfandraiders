@@ -48,6 +48,8 @@ export class GameScene extends Phaser.Scene {
   private zoneLabels: Phaser.GameObjects.Text[] = [];
   private restartKey!: Phaser.Input.Keyboard.Key;
   private endedForMs = 0;
+  private menuKey!: Phaser.Input.Keyboard.Key;
+  private padBPrev: Record<number, boolean> = {};
   private muteKey!: Phaser.Input.Keyboard.Key;
   /** Zustand des vorigen Frames für Sound-Ereignisse, null = noch keiner (erster Frame ohne Sounds) */
   private prevSoundState: GameState | null = null;
@@ -68,6 +70,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.endedForMs = 0;
+    this.padBPrev = {};
     this.prevSoundState = null;
     let state: GameState;
     this.playerColors = new Map();
@@ -167,7 +170,11 @@ export class GameScene extends Phaser.Scene {
     // Jedes HUD erscheint nur in der UI-Kamera seines Spielers, nie in einer Weltkamera.
     const online = this.online;
     const nameOf = (id: string): string => online?.roster.find((r) => r.id === id)?.name ?? playerName(id);
-    this.huds = views.map((v, i) => new PlayerHud(this, v, this.slots[i].color, nameOf(this.slots[i].id), this.sources[i].labels, nameOf));
+    const role = (): 'local' | 'host' | 'guest' => (!online ? 'local' : online.isHost() ? 'host' : 'guest');
+    const colorOf = (id: string): number => this.playerColors.get(id) ?? 0xffffff;
+    this.huds = views.map(
+      (v, i) => new PlayerHud(this, v, this.slots[i].color, nameOf(this.slots[i].id), this.sources[i].labels, nameOf, role, colorOf, this.slots[i].id),
+    );
     this.huds.forEach((hud, i) => {
       cams.forEach((cam) => cam.ignore(hud.objects));
       this.uiCams.forEach((ui, j) => {
@@ -176,6 +183,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.restartKey = this.input.keyboard!.addKey('R');
+    this.menuKey = this.input.keyboard!.addKey('ESC');
     this.muteKey = this.input.keyboard!.addKey('M');
     this.ownSoundIds = this.online ? [this.online.you] : 'all';
     // Tastatur und Maus schaltet der Modul-Listener frei, das Gamepad hier
@@ -197,7 +205,17 @@ export class GameScene extends Phaser.Scene {
     // sonst löst ein alter Tastendruck beim Rundenende sofort einen Neustart aus.
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
     const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
+    const menuPressed = Phaser.Input.Keyboard.JustDown(this.menuKey) || this.padBPressed();
     if (state.phase === 'ended') this.endedForMs += delta;
+    if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && menuPressed) {
+      if (this.online) {
+        this.online.onClosed = null; // absichtliches Schließen ist kein Verbindungsverlust
+        this.online.onStart = null;
+        this.online.close();
+      }
+      this.scene.start('menu');
+      return;
+    }
     if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && (restartPressed || confirmPressed)) {
       if (this.online) {
         this.online.requestStart(); // nur der Host löst aus, alle bekommen danach `start`
@@ -231,6 +249,18 @@ export class GameScene extends Phaser.Scene {
       this.warnings.get(p.id)?.setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, p.id));
     }
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
+  }
+
+  /** Flanke von Gamepad-B; beim ersten Blick auf ein Pad nur den Zustand merken (gehaltene Taste zählt nicht). */
+  private padBPressed(): boolean {
+    let pressed = false;
+    for (const pad of this.input.gamepad?.gamepads ?? []) {
+      if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
+      const prev = this.padBPrev[pad.index];
+      this.padBPrev[pad.index] = pad.B;
+      if (prev !== undefined && pad.B && !prev) pressed = true;
+    }
+    return pressed;
   }
 
   private renderZones(zones: ZoneState[]): void {
