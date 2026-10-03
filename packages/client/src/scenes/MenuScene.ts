@@ -72,7 +72,7 @@ export class MenuScene extends Phaser.Scene {
     this.itemTexts = [];
     this.model = new MenuModel(MAIN_ITEMS);
 
-    this.add.tileSprite(0, 0, GAME_W, GAME_H, tileTexture('floor_0')).setOrigin(0).setTileScale(2);
+    this.add.tileSprite(0, 0, GAME_W, GAME_H, tileTexture('city', 'floor_0')).setOrigin(0).setTileScale(2);
     this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.65).setOrigin(0);
     this.add
       .text(GAME_W / 2, 90, 'PfandRaiders', { fontFamily: 'monospace', fontSize: '32px', color: COLOR_SELECTED })

@@ -1,6 +1,7 @@
 import {
-  CITY_MAP,
   createGame,
+  DEFAULT_MAP_ID,
+  MAP_DEFS,
   MAX_ROOM_PLAYERS,
   MIN_START_PLAYERS,
   NO_INPUT,
@@ -13,6 +14,7 @@ import type {
   GameState,
   Input,
   MapData,
+  MapId,
   RoomPhase,
   RosterEntry,
   ServerMessage,
@@ -42,6 +44,9 @@ export interface Member {
 }
 
 export interface RoomOptions {
+  /** Kennung der Karte (Standard DEFAULT_MAP_ID); bestimmt die Karte und wird mit start gesendet. */
+  mapId?: MapId;
+  /** Überschreibt die Kartendaten von mapId (für Tests). */
   map?: MapData;
   stepMs?: number;
   graceMs?: number;
@@ -63,6 +68,7 @@ export class Room {
   state: GameState | null = null;
   private nextId = 1;
   private lastActive: number;
+  private readonly mapId: MapId;
   private readonly map: MapData;
   private readonly stepMs: number;
   private readonly graceMs: number;
@@ -75,7 +81,8 @@ export class Room {
     readonly code: string,
     opts: RoomOptions = {},
   ) {
-    this.map = opts.map ?? CITY_MAP;
+    this.mapId = opts.mapId ?? DEFAULT_MAP_ID;
+    this.map = opts.map ?? MAP_DEFS[this.mapId].map;
     this.stepMs = opts.stepMs ?? SERVER_CONFIG.stepMs;
     this.graceMs = opts.graceMs ?? SERVER_CONFIG.graceMs;
     // Ein leerer Raum darf nie vor Ablauf der Rückkehrfrist verschwinden
@@ -202,6 +209,7 @@ export class Room {
     if (!this.state || !m.conn) return;
     m.conn.send({
       t: 'start',
+      mapId: this.mapId,
       map: this.state.map,
       you: m.id,
       players: this.roster(),

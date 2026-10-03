@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createGame } from '../src/game';
-import { CITY_MAP } from '../src/maps/city';
+import { CITY_MAP } from '../src/maps';
 import { step } from '../src/step';
 import { NO_INPUT } from '../src/types';
 import type { GameState, Input } from '../src/types';

@@ -1,5 +1,5 @@
 import { MAX_MESSAGE_BYTES, parseClientMessage } from '@pfandraiders/core';
-import type { ErrorCode, ServerMessage } from '@pfandraiders/core';
+import type { ErrorCode, MapId, ServerMessage } from '@pfandraiders/core';
 import type { IncomingMessage } from 'http';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
@@ -15,6 +15,8 @@ export interface ServerOptions {
   roundMs?: number;
   /** Frist für die Rückkehr eines getrennten Spielers in ms. Standard SERVER_CONFIG.graceMs. */
   graceMs?: number;
+  /** Karte der Räume. Standard DEFAULT_MAP_ID. */
+  mapId?: MapId;
   now?: () => number;
   random?: () => number;
   /** Mehr gleichzeitige Verbindungen werden abgewiesen (503). */
@@ -251,6 +253,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     stepMs,
     roundMs: opts.roundMs,
     graceMs: opts.graceMs,
+    mapId: opts.mapId,
     now: opts.now,
     random: opts.random,
     onError: opts.onError

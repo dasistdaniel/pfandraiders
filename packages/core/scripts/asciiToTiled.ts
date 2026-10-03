@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { TILE } from '../src/config';
 import type { TiledMap, TiledObject } from '../src/tiled';
 import type { ZoneDef } from '../src/types';
-import { CITY_ROWS, CITY_ZONES } from '../src/maps/city-ascii';
+import { RETRO_ROWS, RETRO_ZONES } from '../src/maps/retro-ascii';
 
 const OBJECT_TYPES: Record<string, string> = { '@': 'spawn', D: 'dropoff', S: 'shop', N: 'npc_spawn' };
 const SPOT_CHARS: Record<string, string> = {
@@ -76,7 +76,7 @@ export function asciiToTiled(rows: string[], zones: ZoneDef[]): TiledMap {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const out = fileURLToPath(new URL('../src/maps/city.tiled.json', import.meta.url));
-  writeFileSync(out, JSON.stringify(asciiToTiled(CITY_ROWS, CITY_ZONES), null, 1) + '\n');
+  const out = fileURLToPath(new URL('../src/maps/retro.tiled.json', import.meta.url));
+  writeFileSync(out, JSON.stringify(asciiToTiled(RETRO_ROWS, RETRO_ZONES), null, 1) + '\n');
   console.log(`wrote ${out}`);
 }

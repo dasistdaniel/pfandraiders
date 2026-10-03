@@ -1,4 +1,4 @@
-import { CITY_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
+import { CITY_MAP, DEFAULT_MAP_ID, RETRO_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
 import type { ClientMessage, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
@@ -44,7 +44,7 @@ function startMessage(tickValue = 0, x2 = 40): ServerMessage {
   const s = createGame(1, CITY_MAP, ['p1', 'p2']);
   s.tick = tickValue;
   s.players.p2.x = x2;
-  return { t: 'start', map: CITY_MAP, you: 'p1', players: roster(), snap: projectSnapshot(s, 'p1') };
+  return { t: 'start', mapId: DEFAULT_MAP_ID, map: CITY_MAP, you: 'p1', players: roster(), snap: projectSnapshot(s, 'p1') };
 }
 
 function snapMessage(tickValue: number, x2: number): ServerMessage {
@@ -95,6 +95,30 @@ describe('OnlineConnection messages', () => {
     const state = conn.getState();
     expect(state.map.cols).toBe(CITY_MAP.cols);
     expect(Object.keys(state.players)).toEqual(['p1', 'p2']);
+  });
+
+  it('defaults mapId and takes a valid mapId from start', () => {
+    const { socket, conn } = setup();
+    expect(conn.mapId).toBe(DEFAULT_MAP_ID);
+    const msg = startMessage() as Extract<ServerMessage, { t: 'start' }>;
+    socket.receive({ ...msg, mapId: 'retro', map: RETRO_MAP });
+    expect(conn.mapId).toBe('retro');
+  });
+
+  it.each([['x'], [null], [7], [{}], ['__proto__'], [undefined]])('drops a start with mapId %j and keeps its state', (bad) => {
+    const { socket, conn } = setup();
+    let started = 0;
+    conn.onStart = () => started++;
+    socket.receive(startMessage(0));
+    expect(started).toBe(1);
+    const before = conn.getState();
+    const msg = startMessage(5) as Extract<ServerMessage, { t: 'start' }>;
+    const broken = { ...msg, mapId: bad } as unknown;
+    if (bad === undefined) delete (broken as { mapId?: unknown }).mapId;
+    expect(() => socket.receive(broken as ServerMessage)).not.toThrow();
+    expect(started).toBe(1);
+    expect(conn.mapId).toBe(DEFAULT_MAP_ID);
+    expect(conn.getState()).toBe(before);
   });
 
   it('reports errors and a closed connection', () => {

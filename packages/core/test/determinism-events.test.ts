@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { createGame } from '../src/game';
-import { CITY_MAP } from '../src/maps/city';
+import { CITY_MAP } from '../src/maps';
 import { step } from '../src/step';
 import type { GameState, Input } from '../src/types';
 

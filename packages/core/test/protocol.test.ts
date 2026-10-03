@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { RETRO_MAP } from '../src/maps/retro';
+import type { ServerMessage, Snapshot } from '../src/protocol';
 import {
   MAX_NAME_LENGTH,
   parseClientMessage,
@@ -68,5 +70,12 @@ describe('parseClientMessage', () => {
     for (const bad of [null, undefined, 5, 'x', [], { t: 'nope' }, { t: 5 }, {}, { t: '__proto__' }]) {
       expect(parseClientMessage(bad)).toBeNull();
     }
+  });
+});
+
+describe('ServerMessage start', () => {
+  it('carries the map id', () => {
+    const msg: ServerMessage = { t: 'start', mapId: 'retro', map: RETRO_MAP, you: 'p1', players: [], snap: {} as Snapshot };
+    expect(msg.t === 'start' && msg.mapId).toBe('retro');
   });
 });

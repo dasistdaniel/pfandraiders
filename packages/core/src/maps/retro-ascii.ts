@@ -1,7 +1,7 @@
 import type { ZoneDef } from '../types';
 
-/** 32 x 20 Kacheln. Legende siehe map.ts. N = Eingang für Hunde und Polizisten. */
-export const CITY_ROWS: string[] = [
+/** Retro-Karte: 32 x 20 Kacheln. Legende siehe map.ts. N = Eingang für Hunde und Polizisten. */
+export const RETRO_ROWS: string[] = [
   '################################',
   '#.............................N#',
   '#.@@..######....b.....######.g.#',
@@ -25,7 +25,7 @@ export const CITY_ROWS: string[] = [
 ];
 
 /** Pixelrechtecke (Spalten 11 bis 24, je 3 Zeilen) */
-export const CITY_ZONES: ZoneDef[] = [
+export const RETRO_ZONES: ZoneDef[] = [
   { id: 'stadium', name: 'Stadion', area: { x0: 176, y0: 96, x1: 400, y1: 144 } },
   { id: 'concert', name: 'Konzert', area: { x0: 176, y0: 192, x1: 400, y1: 240 } },
 ];

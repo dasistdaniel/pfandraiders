@@ -1,5 +1,5 @@
-import { CITY_MAP, MAX_ROOM_PLAYERS, NO_INPUT } from '@pfandraiders/core';
-import type { Input, ServerMessage } from '@pfandraiders/core';
+import { CITY_MAP, DEFAULT_MAP_ID, MAX_ROOM_PLAYERS, NO_INPUT, RETRO_MAP } from '@pfandraiders/core';
+import type { Input, MapId, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import { SERVER_CONFIG } from '../src/config';
 import { Room } from '../src/room';
@@ -19,16 +19,16 @@ class FakeConn implements Conn {
   }
 }
 
-function setup(opts: { roundMs?: number } = {}) {
+function setup(opts: { roundMs?: number; mapId?: MapId } = {}) {
   let time = 0;
-  const room = new Room('ABCD', { now: () => time, random: () => 0.5, roundMs: opts.roundMs });
+  const room = new Room('ABCD', { now: () => time, random: () => 0.5, roundMs: opts.roundMs, mapId: opts.mapId });
   const advance = (ms: number) => {
     time += ms;
   };
   return { room, advance };
 }
 
-function twoPlayers(opts: { roundMs?: number } = {}) {
+function twoPlayers(opts: { roundMs?: number; mapId?: MapId } = {}) {
   const { room, advance } = setup(opts);
   const a = new FakeConn();
   const b = new FakeConn();
@@ -113,9 +113,22 @@ describe('start', () => {
     expect(sa.you).toBe('p1');
     expect(sb.you).toBe('p2');
     expect(sa.map.cols).toBe(CITY_MAP.cols);
+    expect(sa.mapId).toBe(DEFAULT_MAP_ID);
+    expect(sb.mapId).toBe(DEFAULT_MAP_ID);
     expect(sa.players).toHaveLength(2);
     expect(Object.keys(sa.snap.players)).toEqual(['p1', 'p2']);
     expect(room.phase).toBe('running');
+  });
+});
+
+describe('map selection', () => {
+  it('starts the retro map when the room has mapId retro', () => {
+    const { room, a, b } = twoPlayers({ mapId: 'retro' });
+    room.start('p1');
+    expect(a.last('start').mapId).toBe('retro');
+    expect(b.last('start').mapId).toBe('retro');
+    expect(a.last('start').map).toEqual(RETRO_MAP);
+    expect(room.state!.map).toEqual(RETRO_MAP);
   });
 });
 
@@ -234,6 +247,7 @@ describe('leaving and reconnecting', () => {
     const r = room.join('Anna', fresh, ma.token);
     expect(r.ok).toBe(true);
     expect(fresh.last('start').you).toBe('p1');
+    expect(fresh.last('start').mapId).toBe(DEFAULT_MAP_ID);
     expect(fresh.last('start').snap.tick).toBe(room.state!.tick);
     room.tick();
     expect(fresh.of('snap')).toHaveLength(1);

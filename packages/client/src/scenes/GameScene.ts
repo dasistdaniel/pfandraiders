@@ -1,14 +1,15 @@
 import Phaser from 'phaser';
-import { CITY_MAP, createGame, isBeingRobbed, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
-import type { GameState, MapData, Npc, ZoneState } from '@pfandraiders/core';
+import { createGame, DEFAULT_MAP_ID, isBeingRobbed, isMapId, MAP_DEFS, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
+import type { GameState, MapData, MapId, Npc, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
 import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
 import type { PoseState } from '../pose';
-import { ensurePlayerTextures } from '../textures';
-import { dogTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
+import { bakeMapLayers, ensurePlayerTextures } from '../textures';
+import { dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
+import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
 import { sfx } from '../sfx';
@@ -33,6 +34,10 @@ const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', resol
 export class GameScene extends Phaser.Scene {
   private slots: PlayerSlot[] = [];
   private conn!: GameConnection;
+  /** Kennung der gespielten Karte (online vom Server, lokal aus ?map=). */
+  private mapId: MapId = DEFAULT_MAP_ID;
+  /** Kachelsatz der Karte (aus MAP_DEFS), bestimmt die Texturschlüssel von Karte, Spots und Markern. */
+  private tileset: TilesetId = DEFAULT_MAP_ID;
   private online: OnlineConnection | null = null;
   private sources: InputSource[] = [];
   private huds: PlayerHud[] = [];
@@ -94,6 +99,7 @@ export class GameScene extends Phaser.Scene {
       const online = this.online;
       this.conn = online;
       state = online.getState();
+      this.mapId = online.mapId;
       // Ein Spieler pro Browser, Tastatur 1. Farben kommen aus der Raumliste des Servers.
       for (const r of online.roster) this.playerColors.set(r.id, r.color);
       this.slots = [
@@ -118,13 +124,16 @@ export class GameScene extends Phaser.Scene {
         ? Number(params.get('seed'))
         : (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
       const roundSec = Number(params.get('round'));
+      const mapParam = params.get('map');
+      this.mapId = isMapId(mapParam) ? mapParam : DEFAULT_MAP_ID;
       const ids = this.slots.map((s) => s.id);
-      state = createGame(seed, CITY_MAP, ids, {
+      state = createGame(seed, MAP_DEFS[this.mapId].map, ids, {
         roundMs: roundSec > 0 ? roundSec * 1000 : undefined,
       });
       this.conn = new LocalConnection(state, ids);
       for (const s of this.slots) this.playerColors.set(s.id, s.color);
     }
+    this.tileset = MAP_DEFS[this.mapId].tileset;
     this.sources = this.slots.map((s) => createSource(this, s.device));
 
     this.spotSprites = [];
@@ -142,7 +151,7 @@ export class GameScene extends Phaser.Scene {
       this.zoneRects.push(
         this.add.rectangle((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, COLOR.zoneActive, 0).setDepth(1),
       );
-      this.zoneLabels.push(this.add.text(x0 + 2, y0 + 1, z.def.name, FONT).setDepth(2).setVisible(false));
+      this.zoneLabels.push(this.add.text(x0 + 2, y0 + 1, z.def.name, FONT).setDepth(7).setVisible(false));
     }
     if (localParams?.get('events') === 'now') {
       // Testhilfe: NPCs und Zonen sofort statt nach Minuten
@@ -152,7 +161,7 @@ export class GameScene extends Phaser.Scene {
       });
     }
     for (const spot of state.spots) {
-      this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(spot.type, true)));
+      this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(this.tileset, spot.type, true)));
       this.spotFull.push(true);
     }
     for (const p of Object.values(state.players)) {
@@ -282,7 +291,7 @@ export class GameScene extends Phaser.Scene {
       const full = totalBottles(spot.contents) > 0;
       if (this.spotFull[i] === full) return;
       this.spotFull[i] = full;
-      this.spotSprites[i].setTexture(spotTexture(spot.type, full));
+      this.spotSprites[i].setTexture(spotTexture(this.tileset, spot.type, full));
     });
     this.renderZones(state.zones);
     this.renderNpcs(state.npcs, delta);
@@ -429,9 +438,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawMap(map: MapData): void {
-    for (let r = 0; r < map.rows; r++) {
-      for (let c = 0; c < map.cols; c++) {
-        this.add.image(c * TILE + TILE / 2, r * TILE + TILE / 2, tileTexture(tileKey(map, c, r))).setDepth(0);
+    if (this.tileset === 'city') {
+      // Die Stadt ist ein einziges gebackenes Bild (Boden + Details) plus eine Ebene darüber (Baumkronen, Tiefe 6).
+      bakeMapLayers(this, this.mapId, map);
+      this.add.image(0, 0, mapTexture(this.mapId, 'ground-below')).setOrigin(0).setDepth(0);
+      if (this.textures.exists(mapTexture(this.mapId, 'above'))) {
+        this.add.image(0, 0, mapTexture(this.mapId, 'above')).setOrigin(0).setDepth(6);
+      }
+    } else {
+      for (let r = 0; r < map.rows; r++) {
+        for (let c = 0; c < map.cols; c++) {
+          this.add.image(c * TILE + TILE / 2, r * TILE + TILE / 2, tileTexture(this.tileset, tileKey(map, c, r))).setDepth(0);
+        }
       }
     }
     for (const d of map.dropoffs) this.marker(d.x, d.y, 'dropoff', 'PFAND');
@@ -439,7 +457,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private marker(x: number, y: number, object: 'dropoff' | 'shop', label: string): void {
-    this.add.image(x, y, objectTexture(object));
-    this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1);
+    this.add.image(x, y, objectTexture(this.tileset, object));
+    this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1).setDepth(7);
   }
 }
