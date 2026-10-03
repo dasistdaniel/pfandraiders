@@ -6,6 +6,7 @@ export * from './map';
 export * from './tiled';
 export * from './maps';
 export * from './maps/retro-ascii';
+export * from './maps/cityPlan';
 export * from './loot';
 export * from './game';
 export * from './movement';

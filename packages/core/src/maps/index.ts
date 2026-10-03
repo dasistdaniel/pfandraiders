@@ -1,5 +1,6 @@
 import type { MapData } from '../types';
 import type { MapVisuals } from '../tiled';
+import { CITY_TILED_MAP } from './city';
 import { RETRO_MAP } from './retro';
 
 /** Kennung einer spielbaren Karte. */
@@ -28,8 +29,7 @@ export const MAP_VISUALS: Record<MapId, MapVisuals | null> = {
 };
 
 export const MAP_DEFS: Record<MapId, MapDef> = {
-  // Platzhalter bis Task 3: die Stadt nutzt vorerst die Daten der Retro-Karte.
-  city: { id: 'city', name: 'Stadt', tileset: 'city', map: RETRO_MAP, visuals: MAP_VISUALS.city },
+  city: { id: 'city', name: 'Stadt', tileset: 'city', map: CITY_TILED_MAP, visuals: MAP_VISUALS.city },
   retro: { id: 'retro', name: 'Retro', tileset: 'retro', map: RETRO_MAP, visuals: MAP_VISUALS.retro },
 };
 
@@ -38,4 +38,5 @@ export const DEFAULT_MAP_ID: MapId = 'city';
 /** Die Standardkarte (`MAP_DEFS[DEFAULT_MAP_ID].map`). */
 export const CITY_MAP: MapData = MAP_DEFS[DEFAULT_MAP_ID].map;
 
+export { CITY_TILED_MAP } from './city';
 export { RETRO_MAP, RETRO_ASCII_MAP } from './retro';
