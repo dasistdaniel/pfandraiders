@@ -47,6 +47,16 @@ Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat, Shop) nutzt die fr
 
 Die Spielerfiguren stammen aus dem [Tiny Characters Set](https://opengameart.org/content/tiny-characters-set) von Fleurman (CC0), das auf den [RPG character sprites](https://opengameart.org/content/rpg-character-sprites) von GrafxKid (CC0) beruht (Dateien und `CREDITS.txt` unter `packages/client/src/assets/characters/`). Jeder Spieler bekommt nach seiner Position eine von acht festen Figuren (`packages/client/src/playerChars.ts`) und einen Ring in seiner Spielerfarbe unter den Füßen. Fehlt ein Figurenbogen, zeichnet das Spiel für diesen Spieler die selbst gezeichnete Figur.
 
+### Credits
+
+Dieselbe Liste zeigt das Spiel im Hauptmenü unter "Credits" (Daten in `packages/client/src/credits.ts`, Enter öffnet den Link):
+
+- [Roguelike Modern City](https://kenney.nl/assets/roguelike-modern-city) – Kenney, CC0 (Kacheln der Spielwelt)
+- [Tiny Characters Set](https://opengameart.org/content/tiny-characters-set) – Fleurman, CC0 (Spielerfiguren)
+- [RPG character sprites](https://opengameart.org/content/rpg-character-sprites) – GrafxKid, CC0 (Grundlage des Tiny Characters Set)
+- [Phaser 3](https://phaser.io) – Photon Storm, MIT (Spiel-Framework)
+- [PfandRaiders](https://github.com/dasistdaniel/pfandraiders) – dasistdaniel (Sound, Musik, Hund, Polizist und Karten selbst erzeugt)
+
 ## Testhilfen per URL
 
 `?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden), `?seed=123` (feste Zufallsbefüllung), `?events=now` (NPCs und Zonen sofort statt nach Minuten).
