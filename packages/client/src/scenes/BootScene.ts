@@ -8,6 +8,6 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     bakeStaticTextures(this);
-    this.scene.start('lobby');
+    this.scene.start('menu');
   }
 }

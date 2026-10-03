@@ -1,3 +1,4 @@
+import { DEFAULT_VOLUME, loadVolume, saveVolume } from './settings';
 import type { SoundId } from './soundEvents';
 
 export type { SoundId } from './soundEvents';
@@ -67,6 +68,10 @@ function saveMuted(muted: boolean): void {
   }
 }
 
+function clampVolume(v: number): number {
+  return Number.isFinite(v) ? Math.min(100, Math.max(0, Math.round(v))) : DEFAULT_VOLUME;
+}
+
 function defaultContext(): AudioContext | null {
   const w = globalThis as unknown as {
     AudioContext?: new () => AudioContext;
@@ -86,13 +91,16 @@ export class SoundFx {
   private lastPlayed = new Map<SoundId, number>();
   private noiseBuffer: AudioBuffer | null = null;
   muted: boolean;
+  volume: number;
 
   constructor(
     private readonly createContext: () => AudioContext | null = defaultContext,
     private readonly now: () => number = () => performance.now(),
     muted: boolean = loadMuted(),
+    volume: number = loadVolume(),
   ) {
     this.muted = muted;
+    this.volume = clampVolume(volume);
   }
 
   /** Bei einer Nutzergeste aufrufen: legt den Kontext an bzw. setzt ihn fort. */
@@ -105,10 +113,21 @@ export class SoundFx {
       }
       if (!this.ctx) return;
       this.master = this.ctx.createGain();
-      this.master.gain.value = MASTER_GAIN;
+      this.master.gain.value = this.masterGain();
       this.master.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
+  }
+
+  /** Lautstärke in Prozent (0 bis 100): wirkt sofort und wird gespeichert. */
+  setVolume(v: number): void {
+    this.volume = clampVolume(v);
+    saveVolume(this.volume);
+    if (this.master) this.master.gain.value = this.masterGain();
+  }
+
+  private masterGain(): number {
+    return (MASTER_GAIN * this.volume) / 100;
   }
 
   toggleMute(): boolean {

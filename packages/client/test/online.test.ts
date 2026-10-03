@@ -313,3 +313,140 @@ describe('OnlineConnection robustness', () => {
     expect((conn as any).clock - before).toBeLessThanOrEqual(250);
   });
 });
+
+describe('OnlineConnection reopen', () => {
+  function joinedSetup() {
+    const sockets: FakeSocket[] = [];
+    const conn = new OnlineConnection('ws://test', () => {
+      const s = new FakeSocket();
+      sockets.push(s);
+      return s;
+    });
+    conn.connect();
+    sockets[0].open();
+    conn.join('ABCD', 'Anna');
+    sockets[0].receive({ t: 'joined', room: 'ABCD', you: 'p1', token: 'tok' });
+    sockets[0].receive(startMessage(0, 40));
+    conn.update(10);
+    return { sockets, conn };
+  }
+
+  it('opens a second socket, joins with room, name and token after onopen, and closes the old one', () => {
+    const { sockets, conn } = joinedSetup();
+    expect(conn.playerName()).toBe('Anna');
+    conn.reopen();
+    expect(sockets).toHaveLength(2);
+    expect(sockets[0].closed).toBe(true);
+    expect(conn.status).toBe('connecting');
+    expect(sockets[1].sent).toEqual([]);
+    sockets[1].open();
+    expect(conn.status).toBe('open');
+    expect(sockets[1].sent).toEqual([{ t: 'join', room: 'ABCD', name: 'Anna', token: 'tok' }]);
+  });
+
+  it('ignores the late onclose of a replaced socket', () => {
+    const { sockets, conn } = joinedSetup();
+    let closed = 0;
+    conn.onClosed = () => closed++;
+    conn.reopen();
+    sockets[0].onclose?.(); // spätes Ereignis des alten Sockets (auch wenn schon abgehängt)
+    expect(closed).toBe(0);
+    expect(conn.status).toBe('connecting');
+    sockets[1].open();
+    expect(conn.status).toBe('open');
+  });
+
+  it('reports onClosed when the new socket drops', () => {
+    const { sockets, conn } = joinedSetup();
+    let closed = 0;
+    conn.onClosed = () => closed++;
+    conn.reopen();
+    sockets[1].close();
+    expect(closed).toBe(1);
+    expect(conn.status).toBe('closed');
+  });
+
+  it('ignores a late onclose of the first socket after connect() was replaced', () => {
+    const { sockets, conn } = joinedSetup();
+    const first = sockets[0];
+    const handler = first.onclose;
+    conn.reopen();
+    let closed = 0;
+    conn.onClosed = () => closed++;
+    handler?.();
+    expect(closed).toBe(0);
+  });
+
+  it('replaces a socket that is still connecting; its stale onclose is ignored', () => {
+    const { sockets, conn } = joinedSetup();
+    conn.reopen(); // sockets[1] bleibt im Zustand connecting
+    expect(conn.status).toBe('connecting');
+    const stale = sockets[1].onclose;
+    let closed = 0;
+    conn.onClosed = () => closed++;
+    conn.reopen();
+    expect(sockets).toHaveLength(3);
+    expect(sockets[1].closed).toBe(true);
+    stale?.();
+    sockets[1].onclose?.();
+    expect(closed).toBe(0);
+    expect(conn.status).toBe('connecting');
+    sockets[2].open();
+    expect(sockets[2].sent).toEqual([{ t: 'join', room: 'ABCD', name: 'Anna', token: 'tok' }]);
+    expect(sockets[1].sent).toEqual([]);
+  });
+
+  it('drops a buy command pressed during the outage', () => {
+    const { sockets, conn } = joinedSetup();
+    conn.update(10);
+    conn.setInput('p1', { ...NO_INPUT, buy: 'upgrade' });
+    conn.reopen();
+    sockets[1].open();
+    sockets[1].receive(startMessage(1, 40));
+    conn.update(10);
+    const inputs = sockets[1].sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
+    expect(inputs.length).toBeGreaterThan(0);
+    expect(inputs.every((m) => m.input.buy === null)).toBe(true);
+  });
+
+  it('throws without a prior joined', () => {
+    const { conn } = setup();
+    expect(() => conn.reopen()).toThrow();
+    conn.join('ABCD', 'Anna');
+    expect(() => conn.reopen()).toThrow(); // noch kein Token
+  });
+
+  it('keeps the buffered state until start, then replaces it and sends an input at once', () => {
+    const { sockets, conn } = joinedSetup();
+    sockets[0].receive(snapMessage(5, 90));
+    conn.update(250);
+    conn.update(250);
+    expect(conn.getState().tick).toBe(5);
+    conn.reopen();
+    sockets[1].open();
+    conn.update(50);
+    expect(conn.getState().tick).toBe(5);
+    expect(sockets[1].sent.filter((m) => m.t === 'input')).toHaveLength(0);
+    sockets[1].receive({ t: 'joined', room: 'ABCD', you: 'p1', token: 'tok' });
+    sockets[1].receive(startMessage(2, 40));
+    conn.update(10);
+    expect(conn.getState().tick).toBe(2);
+    expect(sockets[1].sent.filter((m) => m.t === 'input')).toHaveLength(1);
+  });
+
+  it('sets status closed and rethrows when the factory throws in reopen()', () => {
+    let fail = false;
+    const socket = new FakeSocket();
+    const conn = new OnlineConnection('ws://test', () => {
+      if (fail) throw new Error('boom');
+      return socket;
+    });
+    conn.connect();
+    socket.open();
+    conn.join('ABCD', 'Anna');
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p1', token: 'tok' });
+    fail = true;
+    expect(() => conn.reopen()).toThrow('boom');
+    expect(conn.status).toBe('closed');
+  });
+});

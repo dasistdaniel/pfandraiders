@@ -78,7 +78,8 @@ export class Room {
     this.map = opts.map ?? CITY_MAP;
     this.stepMs = opts.stepMs ?? SERVER_CONFIG.stepMs;
     this.graceMs = opts.graceMs ?? SERVER_CONFIG.graceMs;
-    this.emptyMs = opts.emptyMs ?? SERVER_CONFIG.emptyRoomMs;
+    // Ein leerer Raum darf nie vor Ablauf der Rückkehrfrist verschwinden
+    this.emptyMs = Math.max(opts.emptyMs ?? SERVER_CONFIG.emptyRoomMs, this.graceMs + 15_000);
     this.roundMs = opts.roundMs;
     this.now = opts.now ?? (() => Date.now());
     this.random = opts.random ?? Math.random;

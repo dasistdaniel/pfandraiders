@@ -13,6 +13,8 @@ export interface ServerOptions {
   allowedOrigins?: string[];
   stepMs?: number;
   roundMs?: number;
+  /** Frist für die Rückkehr eines getrennten Spielers in ms. Standard SERVER_CONFIG.graceMs. */
+  graceMs?: number;
   now?: () => number;
   random?: () => number;
   /** Mehr gleichzeitige Verbindungen werden abgewiesen (503). */
@@ -248,6 +250,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const manager = new RoomManager({
     stepMs,
     roundMs: opts.roundMs,
+    graceMs: opts.graceMs,
     now: opts.now,
     random: opts.random,
     onError: opts.onError

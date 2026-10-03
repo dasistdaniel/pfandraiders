@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { KeyState } from './input';
-import { EdgeTracker, padToHeld } from './sources';
+import { EdgeTracker, PAD_LABELS, padToHeld } from './sources';
 import type { InputSource, KeyLabels } from './sources';
 
 export interface KeyboardLayout {
@@ -116,7 +116,7 @@ type Pad = Phaser.Input.Gamepad.Gamepad;
 
 class GamepadSource implements InputSource {
   readonly label: string;
-  readonly labels: KeyLabels = { action: 'A', upgrade: 'X', item: 'Y', steal: 'B', treat: 'RB', food: 'LB' };
+  readonly labels: KeyLabels = PAD_LABELS;
   private readonly edges = new EdgeTracker();
   private prevA = false;
 

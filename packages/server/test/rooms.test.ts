@@ -46,11 +46,11 @@ describe('RoomManager', () => {
 
   it('sweeps dead rooms', () => {
     let t = 0;
-    const m = new RoomManager({ maxRooms: 5, now: () => t, emptyMs: 1000 });
+    const m = new RoomManager({ maxRooms: 5, now: () => t, emptyMs: 1000, graceMs: 5000 });
     const r = m.create('A', conn);
     if (!r.ok) throw new Error('create failed');
     r.value.room.leave(conn);
-    t = 2000;
+    t = 20_000; // Rückkehrfrist 5 s + 15 s
     m.sweep();
     expect(m.size).toBe(0);
   });

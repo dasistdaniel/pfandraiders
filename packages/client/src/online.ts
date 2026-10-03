@@ -75,6 +75,7 @@ export class OnlineConnection implements GameConnection {
   private sinceSent = 0;
   private rendered: GameState | null = null;
   private warned = false;
+  private lastName = '';
 
   constructor(
     private readonly url: string,
@@ -91,11 +92,56 @@ export class OnlineConnection implements GameConnection {
       throw err;
     }
     this.socket = socket;
+    this.attach(socket, undefined);
+  }
+
+  /** Name des lokalen Spielers (aus create/join), für die Wiederverbindung. */
+  playerName(): string {
+    return this.lastName;
+  }
+
+  /**
+   * Öffnet nach einem Verbindungsabbruch ein neues Socket und tritt mit dem Token wieder bei.
+   * Der Spielzustand bleibt erhalten, bis der Server "start" schickt.
+   */
+  reopen(): void {
+    if (!this.room || !this.lastName || !this.token) throw new Error('cannot reopen without room, name and token');
+    const old = this.socket;
+    this.socket = null;
+    if (old) {
+      old.onopen = null;
+      old.onmessage = null;
+      old.onclose = null;
+      try {
+        old.close();
+      } catch {
+        // schon geschlossen
+      }
+    }
+    this.pendingBuy = null; // ein während des Ausfalls gedrückter Kauf darf nicht nachträglich greifen
+    this.status = 'connecting';
+    let socket: SocketLike;
+    try {
+      socket = this.factory(this.url);
+    } catch (err) {
+      this.status = 'closed';
+      throw err;
+    }
+    this.socket = socket;
+    this.attach(socket, () => this.join(this.room, this.lastName, this.token));
+  }
+
+  private attach(socket: SocketLike, afterOpen: (() => void) | undefined): void {
     socket.onopen = () => {
+      if (this.socket !== socket) return;
       this.status = 'open';
+      afterOpen?.();
     };
-    socket.onmessage = (e) => this.handle(e.data);
+    socket.onmessage = (e) => {
+      if (this.socket === socket) this.handle(e.data);
+    };
     socket.onclose = () => {
+      if (this.socket !== socket) return; // ersetztes Socket: späte Meldung ignorieren
       this.status = 'closed';
       this.onClosed?.();
     };
@@ -110,10 +156,12 @@ export class OnlineConnection implements GameConnection {
   }
 
   create(name: string): void {
+    this.lastName = name;
     this.sendMsg({ t: 'create', name });
   }
 
   join(room: string, name: string, token?: string): void {
+    this.lastName = name;
     this.sendMsg(token ? { t: 'join', room, name, token } : { t: 'join', room, name });
   }
 

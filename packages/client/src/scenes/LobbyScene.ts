@@ -2,8 +2,6 @@ import Phaser from 'phaser';
 import { KEYBOARD_LAYOUTS, PLAYER_COLORS } from '../devices';
 import type { DeviceRef, PlayerSlot } from '../devices';
 import { GAME_H, GAME_W } from '../layout';
-import { showOnlineMenu } from '../onlineMenu';
-import { resolveServerUrl } from '../serverUrl';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 const MAX_PLAYERS = 4;
@@ -24,9 +22,8 @@ export class LobbyScene extends Phaser.Scene {
   private text!: Phaser.GameObjects.Text;
   private joinKeys: Phaser.Input.Keyboard.Key[] = [];
   private startKey!: Phaser.Input.Keyboard.Key;
-  private padPrev: Record<number, { a: boolean; start: boolean }> = {};
-  private onlineKey!: Phaser.Input.Keyboard.Key;
-  private menuOpen = false;
+  private padPrev: Record<number, { a: boolean; b: boolean; start: boolean }> = {};
+  private backKey!: Phaser.Input.Keyboard.Key;
   private notice = '';
 
   constructor() {
@@ -40,7 +37,6 @@ export class LobbyScene extends Phaser.Scene {
   create(): void {
     this.slots = [];
     this.padPrev = {};
-    this.menuOpen = false;
     const params = new URLSearchParams(window.location.search);
 
     // Testhilfen: ?solo=1 startet sofort mit Tastatur 1, ?players=N startet N Spieler ohne Lobby.
@@ -57,22 +53,14 @@ export class LobbyScene extends Phaser.Scene {
 
     this.joinKeys = KEYBOARD_LAYOUTS.map((l) => this.input.keyboard!.addKey(l.action));
     this.startKey = this.input.keyboard!.addKey('SPACE');
-    this.onlineKey = this.input.keyboard!.addKey('O');
+    this.backKey = this.input.keyboard!.addKey('ESC');
     this.text = this.add.text(GAME_W / 2, GAME_H / 2, '', { ...FONT, align: 'center' }).setOrigin(0.5);
   }
 
   update(): void {
     if (!this.text) return; // Testhilfe-Pfad: create() hat schon zur Spielszene gewechselt
-    if (this.menuOpen) return;
-    if (Phaser.Input.Keyboard.JustDown(this.onlineKey)) {
-      const url = resolveServerUrl(window.location.search, import.meta.env.VITE_SERVER_URL as string | undefined);
-      this.menuOpen = true;
-      this.input.keyboard!.enabled = false; // Tasten gehören dem Eingabefeld
-      void showOnlineMenu(url).then((conn) => {
-        this.menuOpen = false;
-        this.input.keyboard!.enabled = true;
-        if (conn) this.scene.start('game', { online: conn });
-      });
+    if (Phaser.Input.Keyboard.JustDown(this.backKey)) {
+      this.scene.start('menu');
       return;
     }
     KEYBOARD_LAYOUTS.forEach((_, layout) => {
@@ -81,16 +69,23 @@ export class LobbyScene extends Phaser.Scene {
       }
     });
 
+    let backPressed = false;
     let startPressed = Phaser.Input.Keyboard.JustDown(this.startKey);
     for (const pad of this.input.gamepad?.gamepads ?? []) {
       if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
-      const prev = this.padPrev[pad.index] ?? { a: false, start: false };
+      // Erster Blick: aus der Vorszene gehaltenes A oder B zählt nicht als Druck
+      const prev = this.padPrev[pad.index] ?? { a: pad.A, b: pad.B, start: false };
+      if (pad.B && !prev.b) backPressed = true;
       const start = pad.buttons[PAD_START_BUTTON]?.pressed ?? false;
       if (pad.A && !prev.a) this.join({ kind: 'pad', index: pad.index });
       if (start && !prev.start && this.slots.length > 0) startPressed = true;
-      this.padPrev[pad.index] = { a: pad.A, start };
+      this.padPrev[pad.index] = { a: pad.A, b: pad.B, start };
     }
 
+    if (backPressed) {
+      this.scene.start('menu');
+      return;
+    }
     if (startPressed && this.slots.length > 0) {
       this.scene.start('game', { slots: this.slots });
       return;
@@ -111,7 +106,7 @@ export class LobbyScene extends Phaser.Scene {
       const slot = this.slots[i];
       lines.push(slot ? `P${i + 1}: ${describe(slot.device)}` : `P${i + 1}: (frei)`);
     }
-    lines.push('', 'Online spielen: Taste O');
+    lines.push('', 'Zurück: Esc oder Gamepad B');
     lines.push('', this.slots.length > 0 ? 'Start: Leertaste oder Start-Taste' : 'Mindestens ein Spieler muss beitreten');
     if (this.notice) lines.push('', this.notice);
     return lines;

@@ -11,7 +11,9 @@ Retro-Top-Down-Spiel: Pfandflaschen sammeln, abgeben, Container ausbauen. Design
 
 ## Spielen
 
-Lokal mit 1 bis 4 Spielern, jeder mit eigener Kamera. In der Lobby treten Spieler mit der Aktionstaste ihres Geräts bei, Start mit Leertaste oder Start-Taste des Gamepads.
+Das Hauptmenü bietet Lokal spielen, Online spielen und Einstellungen (Lautstärke per Pfeiltasten, A/D oder Mausklick links/rechts der Zeile, Ton an/aus, Steuerungsübersicht). Bedienung: Pfeile oder W/S wählen, Enter/E/Leertaste bestätigt, Esc geht zurück; Gamepad: Steuerkreuz, A, B. Die Lautstärke wird im Browser gespeichert.
+
+Lokal mit 1 bis 4 Spielern, jeder mit eigener Kamera. Im lokalen Spiel (Menüpunkt "Lokal spielen") treten Spieler in der Lobby mit der Aktionstaste ihres Geräts bei, Start mit Leertaste oder Start-Taste des Gamepads, Zurück ins Menü mit Esc oder Gamepad B.
 
 | Gerät | Laufen | Aktion | Klauen | Container-Upgrade | Bolzenschneider | Leckerli | Essen |
 |---|---|---|---|---|---|---|---|
@@ -19,7 +21,7 @@ Lokal mit 1 bis 4 Spielern, jeder mit eigener Kamera. In der Lobby treten Spiele
 | Tastatur 2 | Pfeile | Enter | / | , | . | ; | ' |
 | Gamepad | Stick oder Steuerkreuz | A | B | X | Y | RB | LB |
 
-Aktion: Suchen (halten), Pfand abgeben (drücken am Pfandautomaten). Klauen: Klauen-Taste halten (2 s) neben einem Mitspieler, der Flaschen im Container hat, egal was er gerade macht. Mit dem Bolzenschneider (im Shop 6,00 €) klaut ein neuer Druck der Klauen-Taste sofort alles, was in den eigenen Container passt. `R` oder die Aktionstaste startet nach Rundenende (nach kurzer Sperre) neu. Zwei Spieler an einer Tastatur sind durch Keyboard-Ghosting begrenzt (nicht alle Tastenkombinationen werden erkannt).
+Aktion: Suchen (halten), Pfand abgeben (drücken am Pfandautomaten). Klauen: Klauen-Taste halten (2 s) neben einem Mitspieler, der Flaschen im Container hat, egal was er gerade macht. Mit dem Bolzenschneider (im Shop 6,00 €) klaut ein neuer Druck der Klauen-Taste sofort alles, was in den eigenen Container passt. Am Rundenende zeigt ein Ergebnisfeld die Rangliste; nach kurzer Sperre startet `R` oder die Aktionstaste eine neue Runde (online nur der Host), `Esc` (lokal auch Gamepad B) führt zurück ins Menü. Zwei Spieler an einer Tastatur sind durch Keyboard-Ghosting begrenzt (nicht alle Tastenkombinationen werden erkannt).
 
 ## Leben und Events
 
@@ -44,8 +46,9 @@ Umgebungsvariablen des Servers:
 - `ALLOWED_ORIGINS`: kommagetrennte Liste erlaubter Origins, zum Beispiel `https://dasistdaniel.github.io`. Ist sie leer, darf jede Origin verbinden (nur für die Entwicklung, der Server warnt beim Start).
 
 - `ROUND_MS`: optionale Rundenlänge in Millisekunden (für kurze Testrunden), Standard 10 Minuten.
+- `GRACE_MS`: wie lange der Server den Platz eines getrennten Spielers hält, ganze Zahl in Millisekunden, 5000 bis 3600000, Standard 120000 (2 Minuten). Ungültige Werte ergeben eine Warnung und den Standardwert. Ein leerer Raum bleibt mindestens so lange bestehen wie die Frist plus 15 s. Folge: Eine getrennte Figur steht bis zu 2 Minuten regungslos in der Runde und kann in dieser Zeit beklaut werden.
 
-In der Lobby öffnet die Taste `O` das Online-Menü (Raum erstellen oder mit Code beitreten). Die Server-Adresse kommt aus `?server=ws://…`, sonst aus der Build-Variable `VITE_SERVER_URL`, sonst `ws://localhost:8080`. Nach einem Verbindungsabbruch das Menü erneut öffnen und mit demselben Namen und Code beitreten (Frist 30 s). Das Token liegt nur im sessionStorage, die Wiederverbindung klappt also beim Neuladen oder in einem duplizierten Tab, nicht in einem ganz neuen Tab.
+Im Hauptmenü öffnet "Online spielen" einen Dialog (Raum erstellen oder mit Code beitreten). Die Server-Adresse kommt aus `?server=ws://…`, sonst aus der Build-Variable `VITE_SERVER_URL`, sonst `ws://localhost:8080`. Nach einem Verbindungsabbruch verbindet der Client automatisch neu: 30 s lang im 2-s-Takt, danach fragt er "Weiter versuchen?" (Enter = Ja, jede Runde wieder 30 s; Esc = Menü). Der Server hält den Platz 2 Minuten (siehe `GRACE_MS`); ist die Runde inzwischen vorbei, geht es mit einem Hinweis ins Menü. Das Token liegt nur im sessionStorage, die Wiederverbindung klappt also beim Neuladen oder in einem duplizierten Tab, nicht in einem ganz neuen Tab.
 
 Weitere Grenzen im Server: Pro IP-Adresse sind höchstens 10 gleichzeitige Verbindungen erlaubt (Option `maxPerIp`), ein Socket ohne Raum wird nach 30 s geschlossen (`idleMs`). Als IP gilt der erste Eintrag des Headers `X-Forwarded-For`, sonst die Socket-Adresse. Der Header wird vertraut, weil nur der Reverse Proxy (Nginx Proxy Manager) den Server erreicht (der Container hat keinen Host-Port). Origins in `ALLOWED_ORIGINS` werden normalisiert (Kleinschreibung, ohne Schrägstrich am Ende).
 
