@@ -151,7 +151,7 @@ export class GameScene extends Phaser.Scene {
       this.zoneRects.push(
         this.add.rectangle((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, COLOR.zoneActive, 0).setDepth(1),
       );
-      this.zoneLabels.push(this.add.text(x0 + 2, y0 + 1, z.def.name, FONT).setDepth(2).setVisible(false));
+      this.zoneLabels.push(this.add.text(x0 + 2, y0 + 1, z.def.name, FONT).setDepth(7).setVisible(false));
     }
     if (localParams?.get('events') === 'now') {
       // Testhilfe: NPCs und Zonen sofort statt nach Minuten
@@ -440,7 +440,7 @@ export class GameScene extends Phaser.Scene {
   private drawMap(map: MapData): void {
     if (this.tileset === 'city') {
       // Die Stadt ist ein einziges gebackenes Bild (Boden + Details) plus eine Ebene darüber (Baumkronen, Tiefe 6).
-      bakeMapLayers(this, this.mapId);
+      bakeMapLayers(this, this.mapId, map);
       this.add.image(0, 0, mapTexture(this.mapId, 'ground-below')).setOrigin(0).setDepth(0);
       if (this.textures.exists(mapTexture(this.mapId, 'above'))) {
         this.add.image(0, 0, mapTexture(this.mapId, 'above')).setOrigin(0).setDepth(6);
@@ -458,6 +458,6 @@ export class GameScene extends Phaser.Scene {
 
   private marker(x: number, y: number, object: 'dropoff' | 'shop', label: string): void {
     this.add.image(x, y, objectTexture(this.tileset, object));
-    this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1);
+    this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1).setDepth(7);
   }
 }

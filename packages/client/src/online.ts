@@ -203,6 +203,7 @@ export class OnlineConnection implements GameConnection {
         this.onLobby?.();
         break;
       case 'start':
+        if (!isMapId(msg.mapId)) console.warn('start mit unbekannter Karte verworfen:', msg.mapId);
         if (!msg.map || !isMapId(msg.mapId) || !isValidSnapshot(msg.snap)) break;
         this.map = msg.map;
         this.mapId = msg.mapId;

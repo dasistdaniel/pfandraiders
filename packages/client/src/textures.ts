@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { MAP_DEFS } from '@pfandraiders/core';
-import type { MapId, SpotType } from '@pfandraiders/core';
+import type { MapData, MapId, MapVisuals, SpotType } from '@pfandraiders/core';
 import { decodeSprite, type Decoded } from './pixelart';
 import { DOG_SPRITES, PLAYER_SPRITES, POLICE_SPRITES, type PlayerFrame } from './sprites/characters';
 import { OBJECT_SPRITES, SPOT_SPRITES, TILE_SPRITES } from './sprites/tiles';
 import { dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from './textureKeys';
 import type { TilesetId } from './textureKeys';
-import { cellRect, visualsComplete } from './mapRender';
+import { cellRect, visualsMatchMap } from './mapRender';
 import type { TileKey } from './tiles';
 import { CELL, KENNEY_BOTTLES, KENNEY_OBJECTS, KENNEY_SPOTS, KENNEY_TILES, type Cell } from './kenneyMap';
 
@@ -90,11 +90,14 @@ export function bakeStaticTextures(scene: Phaser.Scene): void {
 const FLAT_FLOOR = '#5a5a5a';
 const FLAT_WALL = '#7a1f1f';
 
-/** Rückfall ohne Grafikebenen oder Bogen: einfarbige Karte aus solid (Boden grau, Wand dunkelrot). */
-function bakeFlatMap(scene: Phaser.Scene, mapId: MapId): void {
-  const map = MAP_DEFS[mapId].map;
-  const tex = scene.textures.createCanvas(mapTexture(mapId, 'ground-below'), map.cols * CELL, map.rows * CELL);
-  if (!tex) return;
+/** Rückfall ohne passende Grafikebenen oder Bogen: einfarbige Karte aus solid (Boden grau, Wand dunkelrot). */
+function bakeFlatMap(scene: Phaser.Scene, mapId: MapId, map: MapData): void {
+  const key = mapTexture(mapId, 'ground-below');
+  const tex = scene.textures.createCanvas(key, map.cols * CELL, map.rows * CELL);
+  if (!tex) {
+    console.warn(`Kartenbild ${key} konnte nicht erzeugt werden`);
+    return;
+  }
   const ctx = tex.getContext();
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
@@ -107,26 +110,42 @@ function bakeFlatMap(scene: Phaser.Scene, mapId: MapId): void {
 
 /**
  * Backt das Kartenbild der Stadt aus ihren Grafikebenen: ein Canvas je Bild, ein drawImage je Zelle.
- * map:<id>:ground-below (ground + below) und map:<id>:above. Fehlen Ebenen oder Bogen, entsteht nur ein
- * einfarbiges ground-below aus solid (kein above). Existiert das Bild schon, passiert nichts.
- * Karten ohne Ebenen (retro) bekommen kein Bild und zeichnen pro Kachel.
+ * map:<id>:ground-below (ground + below) und map:<id>:above. Passen Ebenen und Karte nicht zusammen, fehlen sie
+ * oder der Bogen, entsteht nur ein einfarbiges ground-below aus solid (kein above). Existiert das Bild schon,
+ * passiert nichts. Karten ohne Ebenen (retro) bekommen kein Bild und zeichnen pro Kachel.
  */
-export function bakeMapLayers(scene: Phaser.Scene, mapId: MapId): void {
+export function bakeMapLayers(scene: Phaser.Scene, mapId: MapId, map: MapData): void {
   const def = MAP_DEFS[mapId];
   if (def.tileset !== 'city') return;
   const groundKey = mapTexture(mapId, 'ground-below');
+  const aboveKey = mapTexture(mapId, 'above');
   if (scene.textures.exists(groundKey)) return;
-  const visuals = def.visuals;
+  let visuals: MapVisuals | null = null;
+  try {
+    visuals = def.visuals; // lazy, parseTiledVisuals kann werfen
+  } catch (e) {
+    console.warn('Grafikebenen der Karte nicht lesbar, zeichne einfarbige Karte', e);
+  }
   const img = sheetImage(scene);
-  if (!img || !visualsComplete(visuals)) {
-    bakeFlatMap(scene, mapId);
+  if (!img || !visualsMatchMap(visuals, map)) {
+    bakeFlatMap(scene, mapId, map);
     return;
   }
   const w = visuals.cols * CELL;
   const h = visuals.rows * CELL;
   const groundTex = scene.textures.createCanvas(groundKey, w, h);
-  const aboveTex = scene.textures.createCanvas(mapTexture(mapId, 'above'), w, h);
-  if (!groundTex || !aboveTex) return;
+  if (!groundTex) {
+    console.warn(`Kartenbild ${groundKey} konnte nicht erzeugt werden`);
+    return;
+  }
+  const aboveTex = scene.textures.createCanvas(aboveKey, w, h);
+  if (!aboveTex) {
+    // Nicht halb gebacken zurücklassen: das erste Bild wieder entfernen, dann Rückfall
+    scene.textures.remove(groundKey);
+    console.warn(`Kartenbild ${aboveKey} konnte nicht erzeugt werden`);
+    bakeFlatMap(scene, mapId, map);
+    return;
+  }
   const paint = (tex: Phaser.Textures.CanvasTexture, layers: number[][]): void => {
     const ctx = tex.getContext();
     ctx.imageSmoothingEnabled = false;

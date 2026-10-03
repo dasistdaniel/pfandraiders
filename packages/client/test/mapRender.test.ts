@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { cellRect, visualsComplete } from '../src/mapRender';
+import { MAP_DEFS } from '@pfandraiders/core';
+import type { MapData } from '@pfandraiders/core';
+import { cellRect, visualsComplete, visualsMatchMap } from '../src/mapRender';
 
 describe('cellRect', () => {
   it('maps gids to sheet cells', () => {
@@ -28,5 +30,23 @@ describe('visualsComplete', () => {
     expect(visualsComplete({ ...ok, above: [0, 0, 0] })).toBe(false);
     expect(visualsComplete({ ...ok, ground: [] })).toBe(false);
     expect(visualsComplete({ ...ok, cols: 0 })).toBe(false);
+  });
+});
+
+describe('visualsMatchMap', () => {
+  const map = { cols: 2, rows: 2, solid: [true, false, false, true] } as unknown as MapData;
+  const ok = { cols: 2, rows: 2, ground: [5, 0, 0, 0], below: [0, 0, 0, 7], above: [0, 0, 0, 0] };
+  it('accepts matching data', () => {
+    expect(visualsMatchMap(ok, map)).toBe(true);
+  });
+  it('rejects null and wrong dimensions', () => {
+    expect(visualsMatchMap(null, map)).toBe(false);
+    expect(visualsMatchMap({ ...ok, cols: 4, rows: 1 }, map)).toBe(false);
+  });
+  it('rejects a solid tile without any visual', () => {
+    expect(visualsMatchMap({ ...ok, below: [0, 0, 0, 0] }, map)).toBe(false);
+  });
+  it('accepts the real city data', () => {
+    expect(visualsMatchMap(MAP_DEFS.city.visuals, MAP_DEFS.city.map)).toBe(true);
   });
 });
