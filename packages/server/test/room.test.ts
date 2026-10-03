@@ -1,6 +1,7 @@
 import { CITY_MAP, MAX_ROOM_PLAYERS, NO_INPUT } from '@pfandraiders/core';
 import type { Input, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
+import { SERVER_CONFIG } from '../src/config';
 import { Room } from '../src/room';
 import type { Conn } from '../src/room';
 
@@ -232,7 +233,7 @@ describe('leaving and reconnecting', () => {
     room.start('p1');
     room.leave(ma.conn!);
     expect(room.join('Anna', new FakeConn(), 'wrong-token')).toMatchObject({ ok: false });
-    advance(31_000);
+    advance(SERVER_CONFIG.graceMs + 1000);
     room.tick();
     expect(room.join('Anna', new FakeConn(), ma.token)).toMatchObject({ ok: false, code: 'already_started' });
     expect(room.state!.players.p1).toBeDefined(); // Figur bleibt als Statist
@@ -285,7 +286,7 @@ describe('review fixes', () => {
     const { room, advance, ma } = twoPlayers({ roundMs: 100 });
     room.start('p1');
     room.leave(ma.conn!);
-    advance(31_000);
+    advance(SERVER_CONFIG.graceMs + 1000);
     room.tick();
     room.tick();
     expect(room.phase).toBe('ended');
@@ -302,7 +303,7 @@ describe('review fixes', () => {
     room.tick();
     room.tick();
     expect(room.phase).toBe('ended');
-    advance(31_000);
+    advance(SERVER_CONFIG.graceMs + 1000);
     room.tick();
     expect(room.members.map((m) => m.id)).toEqual(['p2']);
   });
@@ -311,13 +312,13 @@ describe('review fixes', () => {
     const a = twoPlayers();
     a.room.start('p1');
     a.room.leave(a.ma.conn!);
-    a.advance(30_000);
+    a.advance(SERVER_CONFIG.graceMs);
     expect(a.room.join('Anna', new FakeConn(), a.ma.token).ok).toBe(true);
 
     const b = twoPlayers();
     b.room.start('p1');
     b.room.leave(b.ma.conn!);
-    b.advance(30_001);
+    b.advance(SERVER_CONFIG.graceMs + 1);
     expect(b.room.join('Anna', new FakeConn(), b.ma.token)).toMatchObject({ ok: false, code: 'already_started' });
   });
 
@@ -369,7 +370,7 @@ describe('review fixes', () => {
     advance(10_000);
     expect(room.join('Anna', new FakeConn(), ma.token).ok).toBe(true);
     expect(ma.disconnectedAt).toBeNull();
-    advance(25_000);
+    advance(SERVER_CONFIG.graceMs - 5_000);
     room.tick();
     expect(ma.expired).toBe(false);
   });
