@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_H, GAME_W } from './layout';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
+import { MenuScene } from './scenes/MenuScene';
 import { LobbyScene } from './scenes/LobbyScene';
 
 new Phaser.Game({
@@ -13,5 +14,5 @@ new Phaser.Game({
   pixelArt: true,
   input: { gamepad: true },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, LobbyScene, GameScene],
+  scene: [BootScene, MenuScene, LobbyScene, GameScene],
 });

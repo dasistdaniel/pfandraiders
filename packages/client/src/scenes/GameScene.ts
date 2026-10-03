@@ -11,7 +11,7 @@ import { ensurePlayerTextures } from '../textures';
 import { dogTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
-import { SoundFx } from '../sound';
+import { sfx } from '../sfx';
 import { detectSounds, snapshotForSound } from '../soundEvents';
 import { buildInput } from '../input';
 import { viewportsFor, WORLD_ZOOM } from '../layout';
@@ -21,12 +21,6 @@ import { playerName } from '../text';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
-
-/** Ein Soundsystem für die ganze Sitzung, damit der freigeschaltete AudioContext Szenenwechsel überlebt. */
-const sfx = new SoundFx();
-// Schon die erste Taste in der Lobby schaltet den Ton frei, nicht erst eine im Spiel
-window.addEventListener('keydown', () => sfx.unlock());
-window.addEventListener('pointerdown', () => sfx.unlock());
 
 const COLOR = {
   zoneAnnounced: 0xffee58,

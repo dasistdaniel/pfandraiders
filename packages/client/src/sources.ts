@@ -10,6 +10,9 @@ export interface KeyLabels {
   food: string;
 }
 
+/** Beschriftung der Gamepad-Tasten, passend zu padToHeld. */
+export const PAD_LABELS: KeyLabels = { action: 'A', upgrade: 'X', item: 'Y', steal: 'B', treat: 'RB', food: 'LB' };
+
 /** Ein Gerät, das einem Spieler gehört. Phaser-Anbindung steht in devices.ts. */
 export interface InputSource {
   readonly label: string;
