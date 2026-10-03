@@ -160,7 +160,8 @@ describe('corner sliding', () => {
   });
 
   it('walks straight past a soft tile hit dead-centre, horizontally and vertically', () => {
-    for (const dir of [{ moveX: 1 }, { moveX: -1 }, { moveY: 1 }, { moveY: -1 }]) {
+    const dirs: { moveX?: number; moveY?: number }[] = [{ moveX: 1 }, { moveX: -1 }, { moveY: 1 }, { moveY: -1 }];
+    for (const dir of dirs) {
       const s = newGame(world());
       s.map.soft = new Array<boolean>(s.map.cols * s.map.rows).fill(false);
       s.map.soft[4 * s.map.cols + 7] = true; // Mitte (120, 72)
