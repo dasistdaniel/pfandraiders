@@ -59,6 +59,12 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Testhilfen ?solo=1 und ?players=N überspringen das Menü (die Lobby startet das Spiel direkt)
+    const q = new URLSearchParams(window.location.search);
+    if (q.has('solo') || Number(q.get('players')) >= 1) {
+      this.scene.start('lobby');
+      return;
+    }
     this.page = 'main';
     this.showControls = false;
     this.busy = false;
