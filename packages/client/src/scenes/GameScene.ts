@@ -1,10 +1,15 @@
 import Phaser from 'phaser';
-import { CITY_MAP, CONFIG, createGame, isBeingRobbed, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
+import { CITY_MAP, createGame, isBeingRobbed, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
 import type { GameState, MapData, Npc, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
+import { initialPose, npcFrame, stepPose } from '../pose';
+import type { PoseState } from '../pose';
+import { ensurePlayerTextures } from '../textures';
+import { dogTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
+import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
 import { SoundFx } from '../sound';
 import { detectSounds, snapshotForSound } from '../soundEvents';
@@ -24,14 +29,6 @@ window.addEventListener('keydown', () => sfx.unlock());
 window.addEventListener('pointerdown', () => sfx.unlock());
 
 const COLOR = {
-  wall: 0x37474f,
-  floor: 0x9e9e9e,
-  spotFull: 0x66bb6a,
-  spotEmpty: 0x616161,
-  dropoff: 0x42a5f5,
-  shop: 0xffca28,
-  dog: 0x8d6e63,
-  police: 0x1565c0,
   zoneAnnounced: 0xffee58,
   zoneActive: 0xff7043,
 };
@@ -44,11 +41,14 @@ export class GameScene extends Phaser.Scene {
   private online: OnlineConnection | null = null;
   private sources: InputSource[] = [];
   private huds: PlayerHud[] = [];
-  private bodies = new Map<string, Phaser.GameObjects.Rectangle>();
+  private bodies = new Map<string, Phaser.GameObjects.Image>();
+  private poses = new Map<string, PoseState>();
+  private npcPoses = new Map<number, PoseState>();
   private warnings = new Map<string, Phaser.GameObjects.Text>();
   private playerColors = new Map<string, number>();
-  private spotRects: Phaser.GameObjects.Rectangle[] = [];
-  private npcSprites = new Map<number, Phaser.GameObjects.Rectangle>();
+  private spotSprites: Phaser.GameObjects.Image[] = [];
+  private spotFull: boolean[] = [];
+  private npcSprites = new Map<number, Phaser.GameObjects.Image>();
   private zoneRects: Phaser.GameObjects.Rectangle[] = [];
   private uiCams: Phaser.Cameras.Scene2D.Camera[] = [];
   private zoneLabels: Phaser.GameObjects.Text[] = [];
@@ -111,8 +111,11 @@ export class GameScene extends Phaser.Scene {
     }
     this.sources = this.slots.map((s) => createSource(this, s.device));
 
-    this.spotRects = [];
+    this.spotSprites = [];
+    this.spotFull = [];
     this.bodies = new Map();
+    this.poses = new Map();
+    this.npcPoses = new Map();
     this.warnings = new Map();
     this.drawMap(state.map);
     this.npcSprites = new Map();
@@ -133,13 +136,16 @@ export class GameScene extends Phaser.Scene {
       });
     }
     for (const spot of state.spots) {
-      this.spotRects.push(this.add.rectangle(spot.x, spot.y, 10, 10, COLOR.spotFull));
+      this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(spot.type, true)));
+      this.spotFull.push(true);
     }
     for (const p of Object.values(state.players)) {
       const color = this.playerColors.get(p.id) ?? 0xffffff;
-      const body = this.add.rectangle(p.x, p.y, CONFIG.playerHalf * 2, CONFIG.playerHalf * 2, color);
+      ensurePlayerTextures(this, color);
+      const body = this.add.image(p.x, p.y, playerTexture(color, 'down_a'));
       body.setDepth(5);
       this.bodies.set(p.id, body);
+      this.poses.set(p.id, initialPose(p.x, p.y));
       this.warnings.set(
         p.id,
         this.add.text(p.x, p.y - 8, '!', { ...FONT, color: '#ff5252', fontSize: '12px' }).setOrigin(0.5, 1).setDepth(6).setVisible(false),
@@ -212,15 +218,22 @@ export class GameScene extends Phaser.Scene {
     this.prevSoundState = snapshotForSound(state);
 
     state.spots.forEach((spot, i) => {
-      this.spotRects[i].setFillStyle(totalBottles(spot.contents) > 0 ? COLOR.spotFull : COLOR.spotEmpty);
+      const full = totalBottles(spot.contents) > 0;
+      if (this.spotFull[i] === full) return;
+      this.spotFull[i] = full;
+      this.spotSprites[i].setTexture(spotTexture(spot.type, full));
     });
     this.renderZones(state.zones);
-    this.renderNpcs(state.npcs);
+    this.renderNpcs(state.npcs, delta);
     for (const p of Object.values(state.players)) {
       const body = this.bodies.get(p.id);
       if (!body) continue; // Spieler, die nach dem Start nicht in der Liste waren
       body.setPosition(p.x, p.y);
-      body.setAlpha(p.mode === 'unconscious' ? 0.35 : 1);
+      const color = this.playerColors.get(p.id) ?? 0xffffff;
+      const { state: poseState, pose } = stepPose(this.poses.get(p.id) ?? initialPose(p.x, p.y), p.x, p.y, p.mode, delta);
+      this.poses.set(p.id, poseState);
+      body.setTexture(playerTexture(color, pose.frame)).setFlipX(pose.flipX);
+      body.setAlpha(p.mode === 'unconscious' ? 0.6 : 1);
       this.warnings.get(p.id)?.setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, p.id));
     }
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
@@ -239,7 +252,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private renderNpcs(npcs: Npc[]): void {
+  private renderNpcs(npcs: Npc[], delta: number): void {
     const alive = new Set<number>();
     for (const npc of npcs) {
       alive.add(npc.id);
@@ -247,35 +260,38 @@ export class GameScene extends Phaser.Scene {
       if (!sprite) {
         const dog = npc.kind === 'dog';
         sprite = this.add
-          .rectangle(npc.x, npc.y, dog ? 9 : 8, dog ? 6 : 10, dog ? COLOR.dog : COLOR.police)
+          .image(npc.x, npc.y, dog ? dogTexture('a') : policeTexture('a'))
           .setDepth(4);
+        this.npcPoses.set(npc.id, initialPose(npc.x, npc.y));
         for (const ui of this.uiCams) ui.ignore(sprite); // Weltobjekt: nicht in den UI-Kameras
         this.npcSprites.set(npc.id, sprite);
       }
       sprite.setPosition(npc.x, npc.y);
+      const nf = npcFrame(this.npcPoses.get(npc.id)!, npc.x, npc.y, delta);
+      this.npcPoses.set(npc.id, nf.state);
+      sprite.setTexture(npc.kind === 'dog' ? dogTexture(nf.frame) : policeTexture(nf.frame)).setFlipX(nf.flipX);
       sprite.setAlpha(npc.distractedMs > 0 ? 0.5 : 1);
     }
     for (const [id, sprite] of this.npcSprites) {
       if (alive.has(id)) continue;
       sprite.destroy();
       this.npcSprites.delete(id);
+      this.npcPoses.delete(id);
     }
   }
 
   private drawMap(map: MapData): void {
-    const g = this.add.graphics();
     for (let r = 0; r < map.rows; r++) {
       for (let c = 0; c < map.cols; c++) {
-        g.fillStyle(map.solid[r * map.cols + c] ? COLOR.wall : COLOR.floor, 1);
-        g.fillRect(c * TILE, r * TILE, TILE, TILE);
+        this.add.image(c * TILE + TILE / 2, r * TILE + TILE / 2, tileTexture(tileKey(map, c, r))).setDepth(0);
       }
     }
-    for (const d of map.dropoffs) this.marker(d.x, d.y, COLOR.dropoff, 'PFAND');
-    for (const s of map.shops) this.marker(s.x, s.y, COLOR.shop, 'SHOP');
+    for (const d of map.dropoffs) this.marker(d.x, d.y, 'dropoff', 'PFAND');
+    for (const s of map.shops) this.marker(s.x, s.y, 'shop', 'SHOP');
   }
 
-  private marker(x: number, y: number, color: number, label: string): void {
-    this.add.rectangle(x, y, TILE, TILE, color);
+  private marker(x: number, y: number, object: 'dropoff' | 'shop', label: string): void {
+    this.add.image(x, y, objectTexture(object));
     this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1);
   }
 }
