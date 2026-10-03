@@ -6,6 +6,8 @@ import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
 import { PlayerHud } from '../hud';
+import { SoundFx } from '../sound';
+import { detectSounds, snapshotForSound } from '../soundEvents';
 import { buildInput } from '../input';
 import { viewportsFor, WORLD_ZOOM } from '../layout';
 import type { OnlineConnection } from '../online';
@@ -14,6 +16,9 @@ import { playerName } from '../text';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
+
+/** Ein Soundsystem für die ganze Sitzung, damit der freigeschaltete AudioContext Szenenwechsel überlebt. */
+const sfx = new SoundFx();
 
 const COLOR = {
   wall: 0x37474f,
@@ -46,6 +51,10 @@ export class GameScene extends Phaser.Scene {
   private zoneLabels: Phaser.GameObjects.Text[] = [];
   private restartKey!: Phaser.Input.Keyboard.Key;
   private endedForMs = 0;
+  private muteKey!: Phaser.Input.Keyboard.Key;
+  /** Zustand des vorigen Frames für Sound-Ereignisse, null = noch keiner (erster Frame ohne Sounds) */
+  private prevSoundState: GameState | null = null;
+  private ownSoundIds: string[] | 'all' = 'all';
 
   constructor() {
     super('game');
@@ -62,6 +71,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.endedForMs = 0;
+    this.prevSoundState = null;
     let state: GameState;
     this.playerColors = new Map();
     let localParams: URLSearchParams | null = null;
@@ -163,6 +173,18 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.restartKey = this.input.keyboard!.addKey('R');
+    this.muteKey = this.input.keyboard!.addKey('M');
+    this.ownSoundIds = this.online ? [this.online.you] : 'all';
+    // Browser erlauben Audio erst nach einer Nutzergeste
+    const unlock = (): void => sfx.unlock();
+    window.addEventListener('keydown', unlock);
+    window.addEventListener('pointerdown', unlock);
+    this.input.gamepad?.on('down', unlock);
+    this.events.once('shutdown', () => {
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('pointerdown', unlock);
+      this.input.gamepad?.off('down', unlock);
+    });
   }
 
   update(_time: number, delta: number): void {
@@ -185,6 +207,10 @@ export class GameScene extends Phaser.Scene {
         return;
       }
     }
+
+    if (Phaser.Input.Keyboard.JustDown(this.muteKey)) sfx.toggleMute();
+    for (const id of detectSounds(this.prevSoundState, state, this.ownSoundIds)) sfx.play(id);
+    this.prevSoundState = snapshotForSound(state);
 
     state.spots.forEach((spot, i) => {
       this.spotRects[i].setFillStyle(totalBottles(spot.contents) > 0 ? COLOR.spotFull : COLOR.spotEmpty);
