@@ -1,10 +1,11 @@
-import { stateFromSnapshot } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, isMapId, stateFromSnapshot } from '@pfandraiders/core';
 import type {
   ClientMessage,
   ErrorCode,
   GameState,
   Input,
   MapData,
+  MapId,
   RosterEntry,
   ServerMessage,
   Snapshot,
@@ -57,6 +58,8 @@ export class OnlineConnection implements GameConnection {
   token = '';
   host = '';
   roster: RosterEntry[] = [];
+  /** Karte der laufenden Runde (wird mit start gesetzt). */
+  mapId: MapId = DEFAULT_MAP_ID;
 
   onJoined: (() => void) | null = null;
   onLobby: (() => void) | null = null;
@@ -200,8 +203,9 @@ export class OnlineConnection implements GameConnection {
         this.onLobby?.();
         break;
       case 'start':
-        if (!msg.map || !isValidSnapshot(msg.snap)) break;
+        if (!msg.map || !isMapId(msg.mapId) || !isValidSnapshot(msg.snap)) break;
         this.map = msg.map;
+        this.mapId = msg.mapId;
         this.you = msg.you;
         this.localPlayerIds = [msg.you];
         this.roster = msg.players;

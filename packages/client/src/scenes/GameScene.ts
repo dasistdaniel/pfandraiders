@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { CITY_MAP, createGame, isBeingRobbed, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
-import type { GameState, MapData, Npc, ZoneState } from '@pfandraiders/core';
+import { createGame, DEFAULT_MAP_ID, isBeingRobbed, isMapId, MAP_DEFS, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
+import type { GameState, MapData, MapId, Npc, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
@@ -33,6 +33,8 @@ const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', resol
 export class GameScene extends Phaser.Scene {
   private slots: PlayerSlot[] = [];
   private conn!: GameConnection;
+  /** Kennung der gespielten Karte (online vom Server, lokal aus ?map=). Das Tileset hat noch keine Wirkung. */
+  private mapId: MapId = DEFAULT_MAP_ID;
   private online: OnlineConnection | null = null;
   private sources: InputSource[] = [];
   private huds: PlayerHud[] = [];
@@ -94,6 +96,7 @@ export class GameScene extends Phaser.Scene {
       const online = this.online;
       this.conn = online;
       state = online.getState();
+      this.mapId = online.mapId;
       // Ein Spieler pro Browser, Tastatur 1. Farben kommen aus der Raumliste des Servers.
       for (const r of online.roster) this.playerColors.set(r.id, r.color);
       this.slots = [
@@ -118,8 +121,10 @@ export class GameScene extends Phaser.Scene {
         ? Number(params.get('seed'))
         : (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
       const roundSec = Number(params.get('round'));
+      const mapParam = params.get('map');
+      this.mapId = isMapId(mapParam) ? mapParam : DEFAULT_MAP_ID;
       const ids = this.slots.map((s) => s.id);
-      state = createGame(seed, CITY_MAP, ids, {
+      state = createGame(seed, MAP_DEFS[this.mapId].map, ids, {
         roundMs: roundSec > 0 ? roundSec * 1000 : undefined,
       });
       this.conn = new LocalConnection(state, ids);

@@ -1,4 +1,5 @@
 import { sanitizeInput } from './sanitize';
+import type { MapId } from './maps';
 import type { GameState, Input, MapData } from './types';
 
 /** Vom Server gesendeter Zustand ohne die (statische) Karte. */
@@ -48,7 +49,7 @@ export type ServerMessage =
   | { t: 'error'; code: ErrorCode; message: string }
   | { t: 'joined'; room: string; you: string; token: string }
   | { t: 'lobby'; room: string; host: string; players: RosterEntry[]; phase: RoomPhase }
-  | { t: 'start'; map: MapData; you: string; players: RosterEntry[]; snap: Snapshot }
+  | { t: 'start'; mapId: MapId; map: MapData; you: string; players: RosterEntry[]; snap: Snapshot }
   | { t: 'snap'; snap: Snapshot; ack: number };
 
 function cleanName(raw: unknown): string | null {

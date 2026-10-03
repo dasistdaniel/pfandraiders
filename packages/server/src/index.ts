@@ -1,3 +1,5 @@
+import { DEFAULT_MAP_ID, isMapId } from '@pfandraiders/core';
+import type { MapId } from '@pfandraiders/core';
 import { startServer } from './server';
 import type { RunningServer } from './server';
 import { parseGraceMs, SERVER_CONFIG } from './config';
@@ -19,6 +21,13 @@ if (graceRaw?.trim() && graceMs === SERVER_CONFIG.graceMs && Number(graceRaw.tri
   console.warn(`GRACE_MS=${graceRaw} ist ungültig (ganze Zahl, 5000 bis 3600000), Standardwert ${SERVER_CONFIG.graceMs} wird genutzt.`);
 }
 
+let mapId: MapId = DEFAULT_MAP_ID;
+const mapRaw = process.env.MAP_ID?.trim();
+if (mapRaw) {
+  if (isMapId(mapRaw)) mapId = mapRaw;
+  else console.warn(`MAP_ID=${mapRaw} ist ungültig (city oder retro), Standardwert ${DEFAULT_MAP_ID} wird genutzt.`);
+}
+
 // Letzte Rettung: loggen und weiterlaufen, damit ein Fehler nicht alle Räume beendet
 process.on('uncaughtException', (err) => {
   console.error('Unbehandelte Ausnahme:', err);
@@ -29,7 +38,7 @@ process.on('unhandledRejection', (reason) => {
 
 let running: RunningServer | null = null;
 
-startServer({ port, allowedOrigins, roundMs, graceMs })
+startServer({ port, allowedOrigins, roundMs, graceMs, mapId })
   .then((srv) => {
     running = srv;
     console.log(`PfandRaiders server listening on :${srv.port}`);

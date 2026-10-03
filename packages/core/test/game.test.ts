@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
 import { CONFIG } from '../src/config';
 import { createGame } from '../src/game';
-import { CITY_MAP } from '../src/maps/city';
+import { CITY_MAP } from '../src/maps';
 
 describe('createGame', () => {
   it('puts players on spawn points in order and wraps around', () => {
