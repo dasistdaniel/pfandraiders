@@ -5,15 +5,16 @@ import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
 import { alertText, playerName, hintLines, resultLines, statusLines } from './text';
 
-const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
-const BAR_WIDTH = 40;
-// Statusblock belegt y 4..34, Hinweise wachsen von unten (bis 4 Zeilen); Balken und Warnung liegen dazwischen.
-const BAR_Y = 38;
-const ALERT_Y = 46;
+const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
+const BAR_WIDTH = 80;
+// Statusblock belegt y 8..68, Hinweise wachsen von unten (bis 4 Zeilen); Balken und Warnung liegen dazwischen.
+const BAR_Y = 76;
+const ALERT_Y = 92;
 
 /**
  * HUD eines Spielers. Alle Objekte hängen an der Kamera (scrollFactor 0) und liegen
- * in den Koordinaten des eigenen Viewports. Die Szene versteckt sie vor den anderen Kameras.
+ * in den Koordinaten des eigenen Viewports (Bildschirmpixel). Sie werden nur von der
+ * UI-Kamera ihres Spielers (Zoom 1) gezeichnet, nie von Weltkameras (Zoom 2) oder fremden UI-Kameras.
  */
 export class PlayerHud {
   readonly objects: Phaser.GameObjects.GameObject[];
@@ -27,28 +28,28 @@ export class PlayerHud {
   constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private readonly labels: KeyLabels,
     private readonly nameOf: (id: string) => string = playerName,
   ) {
-    const wrap = { wordWrap: { width: view.w - 8 } };
-    this.status = scene.add.text(4, 4, '', { ...FONT, ...wrap });
-    this.hint = scene.add.text(4, view.h - 4, '', { ...FONT, ...wrap }).setOrigin(0, 1);
+    const wrap = { wordWrap: { width: view.w - 16 } };
+    this.status = scene.add.text(8, 8, '', { ...FONT, ...wrap });
+    this.hint = scene.add.text(4, view.h - 8, '', { ...FONT, ...wrap }).setOrigin(0, 1);
     this.alert = scene.add
-      .text(view.w / 2, ALERT_Y, '', { ...FONT, color: '#ff5252', align: 'center', wordWrap: { width: view.w - 8 } })
+      .text(view.w / 2, ALERT_Y, '', { ...FONT, color: '#ff5252', align: 'center', wordWrap: { width: view.w - 16 } })
       .setOrigin(0.5, 0);
     this.banner = scene.add
       .text(view.w / 2, view.h / 2, '', {
         ...FONT,
-        fontSize: '10px',
+        fontSize: '20px',
         align: 'center',
         backgroundColor: '#000000cc',
       })
       .setOrigin(0.5);
     this.barBg = scene.add
-      .rectangle(view.w / 2 - BAR_WIDTH / 2, BAR_Y, BAR_WIDTH, 4, 0x000000)
+      .rectangle(view.w / 2 - BAR_WIDTH / 2, BAR_Y, BAR_WIDTH, 8, 0x000000)
       .setOrigin(0, 0);
     this.bar = scene.add
-      .rectangle(view.w / 2 - BAR_WIDTH / 2, BAR_Y, 0, 4, 0xffee58)
+      .rectangle(view.w / 2 - BAR_WIDTH / 2, BAR_Y, 0, 8, 0xffee58)
       .setOrigin(0, 0);
     const tag = scene.add
-      .text(view.w - 4, 4, name, { ...FONT, color: `#${color.toString(16).padStart(6, '0')}` })
+      .text(view.w - 8, 8, name, { ...FONT, color: `#${color.toString(16).padStart(6, '0')}` })
       .setOrigin(1, 0);
 
     this.objects = [this.status, this.hint, this.alert, this.banner, this.barBg, this.bar, tag];
@@ -74,7 +75,7 @@ export class PlayerHud {
     }
     this.barBg.setVisible(progress > 0);
     this.bar.setVisible(progress > 0);
-    this.bar.setSize(BAR_WIDTH * Math.min(progress, 1), 4);
+    this.bar.setSize(BAR_WIDTH * Math.min(progress, 1), 8);
 
     const ended = state.phase === 'ended';
     this.banner.setVisible(ended);

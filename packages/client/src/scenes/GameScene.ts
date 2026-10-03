@@ -7,7 +7,7 @@ import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
 import { PlayerHud } from '../hud';
 import { buildInput } from '../input';
-import { viewportsFor } from '../layout';
+import { viewportsFor, WORLD_ZOOM } from '../layout';
 import type { OnlineConnection } from '../online';
 import type { InputSource } from '../sources';
 import { playerName } from '../text';
@@ -27,7 +27,8 @@ const COLOR = {
   zoneAnnounced: 0xffee58,
   zoneActive: 0xff7043,
 };
-const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' };
+// Weltraum-Text: Kamerazoom 2 vergrößert ihn, daher doppelte Texturauflösung für scharfe Kanten.
+const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', resolution: WORLD_ZOOM };
 
 export class GameScene extends Phaser.Scene {
   private slots: PlayerSlot[] = [];
@@ -41,6 +42,7 @@ export class GameScene extends Phaser.Scene {
   private spotRects: Phaser.GameObjects.Rectangle[] = [];
   private npcSprites = new Map<number, Phaser.GameObjects.Rectangle>();
   private zoneRects: Phaser.GameObjects.Rectangle[] = [];
+  private uiCams: Phaser.Cameras.Scene2D.Camera[] = [];
   private zoneLabels: Phaser.GameObjects.Text[] = [];
   private restartKey!: Phaser.Input.Keyboard.Key;
   private endedForMs = 0;
@@ -139,17 +141,24 @@ export class GameScene extends Phaser.Scene {
         : this.cameras.add(v.x, v.y, v.w, v.h),
     );
     cams.forEach((cam, i) => {
+      cam.setZoom(WORLD_ZOOM);
       cam.setBounds(0, 0, state.map.cols * TILE, state.map.rows * TILE);
       cam.startFollow(this.bodies.get(this.slots[i].id)!, true, 0.15, 0.15);
     });
 
-    // Jedes HUD erscheint nur in der Kamera seines Spielers.
+    // Alles bisher Erzeugte ist Weltobjekt. Die UI-Kameras (Zoom 1, gleicher Viewport) zeigen nur HUDs.
+    const worldObjects = [...this.children.list];
+    this.uiCams = views.map((v) => this.cameras.add(v.x, v.y, v.w, v.h));
+    this.uiCams.forEach((ui) => ui.ignore(worldObjects));
+
+    // Jedes HUD erscheint nur in der UI-Kamera seines Spielers, nie in einer Weltkamera.
     const online = this.online;
     const nameOf = (id: string): string => online?.roster.find((r) => r.id === id)?.name ?? playerName(id);
     this.huds = views.map((v, i) => new PlayerHud(this, v, this.slots[i].color, nameOf(this.slots[i].id), this.sources[i].labels, nameOf));
     this.huds.forEach((hud, i) => {
-      cams.forEach((cam, j) => {
-        if (i !== j) cam.ignore(hud.objects);
+      cams.forEach((cam) => cam.ignore(hud.objects));
+      this.uiCams.forEach((ui, j) => {
+        if (i !== j) ui.ignore(hud.objects);
       });
     });
 
@@ -215,6 +224,7 @@ export class GameScene extends Phaser.Scene {
         sprite = this.add
           .rectangle(npc.x, npc.y, dog ? 9 : 8, dog ? 6 : 10, dog ? COLOR.dog : COLOR.police)
           .setDepth(4);
+        for (const ui of this.uiCams) ui.ignore(sprite); // Weltobjekt: nicht in den UI-Kameras
         this.npcSprites.set(npc.id, sprite);
       }
       sprite.setPosition(npc.x, npc.y);

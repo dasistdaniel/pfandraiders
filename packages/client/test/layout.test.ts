@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_H, GAME_W, viewportsFor } from '../src/layout';
+import { GAME_H, GAME_W, VIEW_GAP, viewportsFor } from '../src/layout';
 import type { Rect } from '../src/layout';
 
 function overlaps(a: Rect, b: Rect): boolean {
@@ -15,7 +15,7 @@ describe('viewportsFor', () => {
     const [a, b] = viewportsFor(2);
     expect(a).toMatchObject({ x: 0, y: 0, h: GAME_H });
     expect(b).toMatchObject({ y: 0, h: GAME_H });
-    expect(b.x).toBe(a.w + 2);
+    expect(b.x).toBe(a.w + VIEW_GAP);
     expect(b.x + b.w).toBe(GAME_W);
   });
 

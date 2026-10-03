@@ -6,8 +6,14 @@ export interface Rect {
 }
 
 /** Logische Spielfläche in Pixeln. Phaser skaliert sie auf das Fenster. */
-export const GAME_W = 480;
-export const GAME_H = 270;
+export const GAME_W = 960;
+export const GAME_H = 540;
+
+/** Zoom der Weltkameras: Ein Viewport zeigt so denselben Kartenausschnitt wie bei 480x270. */
+export const WORLD_ZOOM = 2;
+
+/** Abstand zwischen Splitscreen-Ansichten in Pixeln. */
+export const VIEW_GAP = 4;
 
 /**
  * Aufteilung des Bildes für 1 bis 4 Spieler. `gap` Pixel Abstand zwischen den Ansichten.
@@ -17,7 +23,7 @@ export function viewportsFor(
   n: number,
   width = GAME_W,
   height = GAME_H,
-  gap = 2,
+  gap = VIEW_GAP,
 ): Rect[] {
   if (!Number.isInteger(n) || n < 1 || n > 4) throw new Error(`unsupported player count ${n}`);
   if (n === 1) return [{ x: 0, y: 0, w: width, h: height }];
