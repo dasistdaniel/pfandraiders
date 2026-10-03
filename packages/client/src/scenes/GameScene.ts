@@ -19,6 +19,9 @@ const RESTART_DELAY_MS = 1500;
 
 /** Ein Soundsystem für die ganze Sitzung, damit der freigeschaltete AudioContext Szenenwechsel überlebt. */
 const sfx = new SoundFx();
+// Schon die erste Taste in der Lobby schaltet den Ton frei, nicht erst eine im Spiel
+window.addEventListener('keydown', () => sfx.unlock());
+window.addEventListener('pointerdown', () => sfx.unlock());
 
 const COLOR = {
   wall: 0x37474f,
@@ -175,14 +178,10 @@ export class GameScene extends Phaser.Scene {
     this.restartKey = this.input.keyboard!.addKey('R');
     this.muteKey = this.input.keyboard!.addKey('M');
     this.ownSoundIds = this.online ? [this.online.you] : 'all';
-    // Browser erlauben Audio erst nach einer Nutzergeste
+    // Tastatur und Maus schaltet der Modul-Listener frei, das Gamepad hier
     const unlock = (): void => sfx.unlock();
-    window.addEventListener('keydown', unlock);
-    window.addEventListener('pointerdown', unlock);
     this.input.gamepad?.on('down', unlock);
     this.events.once('shutdown', () => {
-      window.removeEventListener('keydown', unlock);
-      window.removeEventListener('pointerdown', unlock);
       this.input.gamepad?.off('down', unlock);
     });
   }
