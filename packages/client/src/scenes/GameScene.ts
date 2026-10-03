@@ -18,7 +18,7 @@ import { viewportsFor, WORLD_ZOOM } from '../layout';
 import type { OnlineConnection } from '../online';
 import type { InputSource } from '../sources';
 import { playerName } from '../text';
-import { ReconnectPlan } from '../reconnect';
+import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
@@ -58,6 +58,8 @@ export class GameScene extends Phaser.Scene {
   /** Nur online: läuft, solange die Verbindung weg ist und wir automatisch neu verbinden. */
   private plan: ReconnectPlan | null = null;
   private overlay: Phaser.GameObjects.Text | null = null;
+  private joinedWatch: JoinedWatch | null = null;
+  private connectingMs = 0;
   private enterKey!: Phaser.Input.Keyboard.Key;
 
   constructor() {
@@ -77,6 +79,8 @@ export class GameScene extends Phaser.Scene {
     this.endedForMs = 0;
     this.plan = null;
     this.overlay = null;
+    this.joinedWatch = null;
+    this.connectingMs = 0;
     this.padBPrev = {};
     this.prevSoundState = null;
     let state: GameState;
@@ -228,6 +232,7 @@ export class GameScene extends Phaser.Scene {
     this.input.gamepad?.on('down', unlock);
     this.events.once('shutdown', () => {
       this.input.gamepad?.off('down', unlock);
+      if (this.online) this.online.onJoined = null;
     });
   }
 
@@ -298,6 +303,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.plan = new ReconnectPlan();
+    online.onJoined = () => {
+      if (this.plan) this.joinedWatch = new JoinedWatch();
+    };
     this.overlay?.setVisible(true);
     this.updateOverlay();
   }
@@ -308,6 +316,7 @@ export class GameScene extends Phaser.Scene {
       this.online.onClosed = null;
       this.online.onStart = null;
       this.online.onError = null;
+      this.online.onJoined = null;
       this.online.close();
     }
     this.scene.start('menu', notice ? { notice } : undefined);
@@ -333,7 +342,16 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
     if (Phaser.Input.Keyboard.JustDown(this.enterKey) && plan.phase === 'asking') plan.continueTrying();
-    if (plan.update(delta) === 'attempt' && online.status === 'closed') {
+    if (this.joinedWatch?.update(delta)) {
+      // Platz ist wieder da, aber es kam kein start: die Runde ist vorbei
+      this.leaveToMenu('Die Runde ist inzwischen vorbei.');
+      return true;
+    }
+    this.connectingMs = online.status === 'connecting' ? this.connectingMs + delta : 0;
+    const stalled = this.connectingMs > CONNECT_STALL_MS;
+    if (plan.update(delta) === 'attempt' && (online.status === 'closed' || stalled)) {
+      this.connectingMs = 0;
+      this.joinedWatch = null;
       try {
         online.reopen();
       } catch {

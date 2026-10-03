@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ATTEMPT_WINDOW_MS, FATAL_CODES, ReconnectPlan, RETRY_EVERY_MS } from '../src/reconnect';
+import { ATTEMPT_WINDOW_MS, FATAL_CODES, JOINED_GRACE_MS, JoinedWatch, ReconnectPlan, RETRY_EVERY_MS } from '../src/reconnect';
 
 describe('ReconnectPlan', () => {
   it('starts trying and attempts immediately', () => {
@@ -96,5 +96,15 @@ describe('ReconnectPlan', () => {
     p.update(Number.POSITIVE_INFINITY);
     expect(p.elapsedMs).toBe(0);
     expect(p.phase).toBe('trying');
+  });
+});
+
+describe('JoinedWatch', () => {
+  it('expires after the grace time and ignores bad dt', () => {
+    const w = new JoinedWatch();
+    expect(w.update(Number.NaN)).toBe(false);
+    expect(w.update(-5)).toBe(false);
+    expect(w.update(JOINED_GRACE_MS - 1)).toBe(false);
+    expect(w.update(1)).toBe(true);
   });
 });

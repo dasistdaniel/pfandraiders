@@ -377,6 +377,25 @@ describe('OnlineConnection reopen', () => {
     expect(closed).toBe(0);
   });
 
+  it('replaces a socket that is still connecting; its stale onclose is ignored', () => {
+    const { sockets, conn } = joinedSetup();
+    conn.reopen(); // sockets[1] bleibt im Zustand connecting
+    expect(conn.status).toBe('connecting');
+    const stale = sockets[1].onclose;
+    let closed = 0;
+    conn.onClosed = () => closed++;
+    conn.reopen();
+    expect(sockets).toHaveLength(3);
+    expect(sockets[1].closed).toBe(true);
+    stale?.();
+    sockets[1].onclose?.();
+    expect(closed).toBe(0);
+    expect(conn.status).toBe('connecting');
+    sockets[2].open();
+    expect(sockets[2].sent).toEqual([{ t: 'join', room: 'ABCD', name: 'Anna', token: 'tok' }]);
+    expect(sockets[1].sent).toEqual([]);
+  });
+
   it('throws without a prior joined', () => {
     const { conn } = setup();
     expect(() => conn.reopen()).toThrow();

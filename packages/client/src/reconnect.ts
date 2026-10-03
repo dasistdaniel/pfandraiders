@@ -61,3 +61,19 @@ export class ReconnectPlan {
     return this.phase === 'trying' ? Math.max(0, ATTEMPT_WINDOW_MS - this.elapsedMs) : 0;
   }
 }
+
+/** So lange wartet der Client nach dem Wiederbeitritt (joined) auf start. */
+export const JOINED_GRACE_MS = 1500;
+/** Ein Verbindungsaufbau, der so lange dauert, gilt als hängend und wird ersetzt. */
+export const CONNECT_STALL_MS = 5000;
+
+/** Wartet nach joined auf start: bleibt es aus, ist der Platz da, die Runde aber vorbei. */
+export class JoinedWatch {
+  waitedMs = 0;
+
+  /** Liefert true, sobald die Wartezeit abgelaufen ist. */
+  update(dtMs: number): boolean {
+    this.waitedMs += Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0;
+    return this.waitedMs >= JOINED_GRACE_MS;
+  }
+}
