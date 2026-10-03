@@ -5,6 +5,7 @@ export * from './bottles';
 export * from './map';
 export * from './tiled';
 export * from './maps/city';
+export * from './maps/city-ascii';
 export * from './loot';
 export * from './game';
 export * from './movement';

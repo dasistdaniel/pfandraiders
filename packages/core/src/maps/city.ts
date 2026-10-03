@@ -1,34 +1,9 @@
 import { parseMap } from '../map';
-import type { ZoneDef } from '../types';
+import { parseTiledMap } from '../tiled';
+import cityJson from './city.tiled.json';
+import { CITY_ROWS, CITY_ZONES } from './city-ascii';
 
-/** 32 x 20 Kacheln. Legende siehe map.ts. N = Eingang für Hunde und Polizisten. */
-export const CITY_ROWS: string[] = [
-  '################################',
-  '#.............................N#',
-  '#.@@..######....b.....######.g.#',
-  '#.....######..........######...#',
-  '#..n..######..........######.m.#',
-  '#.....######..........######...#',
-  '#.................b............#',
-  '#.g...........p..........n.....#',
-  '#....................m........N#',
-  '#.####....D.....S.....####.....#',
-  '#.####........m.......####.....#',
-  '#.####................####.....#',
-  '#.................n............#',
-  '#...b.........g..........n.....#',
-  '#....................m........N#',
-  '#.@.@..........................#',
-  '#.....#####............#####...#',
-  '#.....#####.p..........#####.n.#',
-  '#N.............................#',
-  '################################',
-];
-
-/** Pixelrechtecke (Spalten 11 bis 24, je 3 Zeilen) */
-export const CITY_ZONES: ZoneDef[] = [
-  { id: 'stadium', name: 'Stadion', area: { x0: 176, y0: 96, x1: 400, y1: 144 } },
-  { id: 'concert', name: 'Konzert', area: { x0: 176, y0: 192, x1: 400, y1: 240 } },
-];
-
-export const CITY_MAP = parseMap(CITY_ROWS, CITY_ZONES);
+/** Die Stadt, geladen aus `city.tiled.json` (erzeugt aus `city-ascii.ts`, siehe scripts/asciiToTiled.ts). */
+export const CITY_MAP = parseTiledMap(cityJson);
+/** Dieselbe Karte direkt aus ASCII, nur als Referenz für den Paritätstest. */
+export const CITY_ASCII_MAP = parseMap(CITY_ROWS, CITY_ZONES);
