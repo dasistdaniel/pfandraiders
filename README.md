@@ -27,7 +27,7 @@ Aktion: Suchen (halten), Pfand abgeben (drücken am Pfandautomaten). Klauen: Kla
 
 ## Leben und Events
 
-Leben sinken durch Hunger (1 pro 8 s), Hundebisse (15) und das Umfallen kostet Flaschen, Item und 25 % des Geldes; nach 10 s steht man am Startpunkt wieder auf. Essen im Shop (1,00 €) heilt 30. Hunde beißen zu (danach lassen sie genau diesen Spieler 10 s in Ruhe) und lassen sich mit einem Leckerli (1,00 €, wird automatisch eingesetzt, teilt den Item-Slot mit dem Bolzenschneider) ablenken. Polizisten konfiszieren nach 2 s Kontrolle die Hälfte der Flaschen, wer wegläuft, entgeht ihr. Stadion und Konzert laden regelmäßig zu Events ein: 20 s vorher gibt es einen Hinweis, dann liegt dort 60 s lang dreifach so viel Pfand und Spots füllen sich schneller nach.
+Leben sinken durch Hunger (1 pro 8 s), Hundebisse (15) und das Umfallen kostet Flaschen, Item und 25 % des Geldes; nach 10 s steht man am Startpunkt wieder auf. Essen im Shop (1,00 €) heilt 30. Hunde beißen einmal zu, setzen sich danach 8 s hin (beißen dabei niemanden) und trotten dann zum nächsten Eingang der Karte, wo sie verschwinden; mit einem Leckerli (1,00 €, wird automatisch eingesetzt, teilt den Item-Slot mit dem Bolzenschneider) lassen sie sich ablenken. Polizisten konfiszieren nach 2 s Kontrolle die Hälfte der Flaschen und gehen danach ebenfalls zum nächsten Eingang, wer wegläuft, entgeht der Kontrolle. Ohne Biss oder Kontrolle verlieren sie nach ihrer Zeit (Hund 30 s, Polizist 20 s) ebenso das Interesse und gehen (Hunde setzen sich vorher noch). Stadion und Konzert laden regelmäßig zu Events ein: 20 s vorher gibt es einen Hinweis, dann liegt dort 60 s lang dreifach so viel Pfand und Spots füllen sich schneller nach.
 
 ## Karten
 

@@ -51,7 +51,7 @@ export const OFFICER_ANIMS = {
   baton: anim(OFFICER_SHEET_COLS, 8, 7, 120),
 } as const satisfies Record<string, NpcAnim>;
 
-/** So lange nach einem Biss (Beginn der Beißpause) zeigt der Hund den Ausfall: 4 Bilder zu 100 ms. */
+/** So lange nach einem Biss (Beginn der Biss-Pause) zeigt der Hund den Ausfall: 4 Bilder zu 100 ms. */
 export const ATTACK_WINDOW_MS = 400;
 
 export const DOG_COATS = ['white', 'black', 'brown'] as const;
@@ -64,15 +64,22 @@ export function dogCoat(npcId: number): DogCoat {
   return DOG_COATS[((i % n) + n) % n];
 }
 
+/**
+ * Stimmung vor Bewegung, damit ein sitzender Hund nicht durch Ruckeln der Interpolation losrennt:
+ * Biss, dann Gehen zum Eingang (walk), Sitzen nach dem Biss (wag), Jagen (run), Ablenkung (wag), sonst Sitzen.
+ */
 export function dogAnim(npc: Npc, moving: boolean): NpcAnim {
   if (npc.cooldownMs > 0 && npc.cooldownMs > CONFIG.npc.dog.biteCooldownMs - ATTACK_WINDOW_MS) return DOG_ANIMS.attack;
+  if (npc.mood === 'leaving') return DOG_ANIMS.walk;
+  if (npc.mood === 'idle') return DOG_ANIMS.wag;
   if (moving) return npc.targetId !== null ? DOG_ANIMS.run : DOG_ANIMS.walk;
-  if (npc.distractedMs > 0 || npc.restMs > 0) return DOG_ANIMS.wag;
+  if (npc.distractedMs > 0) return DOG_ANIMS.wag;
   return DOG_ANIMS.idle;
 }
 
 export function policeAnim(npc: Npc, moving: boolean): NpcAnim {
   if (npc.checkMs > 0) return OFFICER_ANIMS.baton;
+  if (npc.mood === 'leaving') return OFFICER_ANIMS.walk;
   if (moving) return npc.targetId !== null ? OFFICER_ANIMS.run : OFFICER_ANIMS.walk;
   return OFFICER_ANIMS.idle;
 }

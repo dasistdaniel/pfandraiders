@@ -42,19 +42,28 @@ function pickTarget(
   return best;
 }
 
+/** Hund setzt sich (verliert das Interesse), Polizei geht direkt. */
+function loseInterest(npc: Npc): void {
+  npc.targetId = null;
+  npc.checkMs = 0;
+  if (npc.kind === 'dog') {
+    npc.mood = 'idle';
+    npc.moodMs = CONFIG.npc.dog.sitMs;
+  } else {
+    npc.mood = 'leaving';
+    npc.moodMs = 0;
+  }
+}
+
 function updateDog(state: GameState, npc: Npc, dtMs: number): void {
   const cfg = CONFIG.npc.dog;
   npc.cooldownMs = Math.max(0, npc.cooldownMs - dtMs);
-  if (npc.restMs > 0) {
-    npc.restMs = Math.max(0, npc.restMs - dtMs);
-    if (npc.restMs === 0) npc.restId = null;
-  }
   if (npc.distractedMs > 0) {
     npc.distractedMs = Math.max(0, npc.distractedMs - dtMs);
     return;
   }
   // Wer Schutz hat (nach Respawn oder Diebstahl), wird vom Hund in Ruhe gelassen.
-  const target = pickTarget(state, npc, cfg.senseRadius, (p) => p.shieldMs === 0 && p.id !== npc.restId);
+  const target = pickTarget(state, npc, cfg.senseRadius, (p) => p.shieldMs === 0);
   if (!target) return;
   if (distance(npc, target) > cfg.biteRadius) {
     moveToward(state, npc, target, cfg.speed, dtMs);
@@ -67,8 +76,7 @@ function updateDog(state: GameState, npc: Npc, dtMs: number): void {
     npc.distractedMs = cfg.distractedMs;
   } else {
     damage(target, cfg.biteDamage);
-    npc.restId = target.id; // nach dem Biss Ruhe vor genau diesem Spieler
-    npc.restMs = cfg.biteRestMs;
+    loseInterest(npc); // ein Biss reicht: Hund setzt sich und geht danach
   }
 }
 
@@ -90,12 +98,40 @@ function updatePolice(state: GameState, npc: Npc, dtMs: number): void {
   if (npc.checkMs >= cfg.checkMs) {
     const count = Math.ceil(totalBottles(target.bottles) * cfg.fraction);
     transferBottles(target.bottles, emptyBottles(), count); // beschlagnahmt: verschwindet
-    npc.lifeMs = 0;
+    loseInterest(npc);
   }
 }
 
+/** Nächster Eingang (Luftlinie, bei Gleichstand der erste), oder null, wenn die Karte keinen hat. */
+function nearestEntrance(state: GameState, npc: Npc): Point | null {
+  let best: Point | null = null;
+  let bestDist = Infinity;
+  for (const e of state.map.npcSpawns) {
+    const d = distance(npc, e);
+    if (d < bestDist) {
+      best = e;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/** Geht zum nächsten Eingang; true, sobald er angekommen ist oder zu lange unterwegs war (verschwindet). */
+function updateLeaving(state: GameState, npc: Npc, dtMs: number): boolean {
+  npc.moodMs += dtMs;
+  const exit = nearestEntrance(state, npc);
+  if (exit) {
+    const speed = npc.kind === 'dog' ? CONFIG.npc.dog.speed * 0.6 : CONFIG.npc.police.speed;
+    moveToward(state, npc, exit, speed, dtMs);
+    if (distance(npc, exit) <= CONFIG.npc.leaveArriveRadius) return true;
+  }
+  return npc.moodMs >= CONFIG.npc.leaveMs;
+}
+
 function trySpawn(state: GameState): void {
-  if (state.npcs.length >= CONFIG.npc.maxCount || state.map.npcSpawns.length === 0) return;
+  if (state.map.npcSpawns.length === 0 || state.npcs.length >= CONFIG.npc.maxTotal) return;
+  const active = state.npcs.filter((n) => n.mood === 'active').length;
+  if (active >= CONFIG.npc.maxCount) return;
   const kind: NpcKind = nextRandom(state) < CONFIG.npc.dogChance ? 'dog' : 'police';
   const at = state.map.npcSpawns[randInt(state, 0, state.map.npcSpawns.length - 1)];
   state.npcs.push({
@@ -104,11 +140,11 @@ function trySpawn(state: GameState): void {
     x: at.x,
     y: at.y,
     lifeMs: kind === 'dog' ? CONFIG.npc.dog.lifeMs : CONFIG.npc.police.lifeMs,
+    mood: 'active',
+    moodMs: 0,
     targetId: null,
     cooldownMs: 0,
     distractedMs: 0,
-    restId: null,
-    restMs: 0,
     checkMs: 0,
   });
 }
@@ -120,16 +156,37 @@ export function updateNpcs(state: GameState, dtMs: number): void {
     state.nextNpcMs = randInt(state, ...CONFIG.npc.spawnEveryMs);
     trySpawn(state);
   }
+  const gone = new Set<Npc>();
   for (const npc of state.npcs) {
-    npc.lifeMs -= dtMs;
-    if (npc.lifeMs <= 0) continue;
-    if (npc.kind === 'dog') updateDog(state, npc, dtMs);
-    else updatePolice(state, npc, dtMs);
+    if (npc.mood === 'active') {
+      npc.lifeMs -= dtMs;
+      if (npc.lifeMs <= 0) {
+        loseInterest(npc);
+        continue;
+      }
+      if (npc.kind === 'dog') updateDog(state, npc, dtMs);
+      else updatePolice(state, npc, dtMs);
+      continue;
+    }
+    // Biss-Pause und Ablenkung laufen auch beim Sitzen und Gehen ab (sonst hinge die Animation im Client).
+    npc.cooldownMs = Math.max(0, npc.cooldownMs - dtMs);
+    npc.distractedMs = Math.max(0, npc.distractedMs - dtMs);
+    if (npc.mood === 'idle') {
+      npc.moodMs -= dtMs;
+      if (npc.moodMs <= 0) {
+        npc.mood = 'leaving';
+        npc.moodMs = 0;
+      }
+    } else if (updateLeaving(state, npc, dtMs)) {
+      gone.add(npc);
+    }
   }
-  state.npcs = state.npcs.filter((n) => n.lifeMs > 0);
+  if (gone.size > 0) state.npcs = state.npcs.filter((n) => !gone.has(n));
 }
 
 /** Läuft gerade eine Polizeikontrolle gegen diesen Spieler? Für die Warnung im Client. */
 export function isBeingChecked(state: GameState, playerId: string): boolean {
-  return state.npcs.some((n) => n.kind === 'police' && n.targetId === playerId && n.checkMs > 0);
+  return state.npcs.some(
+    (n) => n.kind === 'police' && n.mood === 'active' && n.targetId === playerId && n.checkMs > 0,
+  );
 }

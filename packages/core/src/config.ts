@@ -65,7 +65,14 @@ export const CONFIG = {
     spawnShieldMs: 3000,
   },
   npc: {
+    /** Höchstzahl aktiver NPCs (sitzende und gehende zählen nicht) */
     maxCount: 3,
+    /** Harte Obergrenze aller NPCs inklusive sitzender und gehender */
+    maxTotal: 8,
+    /** Längstens so lange geht ein NPC zum Eingang, danach verschwindet er einfach */
+    leaveMs: 15000,
+    /** So nah am Eingang gilt er als angekommen (px) */
+    leaveArriveRadius: 10,
     firstSpawnMs: 15000,
     spawnEveryMs: [20000, 40000] as Range,
     dogChance: 0.6,
@@ -77,8 +84,8 @@ export const CONFIG = {
       biteDamage: 15,
       biteCooldownMs: 1500,
       distractedMs: 8000,
-      /** Nach einem Biss lässt der Hund genau diesen Spieler so lange in Ruhe */
-      biteRestMs: 10000,
+      /** Nach einem Biss (oder am Ende seiner Zeit) sitzt der Hund so lange, dann geht er */
+      sitMs: 8000,
     },
     police: {
       speed: 55,

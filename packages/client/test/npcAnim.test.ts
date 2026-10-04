@@ -29,11 +29,11 @@ function npc(over: Partial<Npc> = {}): Npc {
     x: 0,
     y: 0,
     lifeMs: 1000,
+    mood: 'active',
+    moodMs: 0,
     targetId: null,
     cooldownMs: 0,
     distractedMs: 0,
-    restId: null,
-    restMs: 0,
     checkMs: 0,
     ...over,
   };
@@ -110,18 +110,23 @@ describe('dogAnim', () => {
     expect(dogAnim(npc({ cooldownMs: 0 }), false)).not.toBe(DOG_ANIMS.attack);
   });
 
-  it('the bite wins over the rest and distraction that start with it', () => {
-    expect(dogAnim(npc({ cooldownMs: BITE, restMs: 10000 }), false)).toBe(DOG_ANIMS.attack);
+  it('the bite wins over the sitting and distraction that start with it', () => {
+    expect(dogAnim(npc({ cooldownMs: BITE, mood: 'idle', moodMs: 8000 }), false)).toBe(DOG_ANIMS.attack);
     expect(dogAnim(npc({ cooldownMs: BITE, distractedMs: 8000 }), false)).toBe(DOG_ANIMS.attack);
   });
 
-  it('wags its tail while resting after a bite or distracted by a treat', () => {
-    expect(dogAnim(npc({ restMs: 5000 }), false)).toBe(DOG_ANIMS.wag);
+  it('wags its tail while sitting after a bite or distracted by a treat', () => {
+    expect(dogAnim(npc({ mood: 'idle', moodMs: 5000 }), false)).toBe(DOG_ANIMS.wag);
     expect(dogAnim(npc({ distractedMs: 5000 }), false)).toBe(DOG_ANIMS.wag);
   });
 
-  it('moving wins over wagging (resting dog chasing another player)', () => {
-    expect(dogAnim(npc({ restMs: 5000, targetId: 'p2' }), true)).toBe(DOG_ANIMS.run);
+  it('a sitting dog keeps sitting even if interpolation jitter reports movement', () => {
+    expect(dogAnim(npc({ mood: 'idle', moodMs: 5000 }), true)).toBe(DOG_ANIMS.wag);
+  });
+
+  it('walks (not runs) while leaving, moving or not', () => {
+    expect(dogAnim(npc({ mood: 'leaving' }), true)).toBe(DOG_ANIMS.walk);
+    expect(dogAnim(npc({ mood: 'leaving' }), false)).toBe(DOG_ANIMS.walk);
   });
 });
 
@@ -133,6 +138,11 @@ describe('policeAnim', () => {
     expect(policeAnim(cop(), true)).toBe(OFFICER_ANIMS.walk);
     expect(policeAnim(cop({ targetId: 'p1' }), true)).toBe(OFFICER_ANIMS.run);
     expect(policeAnim(cop({ targetId: 'p1' }), false)).toBe(OFFICER_ANIMS.idle);
+  });
+
+  it('walks while leaving', () => {
+    expect(policeAnim(cop({ mood: 'leaving' }), true)).toBe(OFFICER_ANIMS.walk);
+    expect(policeAnim(cop({ mood: 'leaving' }), false)).toBe(OFFICER_ANIMS.walk);
   });
 
   it('swings the baton during a check', () => {
