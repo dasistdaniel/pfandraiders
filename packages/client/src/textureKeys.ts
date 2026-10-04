@@ -15,5 +15,10 @@ export const playerTexture = (color: number, frame: PlayerFrame): string =>
   `player:${color.toString(16).padStart(6, '0')}:${frame}`;
 /** Geladener Figurenbogen (Spritesheet 16x17) aus assets/characters, z. B. char:m01. */
 export const charTexture = (character: string): string => `char:${character}`;
+/** Geladene NPC-Bögen aus assets/npc (Dateiname ohne .png). */
+export const NPC_SHEET_NAMES = ['dog-white', 'dog-black', 'dog-brown', 'officer'] as const;
+export type NpcSheetName = (typeof NPC_SHEET_NAMES)[number];
+/** Geladener NPC-Bogen (Spritesheet, Hund 16x16, Polizist 32x32), z. B. npc:dog-white. */
+export const npcSheetTexture = (name: NpcSheetName): string => `npc:${name}`;
 export const dogTexture = (f: 'a' | 'b'): string => `dog:${f}`;
 export const policeTexture = (f: 'a' | 'b'): string => `police:${f}`;

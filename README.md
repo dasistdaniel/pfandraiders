@@ -27,7 +27,7 @@ Aktion: Suchen (halten), Pfand abgeben (drücken am Pfandautomaten). Klauen: Kla
 
 ## Leben und Events
 
-Leben sinken durch Hunger (1 pro 8 s), Hundebisse (15) und das Umfallen kostet Flaschen, Item und 25 % des Geldes; nach 10 s steht man am Startpunkt wieder auf. Essen im Shop (1,00 €) heilt 30. Hunde beißen zu (danach lassen sie genau diesen Spieler 10 s in Ruhe) und lassen sich mit einem Leckerli (1,00 €, wird automatisch eingesetzt, teilt den Item-Slot mit dem Bolzenschneider) ablenken. Polizisten konfiszieren nach 2 s Kontrolle die Hälfte der Flaschen, wer wegläuft, entgeht ihr. Stadion und Konzert laden regelmäßig zu Events ein: 20 s vorher gibt es einen Hinweis, dann liegt dort 60 s lang dreifach so viel Pfand und Spots füllen sich schneller nach.
+Leben sinken durch Hunger (1 pro 8 s), Hundebisse (15) und das Umfallen kostet Flaschen, Item und 25 % des Geldes; nach 10 s steht man am Startpunkt wieder auf. Essen im Shop (1,00 €) heilt 30. Hunde beißen einmal zu, setzen sich danach 8 s hin (beißen dabei niemanden) und trotten dann zum nächsten Eingang der Karte, wo sie verschwinden; mit einem Leckerli (1,00 €, wird automatisch eingesetzt, teilt den Item-Slot mit dem Bolzenschneider) lassen sie sich ablenken. Polizisten konfiszieren nach 2 s Kontrolle die Hälfte der Flaschen und gehen danach ebenfalls zum nächsten Eingang, wer wegläuft, entgeht der Kontrolle. Ohne Biss oder Kontrolle verlieren sie nach ihrer Zeit (Hund 30 s, Polizist 20 s) ebenso das Interesse und gehen (Hunde setzen sich vorher noch). Stadion und Konzert laden regelmäßig zu Events ein: 20 s vorher gibt es einen Hinweis, dann liegt dort 60 s lang dreifach so viel Pfand und Spots füllen sich schneller nach.
 
 ## Karten
 
@@ -43,9 +43,11 @@ Bäume und Laternen sind weiche Hindernisse (Ebene `soft`): sie blockieren nur e
 
 ## Grafik
 
-Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat, Shop) nutzt die freien Kacheln "Roguelike Modern City" von [Kenney](https://kenney.nl) (CC0, Lizenzdatei unter `packages/client/src/assets/kenney/`). Hunde und Polizisten sind selbst gezeichnet (`packages/client/src/sprites/`). Welche Zelle des Kachelbogens für welches Bild genutzt wird, steht als reine Tabelle in `packages/client/src/kenneyMap.ts`. Fehlt der Bogen, fällt das Spiel auf die selbst gezeichneten Muster zurück.
+Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat, Shop) nutzt die freien Kacheln "Roguelike Modern City" von [Kenney](https://kenney.nl) (CC0, Lizenzdatei unter `packages/client/src/assets/kenney/`). Welche Zelle des Kachelbogens für welches Bild genutzt wird, steht als reine Tabelle in `packages/client/src/kenneyMap.ts`. Fehlt der Bogen, fällt das Spiel auf die selbst gezeichneten Muster zurück.
 
 Die Spielerfiguren stammen aus dem [Tiny Characters Set](https://opengameart.org/content/tiny-characters-set) von Fleurman (CC0), das auf den [RPG character sprites](https://opengameart.org/content/rpg-character-sprites) von GrafxKid (CC0) beruht (Dateien und `CREDITS.txt` unter `packages/client/src/assets/characters/`). Jeder Spieler bekommt nach seiner Position eine von acht festen Figuren (`packages/client/src/playerChars.ts`) und einen Ring in seiner Spielerfarbe unter den Füßen. Fehlt ein Figurenbogen, zeichnet das Spiel für diesen Spieler die selbst gezeichnete Figur.
+
+Hunde und Polizisten stammen aus den [Dog Spritesheets](https://opengameart.org/content/dog-spritesheets) von Jason of GDN (CC0, drei Fellfarben) und dem [Officer Character](https://opengameart.org/content/officer-character) von Chasersgaming (CC0); Dateien und `CREDITS.txt` liegen unter `packages/client/src/assets/npc/`, welche Zeile des Bogens wann läuft, steht in `packages/client/src/npcAnim.ts`. Fehlt ein Bogen, nutzt das Spiel den selbst gezeichneten Hund bzw. Polizisten (`packages/client/src/sprites/`).
 
 ### Credits
 
@@ -54,8 +56,10 @@ Dieselbe Liste zeigt das Spiel im Hauptmenü unter "Credits" (Daten in `packages
 - [Roguelike Modern City](https://kenney.nl/assets/roguelike-modern-city) – Kenney, CC0 (Kacheln der Spielwelt)
 - [Tiny Characters Set](https://opengameart.org/content/tiny-characters-set) – Fleurman, CC0 (Spielerfiguren)
 - [RPG character sprites](https://opengameart.org/content/rpg-character-sprites) – GrafxKid, CC0 (Grundlage des Tiny Characters Set)
+- [Dog Spritesheets](https://opengameart.org/content/dog-spritesheets) – Jason of GDN, CC0 (Hunde)
+- [Officer Character](https://opengameart.org/content/officer-character) – Chasersgaming, CC0 (Polizist)
 - [Phaser 3](https://phaser.io) – Photon Storm, MIT (Spiel-Framework)
-- [PfandRaiders](https://github.com/dasistdaniel/pfandraiders) – dasistdaniel (Sound, Musik, Hund, Polizist und Karten selbst erzeugt)
+- [PfandRaiders](https://github.com/dasistdaniel/pfandraiders) – dasistdaniel (Sound, Musik und Karten selbst erzeugt)
 
 ## Testhilfen per URL
 

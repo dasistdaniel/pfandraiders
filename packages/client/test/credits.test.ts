@@ -12,6 +12,8 @@ describe('CREDITS', () => {
       'Roguelike Modern City',
       'Tiny Characters Set',
       'RPG character sprites',
+      'Dog Spritesheets',
+      'Officer Character',
       'Phaser 3',
       'PfandRaiders',
     ]);
@@ -37,6 +39,17 @@ describe('CREDITS', () => {
     const text = asset('characters/CREDITS.txt');
     for (const t of ['Tiny Characters Set', 'RPG character sprites']) {
       const c = byTitle(t);
+      expect(text).toContain(c.url);
+      expect(text).toContain(c.author);
+      expect(text).toContain(c.license);
+    }
+  });
+
+  it('matches the credits file of the npc sheets', () => {
+    const text = asset('npc/CREDITS.txt');
+    for (const t of ['Dog Spritesheets', 'Officer Character']) {
+      const c = byTitle(t);
+      expect(text).toContain(c.title);
       expect(text).toContain(c.url);
       expect(text).toContain(c.author);
       expect(text).toContain(c.license);

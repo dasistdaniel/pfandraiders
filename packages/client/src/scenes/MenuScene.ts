@@ -51,9 +51,14 @@ const PAGE_ITEMS: Record<Page, MenuItem[]> = { main: MAIN_ITEMS, settings: SETTI
 
 const HINT_DEFAULT = 'Pfeile/W S: wählen   Enter/E/Leertaste: bestätigen   Gamepad: Steuerkreuz, A, B';
 const HINT_CREDITS = 'Pfeile/W S: wählen   Enter öffnet den Link   Esc zurück   Gamepad: A, B';
-/** Credits-Seite: erste Zeile, Abstand je Eintrag (Hauptzeile 16 px, Link 12 px darunter). */
-const CREDITS_TOP = 170;
-const CREDITS_ROW_H = 56;
+/**
+ * Credits-Seite: erste Zeile (unter dem Hinweistext bei y 140), Abstand je Eintrag (Hauptzeile 16 px, Link 12 px
+ * 22 px darunter, zusammen etwa 36 px). Der Abstand schrumpft mit der Zahl der Zeilen, damit die letzte (Zurück)
+ * bei spätestens CREDITS_LAST_Y steht, über der Hilfezeile (GAME_H - 24); höchstens 56 px.
+ */
+const CREDITS_TOP = 160;
+const CREDITS_LAST_Y = 470;
+const CREDITS_ROW_H = Math.min(56, Math.floor((CREDITS_LAST_Y - CREDITS_TOP) / Math.max(1, CREDIT_ITEMS.length - 1)));
 const CREDITS_WRAP = GAME_W - 64;
 
 export class MenuScene extends Phaser.Scene {

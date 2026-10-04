@@ -5,7 +5,7 @@ import { createGame } from '../src/game';
 import { damage } from '../src/health';
 import { parseMap } from '../src/map';
 import { isBeingChecked } from '../src/npc';
-import type { GameState, NpcKind } from '../src/types';
+import type { GameState, Npc, NpcKind, Point } from '../src/types';
 import { input, newGame, openRows, runFor, runSteps, SEARCH_ROWS, teleport } from './helpers';
 
 function quiet(s: GameState): GameState {
@@ -13,23 +13,42 @@ function quiet(s: GameState): GameState {
   return s;
 }
 
-function addNpc(s: GameState, kind: NpcKind, x: number, y: number) {
-  const npc = {
+function addNpc(s: GameState, kind: NpcKind, x: number, y: number): Npc {
+  const npc: Npc = {
     id: s.nextNpcId++,
     kind,
     x,
     y,
     lifeMs: 30000,
-    targetId: null as string | null,
+    mood: 'active',
+    moodMs: 0,
+    targetId: null,
     cooldownMs: 0,
     distractedMs: 0,
-    restId: null as string | null,
-    restMs: 0,
     checkMs: 0,
   };
   s.npcs.push(npc);
   return npc;
 }
+
+function leaving(npc: Npc): Npc {
+  npc.mood = 'leaving';
+  npc.moodMs = 0;
+  return npc;
+}
+
+function dist(a: Point, b: Point): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** Offene Karte 30x5 mit zwei Eingängen: nah bei (168,56), fern bei (456,24). Spieler bei (24,24). */
+const TWO_ENTRANCES = (() => {
+  const rows = openRows(30, 5).map((r) => r.split(''));
+  rows[3][10] = 'N';
+  rows[1][28] = 'N';
+  return rows.map((r) => r.join(''));
+})();
+const NEAR_ENTRANCE = { x: 10 * 16 + 8, y: 3 * 16 + 8 };
 
 describe('dog', () => {
   it('chases the nearest conscious player at dog speed', () => {
@@ -49,78 +68,57 @@ describe('dog', () => {
     expect(dog.targetId).toBeNull();
   });
 
-  it('bites in range and then leaves that player alone (no second bite after the old cooldown)', () => {
-    const s = quiet(newGame(openRows(30, 5)));
-    const dog = addNpc(s, 'dog', 30, 24);
-    runSteps(s, {}, 3, 20);
-    expect(s.players.p1.health).toBeCloseTo(CONFIG.health.max - CONFIG.npc.dog.biteDamage, 1);
-    expect(dog.restId).toBe('p1');
-    expect(dog.restMs).toBeGreaterThan(CONFIG.npc.dog.biteRestMs - 100);
-    runFor(s, {}, 1700); // alte Pause vorbei, Beißpause nicht
-    expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - CONFIG.npc.dog.biteDamage - 1);
-  });
-
-  it('does not bite or approach the bitten player for the whole rest, then bites again', () => {
+  it('bites once, then sits for sitMs without biting, moving or despawning', () => {
     const s = quiet(newGame(openRows(30, 5)));
     const dog = addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
     const afterBite = s.players.p1.health;
-    runFor(s, {}, 9900 - 60);
+    expect(afterBite).toBeCloseTo(CONFIG.health.max - CONFIG.npc.dog.biteDamage, 1);
+    expect(dog.mood).toBe('idle');
+    expect(dog.moodMs).toBeGreaterThan(CONFIG.npc.dog.sitMs - 100);
+    expect(dog.targetId).toBeNull();
+    const at = { x: dog.x, y: dog.y };
+    runFor(s, {}, CONFIG.npc.dog.sitMs - 200); // Spieler steht direkt daneben
     expect(s.players.p1.health).toBeGreaterThan(afterBite - 2); // höchstens Hunger, kein Biss
-    expect(s.players.p1.health).toBeLessThan(afterBite + 1);
+    expect(s.npcs).toHaveLength(1);
+    expect(dog.mood).toBe('idle');
+    expect({ x: dog.x, y: dog.y }).toEqual(at);
     expect(dog.targetId).toBeNull();
-    runFor(s, {}, 400); // Beißpause (10 s) vorbei
-    expect(s.players.p1.health).toBeLessThan(afterBite - CONFIG.npc.dog.biteDamage + 2);
-    expect(dog.restId).toBe('p1'); // neuer Biss, neue Pause
+    runFor(s, {}, 400);
+    expect(dog.mood).toBe('leaving');
   });
 
-  it('does not move toward the rested player', () => {
-    const s = quiet(newGame(openRows(30, 5)));
-    const dog = addNpc(s, 'dog', 30, 24);
-    runSteps(s, {}, 3, 20);
-    teleport(s, 'p1', { x: 120, y: 24 }); // im Sinnesradius, aber außer Reichweite
-    const x = dog.x;
-    runSteps(s, {}, 25, 20);
-    expect(dog.x).toBe(x);
-    expect(dog.targetId).toBeNull();
-    expect(dog.restId).toBe('p1');
-  });
-
-  it('keeps chasing and biting a second player during the first player rest', () => {
+  it('does not chase a second player while sitting', () => {
     const s = quiet(newGame(openRows(30, 5), ['p1', 'p2']));
     const dog = addNpc(s, 'dog', 30, 24);
     teleport(s, 'p2', { x: 130, y: 24 });
     runSteps(s, {}, 3, 20); // p1 gebissen
-    expect(dog.restId).toBe('p1');
-    const hp1 = s.players.p1.health;
-    runFor(s, {}, 1000); // p1 bleibt in Ruhe, der Hund läuft zu p2
-    expect(dog.targetId).toBe('p2');
-    expect(s.players.p1.health).toBeGreaterThan(hp1 - 2);
-    runFor(s, {}, 1000);
-    expect(s.players.p2.health).toBeLessThan(CONFIG.health.max - CONFIG.npc.dog.biteDamage + 2);
+    expect(dog.mood).toBe('idle');
+    const x = dog.x;
+    runFor(s, {}, 2000);
+    expect(dog.x).toBe(x);
+    expect(dog.targetId).toBeNull();
+    expect(s.players.p2.health).toBeGreaterThan(CONFIG.health.max - 2);
   });
 
-  it('does not start a rest when a treat distracts the dog', () => {
-    const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.item = 'dog_treat';
-    const dog = addNpc(s, 'dog', 30, 24);
-    runSteps(s, {}, 3, 20);
-    expect(dog.restId).toBeNull();
-    expect(dog.restMs).toBe(0);
-    expect(dog.distractedMs).toBeGreaterThan(0);
-  });
-
-  it('keeps the rest while the player is unconscious and after the respawn', () => {
+  it('keeps sitting while the bitten player is unconscious', () => {
     const s = quiet(newGame(openRows(30, 5)));
     const dog = addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
     s.players.p1.health = 1;
     damage(s.players.p1, 5); // umfallen
-    expect(s.players.p1.unconsciousMs).toBeGreaterThan(0);
     runFor(s, {}, 1000);
-    expect(dog.restId).toBe('p1');
-    expect(dog.restMs).toBeLessThan(CONFIG.npc.dog.biteRestMs - 900);
-    expect(dog.restMs).toBeGreaterThan(0);
+    expect(dog.mood).toBe('idle');
+    expect(dog.moodMs).toBeLessThan(CONFIG.npc.dog.sitMs - 900);
+  });
+
+  it('a treat distracts the dog without making it sit', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    s.players.p1.item = 'dog_treat';
+    const dog = addNpc(s, 'dog', 30, 24);
+    runSteps(s, {}, 3, 20);
+    expect(dog.mood).toBe('active');
+    expect(dog.distractedMs).toBeGreaterThan(0);
   });
 
   it('interrupts the search of the bitten player', () => {
@@ -144,6 +142,15 @@ describe('dog', () => {
     expect(dog.distractedMs).toBeGreaterThan(CONFIG.npc.dog.distractedMs - 100);
     runFor(s, {}, 3000); // beschäftigt: kein Biss
     expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
+  });
+
+  it('bites after the treat distraction is over and then sits', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    s.players.p1.item = 'dog_treat';
+    const dog = addNpc(s, 'dog', 30, 24);
+    runFor(s, {}, CONFIG.npc.dog.distractedMs + 200);
+    expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
+    expect(dog.mood).toBe('idle');
   });
 
   it('does not use a bolt cutters item up on a bite', () => {
@@ -175,18 +182,82 @@ describe('dog', () => {
     expect(s.players.p1.health).toBe(0);
   });
 
-  it('despawns when its lifetime runs out', () => {
+  it('sits instead of despawning when its lifetime runs out', () => {
     const s = quiet(newGame(openRows(30, 5)));
     const dog = addNpc(s, 'dog', 300, 24);
     dog.lifeMs = 100;
     runSteps(s, {}, 6, 20);
+    expect(s.npcs).toHaveLength(1);
+    expect(dog.mood).toBe('idle');
+    expect(dog.moodMs).toBeGreaterThan(CONFIG.npc.dog.sitMs - 100);
+  });
+});
+
+describe('leaving npcs', () => {
+  it('a leaving dog walks at reduced speed straight to the nearest entrance and despawns there', () => {
+    const s = quiet(newGame(TWO_ENTRANCES));
+    const dog = leaving(addNpc(s, 'dog', 100, 24));
+    let d = dist(dog, NEAR_ENTRANCE);
+    runSteps(s, {}, 1, 20);
+    expect(d - dist(dog, NEAR_ENTRANCE)).toBeCloseTo((CONFIG.npc.dog.speed * 0.6 * 20) / 1000, 3);
+    d = dist(dog, NEAR_ENTRANCE);
+    let steps = 0;
+    while (s.npcs.length > 0 && steps < 500) {
+      runSteps(s, {}, 1, 20);
+      steps++;
+      if (s.npcs.length === 0) break;
+      const now = dist(dog, NEAR_ENTRANCE);
+      expect(now).toBeLessThan(d);
+      expect(dog.targetId).toBeNull();
+      d = now;
+    }
     expect(s.npcs).toHaveLength(0);
+    expect(d).toBeLessThanOrEqual(CONFIG.npc.leaveArriveRadius + 1);
+    expect(steps * 20).toBeLessThan(CONFIG.npc.leaveMs);
+  });
+
+  it('a leaving dog never bites or targets an adjacent player', () => {
+    const s = quiet(newGame(TWO_ENTRANCES));
+    const dog = leaving(addNpc(s, 'dog', 26, 24));
+    runFor(s, {}, 500);
+    expect(dog.targetId).toBeNull();
+    expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
+  });
+
+  it('despawns after leaveMs when the way to the entrance is blocked', () => {
+    const s = quiet(newGame(['#########', '#@.#..N.#', '#########']));
+    leaving(addNpc(s, 'dog', 40, 24));
+    runFor(s, {}, CONFIG.npc.leaveMs - 100);
+    expect(s.npcs).toHaveLength(1);
+    runFor(s, {}, 200);
+    expect(s.npcs).toHaveLength(0);
+  });
+
+  it('despawns after leaveMs on a map without entrances', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const dog = leaving(addNpc(s, 'dog', 200, 40));
+    runFor(s, {}, CONFIG.npc.leaveMs - 100);
+    expect(s.npcs).toHaveLength(1);
+    expect(dog.x).toBe(200);
+    runFor(s, {}, 200);
+    expect(s.npcs).toHaveLength(0);
+  });
+
+  it('a leaving officer ignores players with bottles and walks at police speed', () => {
+    const s = quiet(newGame(TWO_ENTRANCES));
+    s.players.p1.bottles = { plastic: 4, glass: 0, crate: 0 };
+    const cop = leaving(addNpc(s, 'police', 100, 24));
+    const d = dist(cop, NEAR_ENTRANCE);
+    runSteps(s, {}, 1, 20);
+    expect(d - dist(cop, NEAR_ENTRANCE)).toBeCloseTo((CONFIG.npc.police.speed * 20) / 1000, 3);
+    expect(cop.targetId).toBeNull();
+    expect(isBeingChecked(s, 'p1')).toBe(false);
   });
 });
 
 describe('police', () => {
-  function carrying() {
-    const s = quiet(newGame(openRows(30, 5)));
+  function carrying(rows = openRows(30, 5)) {
+    const s = quiet(newGame(rows));
     s.players.p1.containerLevel = 1;
     s.players.p1.bottles = { plastic: 4, glass: 0, crate: 0 };
     return s;
@@ -207,15 +278,48 @@ describe('police', () => {
     expect(cop.targetId).toBeNull();
   });
 
-  it('confiscates half the bottles (rounded up) after the full check and leaves', () => {
+  it('confiscates half the bottles (rounded up) after the full check and starts leaving', () => {
     const s = carrying();
-    addNpc(s, 'police', 40, 24); // 16 px entfernt, innerhalb des Kontrollradius
+    const cop = addNpc(s, 'police', 40, 24); // 16 px entfernt, innerhalb des Kontrollradius
     runSteps(s, {}, 50, 20);
     expect(isBeingChecked(s, 'p1')).toBe(true);
     expect(totalBottles(s.players.p1.bottles)).toBe(4);
     runFor(s, {}, CONFIG.npc.police.checkMs);
     expect(totalBottles(s.players.p1.bottles)).toBe(2);
+    expect(s.npcs).toHaveLength(1);
+    expect(cop.mood).toBe('leaving');
+    expect(cop.targetId).toBeNull();
+    expect(isBeingChecked(s, 'p1')).toBe(false);
+  });
+
+  it('does not check again while leaving and despawns at the entrance', () => {
+    const s = carrying(['################', '#@............N#', '################']);
+    const cop = addNpc(s, 'police', 40, 24);
+    runFor(s, {}, 1000 + CONFIG.npc.police.checkMs);
+    expect(cop.mood).toBe('leaving');
+    expect(totalBottles(s.players.p1.bottles)).toBe(2);
+    runFor(s, {}, 1000);
+    expect(cop.x).toBeGreaterThan(60);
+    expect(isBeingChecked(s, 'p1')).toBe(false);
+    runFor(s, {}, 4000); // 192 px bei 55 px/s
     expect(s.npcs).toHaveLength(0);
+    expect(totalBottles(s.players.p1.bottles)).toBe(2);
+  });
+
+  it('starts leaving instead of despawning when its lifetime runs out', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const cop = addNpc(s, 'police', 300, 24);
+    cop.lifeMs = 100;
+    runSteps(s, {}, 6, 20);
+    expect(s.npcs).toHaveLength(1);
+    expect(cop.mood).toBe('leaving');
+  });
+
+  it('a check by a leaving officer does not count', () => {
+    const s = carrying();
+    const cop = leaving(addNpc(s, 'police', 30, 24));
+    cop.targetId = 'p1';
+    cop.checkMs = 500;
     expect(isBeingChecked(s, 'p1')).toBe(false);
   });
 
@@ -250,11 +354,13 @@ describe('police', () => {
 describe('npc spawning', () => {
   const SPAWN_ROWS = ['#######', '#@N...#', '#######'];
 
-  it('spawns an npc at an entrance when the timer runs out and re-arms the timer', () => {
+  it('spawns an active npc at an entrance when the timer runs out and re-arms the timer', () => {
     const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
     s.nextNpcMs = 20;
     runSteps(s, {}, 2, 20);
     expect(s.npcs).toHaveLength(1);
+    expect(s.npcs[0].mood).toBe('active');
+    expect(s.npcs[0].moodMs).toBe(0);
     // spawnt auf dem N-Feld (40) und läuft schon im Spawn-Tick los (Hund: 1,4 px pro Tick)
     expect(s.npcs[0].x).toBeGreaterThan(40 - 3);
     expect(s.npcs[0].x).toBeLessThanOrEqual(40);
@@ -263,12 +369,37 @@ describe('npc spawning', () => {
     expect(s.nextNpcMs).toBeLessThanOrEqual(CONFIG.npc.spawnEveryMs[1]);
   });
 
-  it('never exceeds the npc cap', () => {
+  it('never exceeds the cap of active npcs', () => {
     const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
     for (let i = 0; i < CONFIG.npc.maxCount; i++) addNpc(s, 'dog', 100, 24).lifeMs = 1e9;
     s.nextNpcMs = 20;
     runSteps(s, {}, 2, 20);
     expect(s.npcs).toHaveLength(CONFIG.npc.maxCount);
+  });
+
+  it('sitting and leaving npcs do not count toward the active cap', () => {
+    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
+    for (let i = 0; i < CONFIG.npc.maxCount; i++) {
+      const n = addNpc(s, 'dog', 72, 24);
+      n.mood = 'idle';
+      n.moodMs = 1e9;
+    }
+    s.nextNpcMs = 20;
+    runSteps(s, {}, 2, 20);
+    expect(s.npcs).toHaveLength(CONFIG.npc.maxCount + 1);
+    expect(s.npcs.filter((n) => n.mood === 'active')).toHaveLength(1);
+  });
+
+  it('never exceeds the hard cap of all npcs', () => {
+    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
+    for (let i = 0; i < CONFIG.npc.maxTotal; i++) {
+      const n = addNpc(s, 'dog', 72, 24);
+      n.mood = 'idle';
+      n.moodMs = 1e9;
+    }
+    s.nextNpcMs = 20;
+    runSteps(s, {}, 2, 20);
+    expect(s.npcs).toHaveLength(CONFIG.npc.maxTotal);
   });
 
   it('spawns nothing on a map without entrances', () => {
