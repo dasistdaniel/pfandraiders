@@ -319,11 +319,11 @@ function bassBar(bar: number, ch: Chord): Cell[] {
 }
 
 /**
- * Powerchords (Grundton plus Quinte, eine Oktave über dem Bass) auf jeder Achtel, betont auf den Offbeats.
+ * Powerchords (Grundton plus Quinte, tiefe Lage G2 bis D3) auf jeder Achtel, betont auf den Offbeats.
  * Am Ende jeder Phrase klingt der letzte Akkord offen aus.
  */
 function guitarBar(bar: number, ch: Chord): Cell[] {
-  const root = ch.root + 12;
+  const root = ch.root + 12 <= 50 ? ch.root + 12 : ch.root;
   const out: Cell[] = [];
   const last = bar % PHRASE_BARS === PHRASE_BARS - 1;
   for (let s = 0; s < STEPS_PER_BAR; s += 2) {

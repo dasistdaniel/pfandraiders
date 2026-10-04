@@ -174,7 +174,7 @@ describe('stepDurationSec and midiToHz', () => {
 
 const DRUMS: readonly LayerName[] = ['kick', 'snare', 'fill', 'crash', 'hat', 'hat16'];
 const RANGES: Partial<Record<LayerName, [number, number]>> = {
-  guitar: [50, 66],
+  guitar: [43, 57],
   bass: [38, 59],
   chords: [60, 76],
   lead: [69, 88],

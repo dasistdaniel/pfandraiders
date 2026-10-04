@@ -220,8 +220,8 @@ export class MusicPlayer {
     }
   }
 
-  private filter(type: BiquadFilterType, hz: number, q: number, dest: AudioNode): BiquadFilterNode {
-    const f = this.ctx!.createBiquadFilter();
+  private filter(ctx: AudioContext, type: BiquadFilterType, hz: number, q: number, dest: AudioNode): BiquadFilterNode {
+    const f = ctx.createBiquadFilter();
     f.type = type;
     f.frequency.value = hz;
     f.Q.value = q;
@@ -249,13 +249,12 @@ export class MusicPlayer {
     const duck = ctx.createGain();
     duck.gain.value = 1;
     duck.connect(out);
-    this.ctx = ctx;
-    this.lowpass = this.filter('lowpass', LOWPASS_HZ, 0.5, duck);
-    this.guitarFilter = this.filter('lowpass', GUITAR_LOWPASS_HZ, 0.7, out);
-    this.bassFilter = this.filter('lowpass', BASS_LOWPASS_HZ, 0.8, out);
-    this.hatFilter = this.filter('highpass', HAT_HIGHPASS_HZ, 0.7, out);
-    this.crashFilter = this.filter('highpass', CRASH_HIGHPASS_HZ, 0.5, out);
-    this.snareFilter = this.filter('bandpass', SNARE_BANDPASS_HZ, SNARE_BANDPASS_Q, out);
+    const lowpass = this.filter(ctx, 'lowpass', LOWPASS_HZ, 0.5, duck);
+    const guitarFilter = this.filter(ctx, 'lowpass', GUITAR_LOWPASS_HZ, 0.7, out);
+    const bassFilter = this.filter(ctx, 'lowpass', BASS_LOWPASS_HZ, 0.8, out);
+    const hatFilter = this.filter(ctx, 'highpass', HAT_HIGHPASS_HZ, 0.7, out);
+    const crashFilter = this.filter(ctx, 'highpass', CRASH_HIGHPASS_HZ, 0.5, out);
+    const snareFilter = this.filter(ctx, 'bandpass', SNARE_BANDPASS_HZ, SNARE_BANDPASS_Q, out);
     const lfo = ctx.createOscillator();
     lfo.type = 'sine';
     lfo.frequency.value = VIBRATO_HZ;
@@ -263,6 +262,14 @@ export class MusicPlayer {
     depth.gain.value = VIBRATO_CENTS;
     lfo.connect(depth);
     lfo.start(0);
+    // erst ganz am Ende zuweisen: scheitert vorher etwas, versucht ein späterer Aufruf es erneut
+    this.ctx = ctx;
+    this.lowpass = lowpass;
+    this.guitarFilter = guitarFilter;
+    this.bassFilter = bassFilter;
+    this.hatFilter = hatFilter;
+    this.crashFilter = crashFilter;
+    this.snareFilter = snareFilter;
     this.out = out;
     this.duck = duck;
     this.vibratoDepth = depth;
