@@ -1,3 +1,6 @@
+import { DEFAULT_MAP_ID, isMapId } from '@pfandraiders/core';
+import type { MapId } from '@pfandraiders/core';
+
 /** Serverwerte (Spielwerte stehen in core/config.ts). */
 export const SERVER_CONFIG = {
   /** Tickdauer in ms: 20 Ticks pro Sekunde */
@@ -39,4 +42,25 @@ export function parseGraceMs(raw: string | undefined, fallback: number): number 
   if (!text) return fallback;
   const n = Number(text);
   return Number.isInteger(n) && n >= MIN_GRACE_MS && n <= MAX_GRACE_MS ? n : fallback;
+}
+
+/** Kleinste zulässige Rundenlänge für ROUND_MS in ms. */
+export const MIN_ROUND_MS = 1000;
+
+/**
+ * Wertet ROUND_MS aus. Fehlend, leer oder nur Leerzeichen: nicht gesetzt (Standardlänge, keine Warnung).
+ * Sonst muss es eine endliche Zahl ab MIN_ROUND_MS sein; alles andere ist ungültig (invalid = true).
+ */
+export function parseRoundMs(raw: string | undefined): { value: number | undefined; invalid: boolean } {
+  const text = raw?.trim();
+  if (!text) return { value: undefined, invalid: false };
+  const n = Number(text);
+  return Number.isFinite(n) && n >= MIN_ROUND_MS ? { value: n, invalid: false } : { value: undefined, invalid: true };
+}
+
+/** Wertet MAP_ID aus. Fehlend oder leer: Standardkarte ohne Warnung; unbekannt: Standardkarte, invalid = true. */
+export function parseMapId(raw: string | undefined): { value: MapId; invalid: boolean } {
+  const text = raw?.trim();
+  if (!text) return { value: DEFAULT_MAP_ID, invalid: false };
+  return isMapId(text) ? { value: text, invalid: false } : { value: DEFAULT_MAP_ID, invalid: true };
 }

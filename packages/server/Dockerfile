@@ -7,6 +7,11 @@ COPY packages/client/package.json packages/client/
 RUN npm ci
 COPY packages/core packages/core
 COPY packages/server packages/server
+# .git liegt nicht im Build-Kontext: Hash und Nummer kommen als Build-Argumente (siehe deploy/update.sh).
+# Erst nach npm ci, damit ein neuer Hash den npm-Cache nicht ungültig macht.
+ARG GIT_SHA=""
+ARG BUILD_NUMBER="dev"
+ENV GIT_SHA=$GIT_SHA BUILD_NUMBER=$BUILD_NUMBER
 RUN npm run build -w @pfandraiders/server
 
 FROM node:22-alpine

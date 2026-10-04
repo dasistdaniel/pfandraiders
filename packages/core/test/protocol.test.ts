@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { RETRO_MAP } from '../src/maps/retro';
 import type { ServerMessage, Snapshot } from '../src/protocol';
 import {
+  MAX_BUILD_FIELD_LENGTH,
   MAX_NAME_LENGTH,
   parseClientMessage,
+  parseServerBuild,
   ROOM_CODE_CHARS,
   ROOM_CODE_LENGTH,
 } from '../src/protocol';
@@ -82,5 +84,32 @@ describe('ServerMessage start', () => {
   it('carries the map id', () => {
     const msg: ServerMessage = { t: 'start', mapId: 'retro', map: RETRO_MAP, you: 'p1', players: [], snap: {} as Snapshot };
     expect(msg.t === 'start' && msg.mapId).toBe('retro');
+  });
+});
+
+describe('server build in joined', () => {
+  it('allows joined with and without build', () => {
+    const withBuild: ServerMessage = { t: 'joined', room: 'ABCD', you: 'p1', token: 't', build: { number: '3', sha: 'abcdef1' } };
+    const without: ServerMessage = { t: 'joined', room: 'ABCD', you: 'p1', token: 't' };
+    expect(JSON.parse(JSON.stringify(withBuild))).toEqual(withBuild);
+    expect('build' in without).toBe(false);
+  });
+});
+
+describe('parseServerBuild', () => {
+  it('accepts short string fields', () => {
+    expect(parseServerBuild({ number: '12', sha: 'abcdef1' })).toEqual({ number: '12', sha: 'abcdef1' });
+    expect(parseServerBuild({ number: 'dev', sha: '' })).toEqual({ number: 'dev', sha: '' });
+    expect(parseServerBuild({ number: 'x'.repeat(MAX_BUILD_FIELD_LENGTH), sha: 'y' })).not.toBeNull();
+  });
+  it('drops extra fields', () => {
+    expect(parseServerBuild({ number: '1', sha: 'a', extra: 5 })).toEqual({ number: '1', sha: 'a' });
+  });
+  it('rejects missing, non-object, non-string and oversized values', () => {
+    for (const raw of [undefined, null, 'abc', 5, [], {}, { number: 1, sha: 'a' }, { number: '1', sha: null }, { number: '1' }]) {
+      expect(parseServerBuild(raw)).toBeNull();
+    }
+    expect(parseServerBuild({ number: 'x'.repeat(MAX_BUILD_FIELD_LENGTH + 1), sha: 'a' })).toBeNull();
+    expect(parseServerBuild({ number: '1', sha: 'y'.repeat(MAX_BUILD_FIELD_LENGTH + 1) })).toBeNull();
   });
 });

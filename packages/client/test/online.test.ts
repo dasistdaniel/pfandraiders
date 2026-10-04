@@ -85,6 +85,29 @@ describe('OnlineConnection messages', () => {
     expect(conn.isHost()).toBe(true);
   });
 
+  it('stores the server build from joined, before onJoined fires', () => {
+    const { socket, conn } = setup();
+    expect(conn.serverBuild).toBeNull();
+    let seen: unknown = undefined;
+    conn.onJoined = () => {
+      seen = conn.serverBuild;
+    };
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't', build: { number: '7', sha: 'abcdef1' } });
+    expect(conn.serverBuild).toEqual({ number: '7', sha: 'abcdef1' });
+    expect(seen).toEqual({ number: '7', sha: 'abcdef1' });
+  });
+
+  it('keeps serverBuild null for joined without or with an invalid build', () => {
+    const { socket, conn } = setup();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
+    expect(conn.serverBuild).toBeNull();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't', build: { number: '7', sha: 'x'.repeat(17) } });
+    expect(conn.serverBuild).toBeNull();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't', build: { number: 7, sha: 'abc' } } as unknown as ServerMessage);
+    expect(conn.serverBuild).toBeNull();
+    expect(conn.room).toBe('ABCD');
+  });
+
   it('builds a full game state on start and fires onStart', () => {
     const { socket, conn } = setup();
     let started = 0;

@@ -1,4 +1,4 @@
-import { DEFAULT_MAP_ID, isMapId, stateFromSnapshot } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, isMapId, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
 import type {
   ClientMessage,
   ErrorCode,
@@ -7,6 +7,7 @@ import type {
   MapData,
   MapId,
   RosterEntry,
+  ServerBuild,
   ServerMessage,
   Snapshot,
 } from '@pfandraiders/core';
@@ -60,6 +61,8 @@ export class OnlineConnection implements GameConnection {
   roster: RosterEntry[] = [];
   /** Karte der laufenden Runde (wird mit start gesetzt). */
   mapId: MapId = DEFAULT_MAP_ID;
+  /** Build des Servers aus joined; null = unbekannt (älterer Server oder ungültige Angabe). */
+  serverBuild: ServerBuild | null = null;
 
   onJoined: (() => void) | null = null;
   onLobby: (() => void) | null = null;
@@ -201,6 +204,7 @@ export class OnlineConnection implements GameConnection {
     }
     switch (msg?.t) {
       case 'joined':
+        this.serverBuild = parseServerBuild(msg.build);
         this.room = msg.room;
         this.you = msg.you;
         this.token = msg.token;
