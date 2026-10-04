@@ -1,7 +1,7 @@
 import { createGame, parseMap, projectSnapshot } from '@pfandraiders/core';
 import type { Snapshot } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
-import { interpolateSnapshot } from '../src/interpolate';
+import { interpolateSnapshot, OWN_SNAP_DIST, smoothPosition } from '../src/interpolate';
 
 function snapAt(x2: number, xn = 0, ids = ['p1', 'p2']): Snapshot {
   const s = createGame(1, parseMap(['#########', '#@@.....#', '#########']), ids);
@@ -68,5 +68,42 @@ describe('interpolateSnapshot', () => {
     const b = snapAt(80);
     expect(interpolateSnapshot(a, b, -3, b, 'p1').players.p2.x).toBe(40);
     expect(interpolateSnapshot(a, b, 9, b, 'p1').players.p2.x).toBe(80);
+  });
+});
+
+describe('smoothPosition', () => {
+  it('starts at the target when there is no current position', () => {
+    expect(smoothPosition(null, { x: 10, y: 20 }, 16)).toEqual({ x: 10, y: 20 });
+  });
+  it('moves part of the way towards the target', () => {
+    const p = smoothPosition({ x: 0, y: 0 }, { x: 10, y: 0 }, 16);
+    expect(p.x).toBeGreaterThan(0);
+    expect(p.x).toBeLessThan(10);
+    expect(p.y).toBe(0);
+  });
+  it('converges to the target and never overshoots', () => {
+    let p = { x: 0, y: 0 };
+    for (let i = 0; i < 200; i++) {
+      p = smoothPosition(p, { x: 20, y: -10 }, 16);
+      expect(p.x).toBeLessThanOrEqual(20);
+      expect(p.y).toBeGreaterThanOrEqual(-10);
+    }
+    expect(p.x).toBeCloseTo(20, 1);
+    expect(p.y).toBeCloseTo(-10, 1);
+  });
+  it('is frame-rate independent: two half steps equal one full step', () => {
+    const one = smoothPosition({ x: 0, y: 0 }, { x: 10, y: 0 }, 32);
+    const two = smoothPosition(smoothPosition({ x: 0, y: 0 }, { x: 10, y: 0 }, 16), { x: 10, y: 0 }, 16);
+    expect(two.x).toBeCloseTo(one.x, 6);
+  });
+  it('snaps when the target is far away', () => {
+    const p = smoothPosition({ x: 0, y: 0 }, { x: OWN_SNAP_DIST + 1, y: 0 }, 16);
+    expect(p).toEqual({ x: OWN_SNAP_DIST + 1, y: 0 });
+  });
+  it('is safe for garbage input', () => {
+    expect(smoothPosition({ x: 0, y: 0 }, { x: 5, y: 5 }, NaN)).toEqual({ x: 0, y: 0 });
+    expect(smoothPosition({ x: 0, y: 0 }, { x: 5, y: 5 }, -3)).toEqual({ x: 0, y: 0 });
+    expect(smoothPosition({ x: NaN, y: 0 }, { x: 5, y: 5 }, 16)).toEqual({ x: 5, y: 5 });
+    expect(smoothPosition({ x: 0, y: 0 }, { x: 5, y: 5 }, 16, 0)).toEqual({ x: 5, y: 5 });
   });
 });

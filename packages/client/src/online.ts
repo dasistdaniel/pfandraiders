@@ -15,7 +15,8 @@ import type {
 import { NO_INPUT } from '@pfandraiders/core';
 import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
 import type { GameConnection } from './connection';
-import { interpolateSnapshot } from './interpolate';
+import { interpolateSnapshot, smoothPosition } from './interpolate';
+import type { Pos } from './interpolate';
 import { isValidSnapshot } from './snapshotGuard';
 
 /** Fremde Figuren werden so viel später gezeigt, damit zwischen zwei Snapshots interpoliert werden kann. */
@@ -86,6 +87,8 @@ export class OnlineConnection implements GameConnection {
   private lastSent: Input | null = null;
   private sinceSent = 0;
   private rendered: GameState | null = null;
+  /** Geglättete Anzeigeposition der eigenen Figur (null = noch keine). */
+  private ownPos: Pos | null = null;
   private warned = false;
   private lastName = '';
 
@@ -238,6 +241,7 @@ export class OnlineConnection implements GameConnection {
         this.roster = msg.players;
         this.buffer = [{ at: this.clock, snap: msg.snap }];
         this.rendered = stateFromSnapshot(msg.map, msg.snap);
+        this.ownPos = null;
         this.seq = 0;
         this.lastSent = null;
         this.onStart?.();
@@ -290,6 +294,7 @@ export class OnlineConnection implements GameConnection {
     this.sendInputIfNeeded();
     try {
       this.rendered = this.computeRendered();
+      this.smoothOwn(dt);
     } catch {
       // Beschädigter Snapshot im Puffer: neuesten verwerfen, letzten guten Zustand behalten.
       this.buffer.pop();
@@ -309,6 +314,15 @@ export class OnlineConnection implements GameConnection {
     this.lastSent = input;
     this.sinceSent = 0;
     this.pendingBuy = null;
+  }
+
+  /** Eigene Figur: aus dem neuesten Snapshot, aber über die Zeit geglättet statt in 20-Hz-Stufen. */
+  private smoothOwn(dtMs: number): void {
+    const me = this.rendered?.players[this.you];
+    if (!me) return;
+    this.ownPos = smoothPosition(this.ownPos, { x: me.x, y: me.y }, dtMs);
+    me.x = this.ownPos.x;
+    me.y = this.ownPos.y;
   }
 
   private computeRendered(): GameState | null {
