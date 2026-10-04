@@ -1,10 +1,31 @@
 import type { ErrorCode, RosterEntry } from '@pfandraiders/core';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
+import { ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import { nextTab, parseTab, sanitizeRoomCode } from './onlineMenuLogic';
+import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
 import type { SocketFactory } from './online';
 
 const TOKEN_KEY = (room: string) => `pfandraiders.token.${room}`;
 const NAME_KEY = 'pfandraiders.name';
+const TAB_KEY = 'pfandraiders.menuTab';
+const LAST_ROOM_KEY = 'pfandraiders.lastRoom';
+
+function localGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function localSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* egal */
+  }
+}
 
 function safeGet(key: string): string | null {
   try {
@@ -96,59 +117,121 @@ export function showOnlineMenu(
     };
     conn.onStart = () => finish(conn);
 
-    const renderEntry = () => {
+    // Name und Code bleiben beim Tabwechsel erhalten
+    const form = { name: safeGet(NAME_KEY) ?? '', code: '', tab: parseTab(localGet(TAB_KEY)) };
+    const lastRoom = sanitizeRoomCode(localGet(LAST_ROOM_KEY) ?? '');
+    if (lastRoom.length === ROOM_CODE_LENGTH && safeGet(TOKEN_KEY(lastRoom))) form.code = lastRoom;
+
+    const need = () => {
+      if (form.name.trim().length === 0) {
+        showError('Bitte einen Namen eingeben.');
+        return false;
+      }
+      safeSet(NAME_KEY, form.name.trim(), true);
+      if (conn.status === 'idle' || conn.status === 'closed') {
+        showError('');
+        try {
+          conn.connect();
+        } catch {
+          showError('Server nicht erreichbar.');
+          return false;
+        }
+      }
+      return true;
+    };
+    const whenOpen = (fn: () => void) => {
+      const t0 = Date.now();
+      const wait = () => {
+        if (finished) return;
+        if (conn.status === 'open') return fn();
+        if (conn.status === 'closed' || Date.now() - t0 > 5000) return showError('Server nicht erreichbar.');
+        setTimeout(wait, 50);
+      };
+      wait();
+    };
+
+    const renderEntry = (focusTab = false) => {
       box.replaceChildren();
       box.appendChild(el('div', { textContent: 'Online spielen' }, 'font-size:22px;margin-bottom:8px'));
       box.appendChild(el('div', { textContent: `Server: ${url}` }, 'color:#aaa;font-size:14px;margin-bottom:10px'));
-      const name = el('input', { placeholder: 'Dein Name', maxLength: 16, value: safeGet(NAME_KEY) ?? '' }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit');
-      const code = el('input', { placeholder: 'Raumcode', maxLength: 4 }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit;text-transform:uppercase');
-      const create = el('button', { textContent: 'Raum erstellen' }, 'font:inherit;margin-right:8px');
-      const join = el('button', { textContent: 'Beitreten' }, 'font:inherit;margin-right:8px');
-      const cancel = el('button', { textContent: 'Abbrechen' }, 'font:inherit');
-      box.append(name, code, create, join, cancel, message);
 
-      const need = () => {
-        if (name.value.trim().length === 0) {
-          showError('Bitte einen Namen eingeben.');
-          return false;
-        }
-        safeSet(NAME_KEY, name.value.trim(), true);
-        if (conn.status === 'idle' || conn.status === 'closed') {
-          showError('');
-          try {
-            conn.connect();
-          } catch {
-            showError('Server nicht erreichbar.');
-            return false;
-          }
-        }
-        return true;
-      };
-      const whenOpen = (fn: () => void) => {
-        const t0 = Date.now();
-        const wait = () => {
-          if (finished) return;
-          if (conn.status === 'open') return fn();
-          if (conn.status === 'closed' || Date.now() - t0 > 5000) return showError('Server nicht erreichbar.');
-          setTimeout(wait, 50);
+      const tabBar = el('div', { role: 'tablist' }, 'display:flex;margin-bottom:12px;border-bottom:1px solid #555');
+      const tabButtons = new Map<MenuTab, HTMLButtonElement>();
+      const tabLabels: Record<MenuTab, string> = { host: 'Raum erstellen', join: 'Beitreten' };
+      for (const id of ['host', 'join'] as MenuTab[]) {
+        const active = form.tab === id;
+        const b = el(
+          'button',
+          { textContent: tabLabels[id], role: 'tab', tabIndex: active ? 0 : -1 },
+          `flex:1;font:inherit;color:${active ? '#fff' : '#999'};background:${active ? '#333' : '#1a1a1a'};border:0;border-bottom:3px solid ${active ? '#ffca28' : 'transparent'};padding:8px 12px;cursor:pointer`,
+        );
+        b.setAttribute('aria-selected', String(active));
+        b.onclick = () => switchTab(id, false);
+        b.onkeydown = (e) => {
+          const next = nextTab(id, e.key);
+          if (next === id) return;
+          e.preventDefault();
+          switchTab(next, true);
         };
-        wait();
+        tabButtons.set(id, b);
+        tabBar.appendChild(b);
+      }
+      box.appendChild(tabBar);
+
+      const name = el('input', { placeholder: 'Dein Name', maxLength: 16, value: form.name }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit');
+      name.setAttribute('aria-label', 'Dein Name');
+      name.oninput = () => {
+        form.name = name.value;
       };
-      create.onclick = () => {
-        if (need()) whenOpen(() => conn.create(name.value.trim()));
+      const cancel = el('button', { textContent: 'Abbrechen' }, 'font:inherit');
+      cancel.onclick = () => finish(null);
+      const nameLabel = el('div', { textContent: 'Dein Name' }, 'color:#aaa;font-size:14px;margin-bottom:4px');
+
+      if (form.tab === 'host') {
+        const create = el('button', { textContent: 'Raum erstellen' }, 'font:inherit;margin-right:8px');
+        create.onclick = () => {
+          if (need()) whenOpen(() => conn.create(form.name.trim()));
+        };
+        name.onkeydown = (e) => {
+          if (e.key === 'Enter') create.click();
+        };
+        box.append(el('div', { textContent: 'Du wirst Host und bekommst einen Raumcode.' }, 'color:#aaa;font-size:14px;margin-bottom:10px'), nameLabel, name, create, cancel, message);
+        if (focusTab) tabButtons.get('host')?.focus();
+        else name.focus();
+        return;
+      }
+
+      const code = el('input', { placeholder: 'Raumcode', maxLength: ROOM_CODE_LENGTH, value: form.code }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit;text-transform:uppercase');
+      code.setAttribute('aria-label', 'Raumcode');
+      code.oninput = () => {
+        code.value = sanitizeRoomCode(code.value);
+        form.code = code.value;
       };
+      const join = el('button', { textContent: 'Beitreten' }, 'font:inherit;margin-right:8px');
       join.onclick = () => {
         if (!need()) return;
-        const room = code.value.trim().toUpperCase();
-        whenOpen(() => conn.join(room, name.value.trim(), safeGet(TOKEN_KEY(room)) ?? undefined));
+        const room = sanitizeRoomCode(form.code);
+        whenOpen(() => conn.join(room, form.name.trim(), safeGet(TOKEN_KEY(room)) ?? undefined));
       };
-      cancel.onclick = () => finish(null);
-      const onEnter = (primary: HTMLButtonElement) => (e: KeyboardEvent) => {
-        if (e.key === 'Enter') primary.click();
+      name.onkeydown = (e) => {
+        if (e.key !== 'Enter') return;
+        if (sanitizeRoomCode(code.value).length === 0) code.focus();
+        else join.click();
       };
-      name.onkeydown = onEnter(code.value.trim() ? join : create);
-      code.onkeydown = onEnter(join);
-      name.focus();
+      code.onkeydown = (e) => {
+        if (e.key === 'Enter') join.click();
+      };
+      box.append(nameLabel, name, el('div', { textContent: 'Raumcode' }, 'color:#aaa;font-size:14px;margin-bottom:4px'), code, join, cancel, message);
+      if (focusTab) tabButtons.get('join')?.focus();
+      else (name.value.trim() === '' ? name : code).focus();
+    };
+
+    const switchTab = (tab: MenuTab, viaKeyboard: boolean) => {
+      if (tab === form.tab) return;
+      form.tab = tab;
+      localSet(TAB_KEY, tab);
+      showError('');
+      renderEntry(viaKeyboard);
     };
 
     const renderLobby = () => {
@@ -199,6 +282,7 @@ export function showOnlineMenu(
 
     conn.onJoined = () => {
       safeSet(TOKEN_KEY(conn.room), conn.token);
+      localSet(LAST_ROOM_KEY, conn.room);
       showError('');
       renderLobby();
     };
