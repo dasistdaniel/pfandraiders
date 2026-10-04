@@ -162,6 +162,21 @@ describe('websocket server', () => {
     await b.until('error', (m) => m.code === 'not_host');
   });
 
+  it('delivers lobby chat to everybody and the history to a late joiner', async () => {
+    server = await startServer({ port: 0, stepMs: 20 });
+    const a = await connect(server.port);
+    const b = await connect(server.port);
+    a.send({ t: 'create', name: 'Anna' });
+    const { room } = await a.until('joined');
+    a.send({ t: 'chat', text: 'Hallo 😀' });
+    await a.until('chat', (m) => m.text === 'Hallo 😀' && m.name === 'Anna');
+    b.send({ t: 'join', room, name: 'Bob' });
+    const hist = await b.until('chathistory');
+    expect(hist.messages.map((m) => m.text)).toEqual(['Hallo 😀']);
+    b.send({ t: 'chat', text: 'Servus' });
+    await a.until('chat', (m) => m.text === 'Servus' && m.name === 'Bob');
+  });
+
   it('lets a disconnected player come back with the token and get a fresh start message', async () => {
     const { a, code, joinedA } = await twoBotsInStartedRoom();
     a.ws.close();

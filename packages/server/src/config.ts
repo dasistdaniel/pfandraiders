@@ -26,6 +26,11 @@ export const SERVER_CONFIG = {
   maxHandlerErrors: 5,
   /** So viele Tick-Fehler in Folge, dann wird der Raum entfernt */
   maxTickFailures: 3,
+  /** Lobby-Chat: Mindestabstand zwischen zwei Nachrichten eines Spielers */
+  chatMinGapMs: 1000,
+  /** Lobby-Chat: höchstens chatMaxPerWindow Nachrichten pro Spieler in diesem Zeitfenster */
+  chatWindowMs: 10_000,
+  chatMaxPerWindow: 5,
 };
 
 /** Kleinste zulässige Frist für GRACE_MS in ms. */

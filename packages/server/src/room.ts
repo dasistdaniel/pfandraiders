@@ -1,4 +1,5 @@
 import {
+  CHAT_HISTORY_SIZE,
   createGame,
   DEFAULT_MAP_ID,
   MAP_DEFS,
@@ -10,6 +11,7 @@ import {
   step,
 } from '@pfandraiders/core';
 import type {
+  ChatMessage,
   ErrorCode,
   GameState,
   Input,
@@ -81,6 +83,10 @@ export class Room {
   private readonly now: () => number;
   private readonly random: () => number;
   private readonly build: ServerBuild;
+  /** Letzte Chatnachrichten der Lobby (nur im Speicher) */
+  private chatHistory: ChatMessage[] = [];
+  /** Zeitpunkte der angenommenen Chatnachrichten je Mitglied (Ratenbegrenzung) */
+  private chatTimes = new Map<string, number[]>();
 
   constructor(
     readonly code: string,
@@ -143,6 +149,7 @@ export class Room {
         back.conn = conn;
         back.disconnectedAt = null;
         conn.send({ t: 'joined', room: this.code, you: back.id, token: back.token, build: this.build });
+        this.sendChatHistory(conn);
         if (this.phase === 'running' && this.state) this.sendStart(back);
         this.broadcastLobby();
         return { ok: true, value: back };
@@ -170,8 +177,48 @@ export class Room {
     };
     this.members.push(member);
     conn.send({ t: 'joined', room: this.code, you: member.id, token: member.token, build: this.build });
+    this.sendChatHistory(conn);
     this.broadcastLobby();
     return { ok: true, value: member };
+  }
+
+  private sendChatHistory(conn: Conn): void {
+    conn.send({ t: 'chathistory', messages: this.chatHistory.map((m) => ({ ...m })) });
+  }
+
+  /** Ohne verbundene Spieler wird der Chat vergessen (ein Nachzügler sieht keine alten Nachrichten). */
+  private forgetChatIfEmpty(): void {
+    if (this.connected().length > 0) return;
+    this.chatHistory = [];
+    this.chatTimes.clear();
+  }
+
+  /**
+   * Chatnachricht eines Mitglieds (Text schon mit cleanChat bereinigt). Nur in der Lobby;
+   * pro Mitglied höchstens eine Nachricht je chatMinGapMs und chatMaxPerWindow je chatWindowMs.
+   * Geht an alle verbundenen Mitglieder, auch an den Absender.
+   */
+  chat(conn: Conn, text: string): Result<void> {
+    const member = this.members.find((m) => m.conn === conn);
+    if (!member) return fail('not_in_room', 'Du bist in keinem Raum.');
+    if (this.phase !== 'lobby') return fail('chat_closed', 'Chat gibt es nur in der Lobby.');
+    const now = this.now();
+    const times = (this.chatTimes.get(member.id) ?? []).filter((t) => now - t < SERVER_CONFIG.chatWindowMs);
+    const last = times[times.length - 1];
+    if ((last !== undefined && now - last < SERVER_CONFIG.chatMinGapMs) || times.length >= SERVER_CONFIG.chatMaxPerWindow) {
+      this.chatTimes.set(member.id, times);
+      return fail('chat_too_fast', 'Zu schnell.');
+    }
+    times.push(now);
+    this.chatTimes.set(member.id, times);
+    this.lastActive = now;
+    const msg: ChatMessage = { id: member.id, name: member.name, color: member.color, text, at: now };
+    this.chatHistory.push(msg);
+    if (this.chatHistory.length > CHAT_HISTORY_SIZE) {
+      this.chatHistory.splice(0, this.chatHistory.length - CHAT_HISTORY_SIZE);
+    }
+    for (const m of this.members) m.conn?.send({ t: 'chat', ...msg });
+    return { ok: true, value: undefined };
   }
 
   /** Verbindung weg. In der Lobby verschwindet der Spieler, im Spiel steht seine Figur still weiter. */
@@ -185,6 +232,7 @@ export class Room {
     if (this.phase !== 'running') {
       this.members = this.members.filter((m) => m !== member);
     }
+    this.forgetChatIfEmpty();
     this.broadcastLobby();
   }
 
@@ -204,6 +252,7 @@ export class Room {
     if (this.phase !== 'running') {
       this.members = this.members.filter((m) => m !== member);
     }
+    this.forgetChatIfEmpty();
     this.broadcastLobby();
   }
 
@@ -225,6 +274,8 @@ export class Room {
       m.ackSeq = 0;
     }
     this.phase = 'running';
+    // Chat ist nur in der Lobby offen; die Zähler werden nicht mehr gebraucht
+    this.chatTimes.clear();
     for (const m of this.members) this.sendStart(m);
     this.broadcastLobby();
     return { ok: true, value: undefined };

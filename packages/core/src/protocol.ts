@@ -18,6 +18,13 @@ export const ROOM_COLORS = [
   0xef5350, 0xab47bc, 0x26c6da, 0xec407a, 0xffa726, 0x66bb6a, 0x8d6e63, 0x5c6bc0,
 ];
 
+/** Längste Chatnachricht in Unicode-Codepunkten (nach dem Bereinigen; Längeres wird gekürzt) */
+export const MAX_CHAT_LENGTH = 140;
+/** Längerer Rohtext einer Chatnachricht wird ganz verworfen */
+export const MAX_CHAT_RAW_LENGTH = 1000;
+/** So viele Chatnachrichten behält ein Raum für Nachzügler */
+export const CHAT_HISTORY_SIZE = 30;
+
 /** Größte Länge von Buildnummer und Kurz-Hash in der joined-Nachricht */
 export const MAX_BUILD_FIELD_LENGTH = 16;
 
@@ -37,7 +44,19 @@ export type ErrorCode =
   | 'need_players'
   | 'not_in_room'
   | 'rate_limited'
-  | 'too_many_rooms';
+  | 'too_many_rooms'
+  | 'chat_too_fast'
+  | 'chat_closed';
+
+/** Eine Chatnachricht der Lobby; id, name und color stammen aus der Spielerliste des Servers. */
+export interface ChatMessage {
+  id: string;
+  name: string;
+  color: number;
+  text: string;
+  /** Serverzeit in ms */
+  at: number;
+}
 
 export type ClientMessage =
   | { t: 'create'; name: string }
@@ -45,7 +64,9 @@ export type ClientMessage =
   | { t: 'start' }
   | { t: 'input'; seq: number; input: Input }
   /** Spieler verlässt den Raum absichtlich: sein Platz wird sofort frei, keine Rückkehr mit dem Token. */
-  | { t: 'leave' };
+  | { t: 'leave' }
+  /** Chatnachricht, nur in der Lobby */
+  | { t: 'chat'; text: string };
 
 export interface RosterEntry {
   id: string;
@@ -61,7 +82,27 @@ export type ServerMessage =
   | { t: 'joined'; room: string; you: string; token: string; build?: ServerBuild }
   | { t: 'lobby'; room: string; host: string; players: RosterEntry[]; phase: RoomPhase }
   | { t: 'start'; mapId: MapId; map: MapData; you: string; players: RosterEntry[]; snap: Snapshot }
-  | { t: 'snap'; snap: Snapshot; ack: number };
+  | { t: 'snap'; snap: Snapshot; ack: number }
+  | ({ t: 'chat' } & ChatMessage)
+  /** Bisheriger Chat des Raums, direkt nach joined */
+  | { t: 'chathistory'; messages: ChatMessage[] };
+
+/**
+ * Bereinigt eine Chatnachricht: Leerraum zu einem Leerzeichen, Steuer- und Formatzeichen
+ * (\p{Cc}, \p{Cf}: Nullbreite, Richtungswechsel ...) entfernen, trimmen, auf MAX_CHAT_LENGTH
+ * Codepunkte kürzen. null = keine Zeichenkette, leer oder Rohtext länger als MAX_CHAT_RAW_LENGTH.
+ */
+export function cleanChat(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > MAX_CHAT_RAW_LENGTH) return null;
+  // Zeilenumbrüche und Tabs sind auch Steuerzeichen: erst zu Leerzeichen machen, dann entfernen
+  const text = raw
+    .replace(/\s+/gu, ' ')
+    .replace(/[\p{Cc}\p{Cf}]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  const cut = [...text].slice(0, MAX_CHAT_LENGTH).join('').trim();
+  return cut.length === 0 ? null : cut;
+}
 
 function cleanName(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
@@ -116,6 +157,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'leave':
       return { t: 'leave' };
+    case 'chat': {
+      const text = cleanChat(m.text);
+      return text === null ? null : { t: 'chat', text };
+    }
     default:
       return null;
   }
