@@ -5,7 +5,9 @@ describe('steal and item config', () => {
   it('has sane theft values', () => {
     expect(CONFIG.steal.radius).toBeGreaterThan(0);
     expect(CONFIG.steal.radius).toBeLessThanOrEqual(2 * CONFIG.interactRadius); // Dieb und Opfer müssen sich sehen können
-    expect(CONFIG.steal.durationMs).toBeGreaterThan(0);
+    expect(CONFIG.steal.cooldownMs).toBeGreaterThan(0);
+    // die Abklingzeit des Diebs ist länger als der Schutz des Opfers: kein Dauerklauen am selben Opfer
+    expect(CONFIG.steal.cooldownMs).toBeGreaterThan(CONFIG.steal.shieldMs);
     expect(CONFIG.steal.fraction).toBeGreaterThan(0);
     expect(CONFIG.steal.fraction).toBeLessThanOrEqual(1);
     expect(CONFIG.steal.shieldMs).toBeGreaterThan(0);

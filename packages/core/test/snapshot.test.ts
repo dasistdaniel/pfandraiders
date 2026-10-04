@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
-import { canBeRobbed, findStealTarget, isBeingRobbed } from '../src/theft';
+import { canBeRobbed, findStealTarget } from '../src/theft';
 import { projectSnapshot, stateFromSnapshot } from '../src/snapshot';
 import { input, newGame, runSteps, THIEF_ROWS } from './helpers';
 
@@ -63,13 +63,19 @@ describe('projectSnapshot', () => {
     expect(other.stealHeld).toBe(false);
   });
 
-  it('keeps the public theft warning of other players', () => {
+  it('hides the steal cooldown of other players but keeps the own one', () => {
     const s = game();
-    s.players.p2.stealTargetId = 'p1';
-    s.players.p2.stealProgressMs = 400;
+    s.players.p1.stealCooldownMs = 4000;
+    s.players.p2.stealCooldownMs = 5000;
     const snap = projectSnapshot(s, 'p1');
-    expect(snap.players.p2.stealTargetId).toBe('p1');
-    expect(isBeingRobbed(stateFromSnapshot(s.map, snap), 'p1')).toBe(true);
+    expect(snap.players.p1.stealCooldownMs).toBe(4000);
+    expect(snap.players.p2.stealCooldownMs).toBe(0);
+  });
+
+  it('keeps the public shield of other players', () => {
+    const s = game();
+    s.players.p2.shieldMs = 2500;
+    expect(projectSnapshot(s, 'p1').players.p2.shieldMs).toBe(2500);
   });
 
   it('shows spots only as full or empty', () => {
@@ -135,7 +141,7 @@ describe('projectSnapshot', () => {
 describe('snapshot key sets', () => {
   const PLAYER_KEYS = [
     'actionHeld', 'bottles', 'containerLevel', 'health', 'id', 'item', 'mode', 'money', 'searchProgressMs',
-    'searchSpotId', 'shieldMs', 'spawn', 'stealHeld', 'stealProgressMs', 'stealTargetId', 'unconsciousMs', 'x', 'y',
+    'searchSpotId', 'shieldMs', 'spawn', 'stealCooldownMs', 'stealHeld', 'unconsciousMs', 'x', 'y',
   ];
 
   it('pins the keys of own and foreign players', () => {

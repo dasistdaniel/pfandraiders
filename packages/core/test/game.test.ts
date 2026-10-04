@@ -57,12 +57,11 @@ describe('createGame', () => {
     expect(() => createGame(1, noSpawn, ['a'])).toThrow(/spawn/);
   });
 
-  it('starts players without item, theft state or shield', () => {
+  it('starts players without item, steal cooldown or shield', () => {
     const s = createGame(1, CITY_MAP, ['a']);
     expect(s.players.a).toMatchObject({
       item: null,
-      stealTargetId: null,
-      stealProgressMs: 0,
+      stealCooldownMs: 0,
       shieldMs: 0,
     });
   });

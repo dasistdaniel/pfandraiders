@@ -6,7 +6,6 @@ import {
   findSearchableSpot,
   findStealTarget,
   isBeingChecked,
-  isBeingRobbed,
   isNear,
   nextUpgrade,
   ranking,
@@ -62,7 +61,8 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
     lines.push(full ? 'Container voll' : `[${labels.action} halten] Suchen`);
   }
   if (!full && findStealTarget(state, p)) {
-    lines.push(p.item !== null ? `[${labels.steal}] Bolzenschneider einsetzen` : `[${labels.steal} halten] Klauen`);
+    if (p.stealCooldownMs > 0) lines.push(`Klauen in ${Math.ceil(p.stealCooldownMs / 1000)} s`);
+    else lines.push(p.item !== null ? `[${labels.steal}] Bolzenschneider einsetzen` : `[${labels.steal}] Klauen`);
   }
   return lines;
 }
@@ -72,8 +72,7 @@ export function alertText(state: GameState, p: Player): string {
   const lines: string[] = [];
   if (p.unconsciousMs > 0) lines.push(`Bewusstlos! Noch ${Math.ceil(p.unconsciousMs / 1000)} s`);
   if (isBeingChecked(state, p.id)) lines.push('KONTROLLE! Lauf weg!');
-  if (isBeingRobbed(state, p.id)) lines.push('! DU WIRST BESTOHLEN !');
-  else if (p.shieldMs > 0) lines.push(`Schutz ${Math.ceil(p.shieldMs / 1000)} s`);
+  if (p.shieldMs > 0) lines.push(`Schutz ${Math.ceil(p.shieldMs / 1000)} s`);
   for (const z of state.zones) {
     const secs = Math.ceil(z.timerMs / 1000);
     if (z.phase === 'announced') lines.push(`${z.def.name} in ${secs} s!`);

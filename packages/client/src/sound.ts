@@ -26,11 +26,6 @@ const RECIPES: Record<SoundId, Recipe> = {
   pickup: { wave: 'square', gain: 0.5, notes: [{ f: 1200, d: 0.06 }] },
   sell: { wave: 'square', gain: 0.5, notes: [{ f: 988, d: 0.07 }, { f: 1319, d: 0.14 }] },
   buy: { wave: 'triangle', gain: 0.8, notes: [{ f: 400, d: 0.18, to: 900 }] },
-  stealStart: {
-    wave: 'sawtooth',
-    gain: 0.4,
-    notes: [{ f: 140, d: 0.08 }, { f: 180, d: 0.08 }, { f: 140, d: 0.08 }, { f: 180, d: 0.08 }],
-  },
   stealSuccess: { wave: 'square', gain: 0.5, notes: [{ f: 700, d: 0.3, to: 200 }] },
   bite: { wave: 'sawtooth', gain: 0.9, notes: [{ f: 0, d: 0.12 }], noise: true },
   knockout: { wave: 'triangle', gain: 0.9, notes: [{ f: 440, d: 0.7, to: 70 }] },

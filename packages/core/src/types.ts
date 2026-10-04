@@ -1,7 +1,7 @@
 export type BottleKind = 'plastic' | 'glass' | 'crate';
 export type Bottles = Record<BottleKind, number>;
 export type SpotType = 'bus_stop' | 'bench' | 'bush' | 'bin' | 'park';
-export type Mode = 'walking' | 'searching' | 'stealing' | 'unconscious';
+export type Mode = 'walking' | 'searching' | 'unconscious';
 export type ItemId = 'bolt_cutters' | 'dog_treat';
 /** Kaufbefehl: Container-Upgrade, Essen oder ein Special Item */
 export type BuyCommand = 'upgrade' | 'food' | ItemId;
@@ -72,13 +72,12 @@ export interface Player {
   searchProgressMs: number;
   /** Aktionstaste im vorigen Tick gedrückt, für Flankenerkennung */
   actionHeld: boolean;
-  /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Bolzenschneider) */
+  /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Klauen wirkt nur beim Drücken) */
   stealHeld: boolean;
   /** Special Item im einzigen Slot, null = keins */
   item: ItemId | null;
-  /** Opfer, das gerade bestohlen wird */
-  stealTargetId: string | null;
-  stealProgressMs: number;
+  /** Restzeit, bis der Spieler wieder klauen kann, 0 = bereit */
+  stealCooldownMs: number;
   /** Restzeit des Schutzes nach einem Diebstahl, 0 = angreifbar */
   shieldMs: number;
   /** Leben, 0 = bewusstlos (kann zwischen Ticks Nachkommastellen haben) */

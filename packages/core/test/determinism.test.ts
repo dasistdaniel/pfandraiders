@@ -64,7 +64,7 @@ function comprehensive(seed: number): {
     const spotBottlesBefore = firstSpot.contents.plastic + firstSpot.contents.glass + firstSpot.contents.crate;
 
     if (phase === 0) {
-      // Phase 0: teleport to spot and search (hold action for 31 steps = 3100ms > 3000ms searchMs)
+      // Phase 0: teleport to spot and search (hold action for 31 steps = 3100ms > CONFIG.searchMs)
       player.x = firstSpot.x;
       player.y = firstSpot.y;
       const input: Input = t < 31 ? { moveX: 0, moveY: 0, action: true, steal: false, buy: null } : NO_INPUT;
@@ -89,10 +89,11 @@ function comprehensive(seed: number): {
         phase = 2;
       }
     } else if (phase === 2) {
-      // Phase 2: wait for refill (>450 steps = 45000ms to ensure CONFIG.refillMs of 45000ms elapses)
+      // Phase 2: search the rest of the spot, then wait for refill (>450 steps = 45000ms > CONFIG.refillMs)
       player.x = firstSpot.x;
       player.y = firstSpot.y;
-      const holdAction = t < 32 + 451; // 451 steps to ensure > 45s wait
+      // a new search needs a fresh press: release once after the deposit press, then hold
+      const holdAction = t > 33 && t < 32 + 451; // 451 steps to ensure > 45s wait
       const input: Input = { moveX: 0, moveY: 0, action: holdAction, steal: false, buy: null };
       step(s, { a: input }, dt);
       if (t === 32 + 451) phase = 3;

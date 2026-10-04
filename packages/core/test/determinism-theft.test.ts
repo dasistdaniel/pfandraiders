@@ -15,11 +15,11 @@ function base(seed: number): GameState {
   return s;
 }
 
-/** Normaler Diebstahl über 2 Sekunden */
+/** Sofort-Diebstahl, wiederholte Tastendrücke: alle 2 s, die Abklingzeit lässt nur jeden dritten durch */
 function normalTheft(seed: number): GameState {
   const s = base(seed);
-  for (let t = 0; t < 200; t++) {
-    step(s, { p1: input({ steal: true }), p2: input({ action: true }) }, 20);
+  for (let t = 0; t < 400; t++) {
+    step(s, { p1: input({ steal: t % 100 < 2 }), p2: input({ action: true }) }, 20);
   }
   return s;
 }
@@ -41,8 +41,9 @@ describe('determinism with theft', () => {
     const a = normalTheft(7);
     const b = normalTheft(7);
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
-    expect(totalBottles(a.players.p1.bottles)).toBe(2);
-    expect(a.players.p2.shieldMs).toBeGreaterThan(0);
+    // erster Diebstahl 2 Flaschen, zweiter erst nach der Abklingzeit (bei 6 s) füllt die Hände
+    expect(totalBottles(a.players.p1.bottles)).toBe(3);
+    expect(a.players.p1.stealCooldownMs).toBeGreaterThan(0);
   });
 
   it('replays a bolt cutters theft identically and the item was used', () => {

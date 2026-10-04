@@ -28,8 +28,10 @@ export function cancelSearch(p: Player): void {
 /**
  * Führt einen Suchschritt aus. Gibt true zurück, wenn der Spieler gerade sucht
  * (oder die Suche in diesem Schritt abgeschlossen hat), sonst false.
+ * `canStart` ist true im Schritt, in dem die Aktionstaste neu gedrückt wurde: Nur dann
+ * beginnt eine neue Suche; eine laufende Suche geht ohne neuen Druck weiter.
  */
-export function updateSearch(state: GameState, p: Player, dtMs: number): boolean {
+export function updateSearch(state: GameState, p: Player, dtMs: number, canStart: boolean): boolean {
   if (totalBottles(p.bottles) >= capacityOf(p)) return false;
   // Ziel bleibt "klebrig": solange der aktuelle Spot gefüllt und in Reichweite ist, wird nicht gewechselt.
   const current = p.searchSpotId === null ? undefined : state.spots.find((x) => x.id === p.searchSpotId);
@@ -37,7 +39,7 @@ export function updateSearch(state: GameState, p: Player, dtMs: number): boolean
     current !== undefined &&
     totalBottles(current.contents) > 0 &&
     distance(p, current) <= CONFIG.interactRadius;
-  const spot = stillValid ? current : findSearchableSpot(state, p);
+  const spot = stillValid ? current : canStart ? findSearchableSpot(state, p) : null;
   if (!spot) return false;
 
   if (p.searchSpotId !== spot.id) {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { createGame, DEFAULT_MAP_ID, isBeingRobbed, isMapId, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
+import { createGame, DEFAULT_MAP_ID, isMapId, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
 import type { GameState, MapData, MapId, Npc, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
@@ -33,8 +33,6 @@ const POLICE_SCALE = 0.6;
 
 /** Farbring unter den Füßen: Mitte 4 px unter der Position (Füße enden 5 px darunter), Tiefe zwischen NPCs (4) und Figur (5). */
 const RING = { w: 12, h: 6, dy: 4, depth: 4.5, fillAlpha: 0.25, strokeAlpha: 0.8 };
-/** Unterkante des Warnzeichens: über dem Kopf der Bogenfigur (12 px über der Position) bzw. der gezeichneten (6 px). */
-const WARN_DY = { char: -13, drawn: -8 };
 
 const COLOR = {
   zoneAnnounced: 0xffee58,
@@ -88,7 +86,6 @@ export class GameScene extends Phaser.Scene {
   private npcPoses = new Map<number, PoseState>();
   /** Unsichtbare, nicht wippende Kamera-Ziele, damit die Kamera beim Gehen nicht ruckelt. */
   private followTargets = new Map<string, Phaser.GameObjects.Zone>();
-  private warnings = new Map<string, Phaser.GameObjects.Text>();
   private playerColors = new Map<string, number>();
   private spotSprites: Phaser.GameObjects.Image[] = [];
   private spotFull: boolean[] = [];
@@ -207,7 +204,6 @@ export class GameScene extends Phaser.Scene {
     this.rings = new Map();
     this.poses = new Map();
     this.npcPoses = new Map();
-    this.warnings = new Map();
     this.drawMap(state.map);
     this.npcSprites = new Map();
     this.npcClocks = new Map();
@@ -257,14 +253,6 @@ export class GameScene extends Phaser.Scene {
       this.bodies.set(p.id, body);
       this.followTargets.set(p.id, this.add.zone(p.x, p.y, 1, 1));
       this.poses.set(p.id, initialPose(p.x, p.y));
-      this.warnings.set(
-        p.id,
-        this.add
-          .text(p.x, p.y + (charKey ? WARN_DY.char : WARN_DY.drawn), '!', { ...FONT, color: '#ff5252', fontSize: '12px' })
-          .setOrigin(0.5, 1)
-          .setDepth(6)
-          .setVisible(false),
-      );
     }
 
     // Eine Kamera pro Spieler. Die erste ist Phasers Hauptkamera.
@@ -442,10 +430,6 @@ export class GameScene extends Phaser.Scene {
       }
       body.setAlpha(unconscious ? 0.6 : 1);
       this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
-      this.warnings
-        .get(p.id)
-        ?.setPosition(p.x, p.y + (charKey ? WARN_DY.char : WARN_DY.drawn))
-        .setVisible(isBeingRobbed(state, p.id));
     }
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
   }

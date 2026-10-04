@@ -42,18 +42,14 @@ describe('knock out', () => {
     expect(p.unconsciousMs).toBe(CONFIG.health.unconsciousMs);
   });
 
-  it('cancels searching and stealing', () => {
+  it('cancels searching', () => {
     const s = newGame(SEARCH_ROWS);
     const p = s.players.p1;
     p.searchSpotId = 0;
     p.searchProgressMs = 500;
-    p.stealTargetId = 'x';
-    p.stealProgressMs = 500;
     damage(p, 1000);
     expect(p.searchSpotId).toBeNull();
     expect(p.searchProgressMs).toBe(0);
-    expect(p.stealTargetId).toBeNull();
-    expect(p.stealProgressMs).toBe(0);
   });
 
   it('ignores all input while unconscious', () => {

@@ -10,7 +10,7 @@ export const CONFIG = {
   /** größter Zeitschritt, den ein einzelner step verarbeitet */
   maxStepMs: 100,
   /** Pixel pro Sekunde */
-  playerSpeed: 90,
+  playerSpeed: 115,
   /** halbe Kantenlänge der Kollisionsbox */
   playerHalf: 5,
   /** halbe Kantenlänge des festen Kerns einer weichen Kachel (Baum, Laterne) um deren Mitte */
@@ -22,10 +22,10 @@ export const CONFIG = {
    */
   slideMaxPx: 9,
   interactRadius: 20,
-  searchMs: 3000,
-  refillMs: 45000,
+  searchMs: 1500,
+  refillMs: 30000,
   /** Wahrscheinlichkeit, dass ein Spot zu Rundenbeginn gefüllt ist */
-  spotActiveChance: 0.7,
+  spotActiveChance: 0.85,
   /** Cent pro Flasche */
   bottleValue: { plastic: 8, glass: 15, crate: 25 } as Record<BottleKind, number>,
   containers: [
@@ -40,12 +40,12 @@ export const CONFIG = {
   steal: {
     /** größter Abstand Dieb zu Opfer in Pixeln */
     radius: 20,
-    /** so lange hält der Dieb die Taste */
-    durationMs: 2000,
     /** Anteil des Opfer-Containers */
     fraction: 0.5,
     /** Schutz des Opfers nach einem Diebstahl */
     shieldMs: 3000,
+    /** so lange kann der Dieb nach einem Diebstahl nicht erneut klauen */
+    cooldownMs: 6000,
   },
   items: {
     bolt_cutters: { name: 'Bolzenschneider', price: 600 },
@@ -77,7 +77,7 @@ export const CONFIG = {
     spawnEveryMs: [20000, 40000] as Range,
     dogChance: 0.6,
     dog: {
-      speed: 70,
+      speed: 100,
       lifeMs: 30000,
       senseRadius: 160,
       biteRadius: 12,
@@ -88,7 +88,7 @@ export const CONFIG = {
       sitMs: 8000,
     },
     police: {
-      speed: 55,
+      speed: 80,
       lifeMs: 20000,
       senseRadius: 140,
       controlRadius: 22,
@@ -103,7 +103,7 @@ export const CONFIG = {
     idleMs: [90000, 150000] as Range,
     multiplier: 3,
     /** Nachfüllzeit eines Spots in einer aktiven Zone */
-    refillMs: 12000,
+    refillMs: 8000,
   },
   /** Fundtabelle: pro Spot-Typ und Flaschenart [min, max] */
   spotTypes: {
