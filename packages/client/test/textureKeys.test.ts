@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../src/textureKeys';
+import { charTexture, dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../src/textureKeys';
 
 describe('textureKeys', () => {
   it('prefixes tile, spot and object keys with the tileset', () => {
@@ -22,6 +22,10 @@ describe('textureKeys', () => {
   it('formats player keys with 6-digit hex', () => {
     expect(playerTexture(0xef5350, 'down_a')).toBe('player:ef5350:down_a');
     expect(playerTexture(0xff, 'lying')).toBe('player:0000ff:lying');
+  });
+  it('formats character sheet keys', () => {
+    expect(charTexture('m01')).toBe('char:m01');
+    expect(charTexture('f12')).toBe('char:f12');
   });
   it('formats npc keys', () => {
     expect(dogTexture('a')).toBe('dog:a');

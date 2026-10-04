@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { BOB_PX, WALK_FRAME_MS, bobOffset, initialPose, npcFrame, stepPose } from '../src/pose';
+import {
+  ACTION_FRAME_MS,
+  ACTION_STEPS,
+  BOB_PX,
+  WALK_FRAME_MS,
+  WALK_STEPS,
+  bobOffset,
+  initialPose,
+  npcFrame,
+  stepPose,
+  walkStepIndex,
+} from '../src/pose';
+import { charFrameIndex } from '../src/playerChars';
 
 describe('stepPose', () => {
   it('starts facing down and idles as down_a', () => {
@@ -155,6 +167,88 @@ describe('bobOffset', () => {
     expect(bobOffset(NaN, true)).toBe(0);
     expect(bobOffset(Infinity, true)).toBe(0);
     expect(bobOffset(-WALK_FRAME_MS, true)).toBe(0);
+  });
+});
+
+describe('walkStepIndex', () => {
+  it('cycles 0..3, one step per WALK_FRAME_MS', () => {
+    expect(WALK_STEPS).toBe(4);
+    expect(walkStepIndex(0)).toBe(0);
+    expect(walkStepIndex(WALK_FRAME_MS - 1)).toBe(0);
+    expect(walkStepIndex(WALK_FRAME_MS)).toBe(1);
+    expect(walkStepIndex(2 * WALK_FRAME_MS)).toBe(2);
+    expect(walkStepIndex(3 * WALK_FRAME_MS)).toBe(3);
+    expect(walkStepIndex(4 * WALK_FRAME_MS - 1)).toBe(3);
+    expect(walkStepIndex(4 * WALK_FRAME_MS)).toBe(0);
+    expect(walkStepIndex(9 * WALK_FRAME_MS)).toBe(1);
+  });
+
+  it('treats NaN, Infinity and negative as 0', () => {
+    expect(walkStepIndex(NaN)).toBe(0);
+    expect(walkStepIndex(Infinity)).toBe(0);
+    expect(walkStepIndex(-1)).toBe(0);
+  });
+
+  it('bob is up exactly on the step frames 1 and 3', () => {
+    for (let s = 0; s < 4; s++) expect(bobOffset(s * WALK_FRAME_MS, true)).toBe(s % 2 === 1 ? -BOB_PX : 0);
+  });
+});
+
+describe('stepPose character fields', () => {
+  it('starts as down, step 0', () => {
+    const r = stepPose(initialPose(0, 0), 0, 0, 'walking', 16);
+    expect(r.dir).toBe('down');
+    expect(r.step).toBe(0);
+  });
+
+  it('step advances only while moving and resets when standing', () => {
+    let s = initialPose(0, 0);
+    let x = 0;
+    const walk = (dt: number) => {
+      x += 1;
+      const r = stepPose(s, x, 0, 'walking', dt);
+      s = r.state;
+      return r;
+    };
+    expect(walk(10).step).toBe(0);
+    expect(walk(140).step).toBe(1); // 150
+    expect(walk(150).step).toBe(2); // 300
+    expect(walk(150).step).toBe(3); // 450
+    expect(walk(150).step).toBe(0); // 600
+    const r = walk(150);
+    expect(r.step).toBe(1);
+    expect(r.dir).toBe('right');
+    const stand = stepPose(s, x, 0, 'walking', 150);
+    expect(stand.step).toBe(0);
+    expect(stand.dir).toBe('right');
+    expect(stepPose(stand.state, x, 0, 'walking', 1000).step).toBe(0);
+  });
+
+  it('maps directions: left uses the native left column, up and down', () => {
+    expect(stepPose(initialPose(5, 5), 4, 5, 'walking', 16).dir).toBe('left');
+    expect(stepPose(initialPose(5, 5), 6, 5, 'walking', 16).dir).toBe('right');
+    expect(stepPose(initialPose(5, 5), 5, 4, 'walking', 16).dir).toBe('up');
+    expect(stepPose(initialPose(5, 5), 5, 6, 'walking', 16).dir).toBe('down');
+  });
+
+  it('searching and stealing face down and alternate two different steps every ACTION_FRAME_MS', () => {
+    const [a, b] = ACTION_STEPS;
+    expect(charFrameIndex('down', a)).not.toBe(charFrameIndex('down', b));
+    const facingUp = stepPose(initialPose(3, 3), 3, 2, 'walking', 16).state;
+    let r = stepPose(facingUp, 3, 2, 'searching', 100);
+    expect(r.dir).toBe('down');
+    expect(r.step).toBe(a);
+    r = stepPose(r.state, 3, 2, 'searching', ACTION_FRAME_MS - 100);
+    expect(r.step).toBe(b);
+    r = stepPose(r.state, 3, 2, 'stealing', ACTION_FRAME_MS);
+    expect(r.step).toBe(a);
+  });
+
+  it('unconscious shows the standing front frame', () => {
+    const s = stepPose(initialPose(0, 0), 1, 0, 'walking', 200).state;
+    const r = stepPose(s, 2, 0, 'unconscious', 200);
+    expect(r.dir).toBe('down');
+    expect(r.step).toBe(0);
   });
 });
 

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { CREDITS, creditDetail, creditLine } from '../credits';
 import { KEYBOARD_LAYOUTS } from '../devices';
 import { GAME_H, GAME_W } from '../layout';
 import { controlLines, MenuModel } from '../menuModel';
@@ -14,7 +15,7 @@ const STICK_THRESHOLD = 0.5;
 const COLOR_NORMAL = '#ffffff';
 const COLOR_SELECTED = '#ffee58';
 
-type Page = 'main' | 'settings';
+type Page = 'main' | 'settings' | 'credits';
 type KeyName = 'up' | 'down' | 'left' | 'right' | 'upW' | 'downS' | 'leftA' | 'rightD' | 'enter' | 'e' | 'space' | 'esc';
 
 interface PadPrev {
@@ -30,6 +31,7 @@ const MAIN_ITEMS: MenuItem[] = [
   { id: 'local', label: 'Lokal spielen' },
   { id: 'online', label: 'Online spielen' },
   { id: 'settings', label: 'Einstellungen' },
+  { id: 'credits', label: 'Credits' },
 ];
 
 const SETTINGS_ITEMS: MenuItem[] = [
@@ -40,6 +42,20 @@ const SETTINGS_ITEMS: MenuItem[] = [
   { id: 'back', label: 'Zurück' },
 ];
 
+const CREDIT_PREFIX = 'credit:';
+const CREDIT_ITEMS: MenuItem[] = [
+  ...CREDITS.map((c, i) => ({ id: `${CREDIT_PREFIX}${i}`, label: creditLine(c) })),
+  { id: 'back', label: 'Zurück' },
+];
+const PAGE_ITEMS: Record<Page, MenuItem[]> = { main: MAIN_ITEMS, settings: SETTINGS_ITEMS, credits: CREDIT_ITEMS };
+
+const HINT_DEFAULT = 'Pfeile/W S: wählen   Enter/E/Leertaste: bestätigen   Gamepad: Steuerkreuz, A, B';
+const HINT_CREDITS = 'Pfeile/W S: wählen   Enter öffnet den Link   Esc zurück   Gamepad: A, B';
+/** Credits-Seite: erste Zeile, Abstand je Eintrag (Hauptzeile 16 px, Link 12 px darunter). */
+const CREDITS_TOP = 170;
+const CREDITS_ROW_H = 56;
+const CREDITS_WRAP = GAME_W - 64;
+
 export class MenuScene extends Phaser.Scene {
   private notice = '';
   private page: Page = 'main';
@@ -47,6 +63,9 @@ export class MenuScene extends Phaser.Scene {
   private showControls = false;
   private busy = false;
   private itemTexts: Phaser.GameObjects.Text[] = [];
+  /** Zweite, kleine Zeile je Eintrag (nur Credits: Link und Hinweis). */
+  private detailTexts: Phaser.GameObjects.Text[] = [];
+  private hintText!: Phaser.GameObjects.Text;
   private controlsText!: Phaser.GameObjects.Text;
   private keys!: Record<KeyName, Phaser.Input.Keyboard.Key>;
   private padPrev: Record<number, PadPrev> = {};
@@ -71,6 +90,7 @@ export class MenuScene extends Phaser.Scene {
     this.busy = false;
     this.padPrev = {};
     this.itemTexts = [];
+    this.detailTexts = [];
     this.model = new MenuModel(MAIN_ITEMS);
     // Ruhige Fassung: langsam, ohne Beat; läuft weiter, falls sie schon spielt
     music.setMode('menu');
@@ -90,8 +110,8 @@ export class MenuScene extends Phaser.Scene {
     this.controlsText = this.add
       .text(GAME_W / 2, 400, '', { fontFamily: 'monospace', fontSize: '14px', color: '#cccccc', align: 'center' })
       .setOrigin(0.5, 0);
-    this.add
-      .text(GAME_W / 2, GAME_H - 24, 'Pfeile/W S: wählen   Enter/E/Leertaste: bestätigen   Gamepad: Steuerkreuz, A, B', {
+    this.hintText = this.add
+      .text(GAME_W / 2, GAME_H - 24, HINT_DEFAULT, {
         fontFamily: 'monospace',
         fontSize: '14px',
         color: '#999999',
@@ -165,31 +185,70 @@ export class MenuScene extends Phaser.Scene {
 
   private rebuild(): void {
     for (const t of this.itemTexts) t.destroy();
-    this.itemTexts = this.model.items.map((_, i) => {
-      const t = this.add
-        .text(GAME_W / 2, 200 + i * 44, '', { fontFamily: 'monospace', fontSize: '24px', color: COLOR_NORMAL })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-      t.on('pointerover', () => {
-        if (this.busy) return;
-        this.model.select(i);
-        this.render();
-      });
-      t.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-        if (this.busy) return;
-        this.model.select(i);
-        this.render();
-        const id = this.model.activate();
-        if (id === 'volume' || id === 'music') {
-          // Linke Hälfte der Zeile leiser, rechte lauter
-          this.adjustVolume(pointer.x < t.x ? -1 : 1);
-          return;
-        }
-        this.activate(id);
-      });
+    for (const t of this.detailTexts) t.destroy();
+    this.detailTexts = [];
+    const credits = this.page === 'credits';
+    this.hintText.setText(credits ? HINT_CREDITS : HINT_DEFAULT);
+    this.itemTexts = this.model.items.map((item, i) => {
+      const t = credits
+        ? this.add
+            .text(GAME_W / 2, CREDITS_TOP + i * CREDITS_ROW_H, '', {
+              fontFamily: 'monospace',
+              fontSize: '16px',
+              color: COLOR_NORMAL,
+              align: 'center',
+              wordWrap: { width: CREDITS_WRAP },
+            })
+            .setOrigin(0.5, 0)
+        : this.add
+            .text(GAME_W / 2, 200 + i * 44, '', { fontFamily: 'monospace', fontSize: '24px', color: COLOR_NORMAL })
+            .setOrigin(0.5);
+      this.bindPointer(t, i);
+      const entry = this.creditFor(item.id);
+      if (entry) {
+        const d = this.add
+          .text(GAME_W / 2, t.y + 22, creditDetail(entry), {
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            color: '#aaaaaa',
+            align: 'center',
+            wordWrap: { width: CREDITS_WRAP },
+          })
+          .setOrigin(0.5, 0);
+        this.bindPointer(d, i);
+        this.detailTexts.push(d);
+      }
       return t;
     });
     this.render();
+  }
+
+  /** Maus: Überfahren wählt die Zeile, Klick löst sie aus (wie Enter). */
+  private bindPointer(t: Phaser.GameObjects.Text, i: number): void {
+    t.setInteractive({ useHandCursor: true });
+    t.on('pointerover', () => {
+      if (this.busy) return;
+      this.model.select(i);
+      this.render();
+    });
+    t.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.busy) return;
+      this.model.select(i);
+      this.render();
+      const id = this.model.activate();
+      if (id === 'volume' || id === 'music') {
+        // Linke Hälfte der Zeile leiser, rechte lauter
+        this.adjustVolume(pointer.x < t.x ? -1 : 1);
+        return;
+      }
+      this.activate(id);
+    });
+  }
+
+  /** Credits-Eintrag zu einer Menü-ID (credit:<Index>), sonst null. */
+  private creditFor(id: string): (typeof CREDITS)[number] | null {
+    if (!id.startsWith(CREDIT_PREFIX)) return null;
+    return CREDITS[Number(id.slice(CREDIT_PREFIX.length))] ?? null;
   }
 
   private labelFor(item: MenuItem): string {
@@ -206,6 +265,7 @@ export class MenuScene extends Phaser.Scene {
         .setText(`${sel ? '> ' : '  '}${this.labelFor(item)}`)
         .setColor(sel ? COLOR_SELECTED : COLOR_NORMAL);
     });
+    this.detailTexts.forEach((d, i) => d.setColor(i === this.model.selected ? '#fff59d' : '#aaaaaa'));
     this.controlsText.setText(
       this.page === 'settings' && this.showControls ? controlLines(KEYBOARD_LAYOUTS, PAD_LABELS).join('\n') : '',
     );
@@ -230,24 +290,32 @@ export class MenuScene extends Phaser.Scene {
         this.showControls = !this.showControls;
         this.render();
         break;
+      case 'credits':
+        this.showPage('credits');
+        break;
       case 'back':
         this.goBack();
         break;
-      default:
-        break; // 'volume' und 'music' ändern sich nur mit links/rechts
+      default: {
+        const entry = this.creditFor(id);
+        if (entry) window.open(entry.url, '_blank', 'noopener,noreferrer');
+        // sonst 'volume' und 'music': ändern sich nur mit links/rechts
+      }
     }
   }
 
   private showPage(page: Page): void {
+    const from = this.page;
     this.page = page;
     this.showControls = false;
-    this.model = new MenuModel(page === 'main' ? MAIN_ITEMS : SETTINGS_ITEMS);
-    if (page === 'main') this.model.select(MAIN_ITEMS.findIndex((i) => i.id === 'settings'));
+    this.model = new MenuModel(PAGE_ITEMS[page]);
+    // Zurück im Hauptmenü: den Eintrag der verlassenen Seite wieder auswählen
+    if (page === 'main') this.model.select(MAIN_ITEMS.findIndex((i) => i.id === from));
     this.rebuild();
   }
 
   private goBack(): void {
-    if (this.page === 'settings') this.showPage('main');
+    if (this.page !== 'main') this.showPage('main');
   }
 
   private adjustVolume(dir: -1 | 1): void {

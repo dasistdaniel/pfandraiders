@@ -7,8 +7,9 @@ import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
 import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
 import type { PoseState } from '../pose';
+import { CHAR_ORIGIN_Y, charFrameIndex, characterFor, characterIndex } from '../playerChars';
 import { bakeMapLayers, ensurePlayerTextures } from '../textures';
-import { dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
+import { charTexture, dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
 import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
@@ -23,6 +24,11 @@ import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
+
+/** Farbring unter den Füßen: Mitte 4 px unter der Position (Füße enden 5 px darunter), Tiefe zwischen NPCs (4) und Figur (5). */
+const RING = { w: 12, h: 6, dy: 4, depth: 4.5, fillAlpha: 0.25, strokeAlpha: 0.8 };
+/** Unterkante des Warnzeichens: über dem Kopf der Bogenfigur (12 px über der Position) bzw. der gezeichneten (6 px). */
+const WARN_DY = { char: -13, drawn: -8 };
 
 const COLOR = {
   zoneAnnounced: 0xffee58,
@@ -42,6 +48,9 @@ export class GameScene extends Phaser.Scene {
   private sources: InputSource[] = [];
   private huds: PlayerHud[] = [];
   private bodies = new Map<string, Phaser.GameObjects.Image>();
+  /** Texturschlüssel des Figurenbogens je Spieler, null = Bogen fehlt, gezeichnete Figur als Rückfall. */
+  private charKeys = new Map<string, string | null>();
+  private rings = new Map<string, Phaser.GameObjects.Ellipse>();
   private poses = new Map<string, PoseState>();
   private npcPoses = new Map<number, PoseState>();
   /** Unsichtbare, nicht wippende Kamera-Ziele, damit die Kamera beim Gehen nicht ruckelt. */
@@ -142,6 +151,8 @@ export class GameScene extends Phaser.Scene {
     this.spotSprites = [];
     this.spotFull = [];
     this.bodies = new Map();
+    this.charKeys = new Map();
+    this.rings = new Map();
     this.poses = new Map();
     this.npcPoses = new Map();
     this.warnings = new Map();
@@ -167,17 +178,39 @@ export class GameScene extends Phaser.Scene {
       this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(this.tileset, spot.type, true)));
       this.spotFull.push(true);
     }
+    // Figur je Spieler nach Position: online Reihenfolge der Raumliste, lokal Slot-Index, sonst Reihenfolge im Zustand
+    const orderIds = this.online ? this.online.roster.map((r) => r.id) : this.slots.map((s) => s.id);
+    const playerIds = Object.keys(state.players);
     for (const p of Object.values(state.players)) {
       const color = this.playerColors.get(p.id) ?? 0xffffff;
-      ensurePlayerTextures(this, color);
-      const body = this.add.image(p.x, p.y, playerTexture(color, 'down_a'));
+      const sheet = charTexture(characterFor(characterIndex(p.id, orderIds, playerIds)));
+      const charKey = this.textures.exists(sheet) ? sheet : null;
+      this.charKeys.set(p.id, charKey);
+      this.rings.set(
+        p.id,
+        this.add
+          .ellipse(p.x, p.y + RING.dy, RING.w, RING.h, color, RING.fillAlpha)
+          .setStrokeStyle(1, color, RING.strokeAlpha)
+          .setDepth(RING.depth),
+      );
+      let body: Phaser.GameObjects.Image;
+      if (charKey) {
+        body = this.add.image(p.x, p.y, charKey, charFrameIndex('down', 0)).setOrigin(0.5, CHAR_ORIGIN_Y);
+      } else {
+        ensurePlayerTextures(this, color);
+        body = this.add.image(p.x, p.y, playerTexture(color, 'down_a'));
+      }
       body.setDepth(5);
       this.bodies.set(p.id, body);
       this.followTargets.set(p.id, this.add.zone(p.x, p.y, 1, 1));
       this.poses.set(p.id, initialPose(p.x, p.y));
       this.warnings.set(
         p.id,
-        this.add.text(p.x, p.y - 8, '!', { ...FONT, color: '#ff5252', fontSize: '12px' }).setOrigin(0.5, 1).setDepth(6).setVisible(false),
+        this.add
+          .text(p.x, p.y + (charKey ? WARN_DY.char : WARN_DY.drawn), '!', { ...FONT, color: '#ff5252', fontSize: '12px' })
+          .setOrigin(0.5, 1)
+          .setDepth(6)
+          .setVisible(false),
       );
     }
 
@@ -304,12 +337,28 @@ export class GameScene extends Phaser.Scene {
       if (!body) continue; // Spieler, die nach dem Start nicht in der Liste waren
       this.followTargets.get(p.id)?.setPosition(p.x, p.y);
       const color = this.playerColors.get(p.id) ?? 0xffffff;
-      const { state: poseState, pose, moving } = stepPose(this.poses.get(p.id) ?? initialPose(p.x, p.y), p.x, p.y, p.mode, delta);
+      const { state: poseState, pose, moving, dir, step } = stepPose(this.poses.get(p.id) ?? initialPose(p.x, p.y), p.x, p.y, p.mode, delta);
       this.poses.set(p.id, poseState);
+      const unconscious = p.mode === 'unconscious';
+      const charKey = this.charKeys.get(p.id) ?? null;
       body.setPosition(p.x, p.y + bobOffset(poseState.walkMs, moving));
-      body.setTexture(playerTexture(color, pose.frame)).setFlipX(pose.flipX);
-      body.setAlpha(p.mode === 'unconscious' ? 0.6 : 1);
-      this.warnings.get(p.id)?.setPosition(p.x, p.y - 8).setVisible(isBeingRobbed(state, p.id));
+      if (charKey) {
+        // Bogenfigur: Richtung über die Spalte (links hat eine eigene Spalte), daher nie spiegeln.
+        // Bewusstlos: kein Liegebild im Satz, also das Standbild vorn um 90 Grad gedreht, mittig auf der Position.
+        body
+          .setTexture(charKey, charFrameIndex(dir, step))
+          .setFlipX(false)
+          .setOrigin(0.5, unconscious ? 0.5 : CHAR_ORIGIN_Y)
+          .setAngle(unconscious ? 90 : 0);
+      } else {
+        body.setTexture(playerTexture(color, pose.frame)).setFlipX(pose.flipX);
+      }
+      body.setAlpha(unconscious ? 0.6 : 1);
+      this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
+      this.warnings
+        .get(p.id)
+        ?.setPosition(p.x, p.y + (charKey ? WARN_DY.char : WARN_DY.drawn))
+        .setVisible(isBeingRobbed(state, p.id));
     }
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
   }
