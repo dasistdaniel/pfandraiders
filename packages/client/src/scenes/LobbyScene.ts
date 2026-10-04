@@ -6,7 +6,7 @@ import { addLogo } from '../logoTexture';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 /** Oberkante des Lobby-Textes unter dem Logo. */
-const TEXT_TOP = 212;
+const TEXT_TOP = 232;
 const MAX_PLAYERS = 4;
 const PAD_START_BUTTON = 9;
 
@@ -57,7 +57,7 @@ export class LobbyScene extends Phaser.Scene {
     this.joinKeys = KEYBOARD_LAYOUTS.map((l) => this.input.keyboard!.addKey(l.action));
     this.startKey = this.input.keyboard!.addKey('SPACE');
     this.backKey = this.input.keyboard!.addKey('ESC');
-    addLogo(this); // oben mittig, bis y 196
+    addLogo(this, 32); // oben mittig, bis y 216
     this.text = this.add.text(GAME_W / 2, TEXT_TOP, '', { ...FONT, align: 'center' }).setOrigin(0.5, 0);
   }
 
