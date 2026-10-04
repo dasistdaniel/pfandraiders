@@ -16,7 +16,7 @@ function next(prev: GameState, edit: (s: GameState) => void): GameState {
 
 function npc(over: Partial<Npc>): Npc {
   return {
-    id: 99, kind: 'dog', x: 0, y: 0, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, cooldownMs: 0, distractedMs: 0, checkMs: 0,
+    id: 99, kind: 'dog', x: 0, y: 0, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 0,
     ...over,
   };
 }

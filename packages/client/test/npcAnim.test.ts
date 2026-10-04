@@ -32,6 +32,12 @@ function npc(over: Partial<Npc> = {}): Npc {
     mood: 'active',
     moodMs: 0,
     targetId: null,
+    restId: null,
+    restMs: 0,
+    pauseMs: 0,
+    wanderX: 0,
+    wanderY: 0,
+    wanderRef: 0,
     cooldownMs: 0,
     distractedMs: 0,
     checkMs: 0,
@@ -124,9 +130,18 @@ describe('dogAnim', () => {
     expect(dogAnim(npc({ mood: 'idle', moodMs: 5000 }), true)).toBe(DOG_ANIMS.wag);
   });
 
-  it('walks (not runs) while leaving, moving or not', () => {
-    expect(dogAnim(npc({ mood: 'leaving' }), true)).toBe(DOG_ANIMS.walk);
-    expect(dogAnim(npc({ mood: 'leaving' }), false)).toBe(DOG_ANIMS.walk);
+  it('walks (not runs) while roaming, moving or not', () => {
+    expect(dogAnim(npc({ mood: 'roaming' }), true)).toBe(DOG_ANIMS.walk);
+    expect(dogAnim(npc({ mood: 'roaming' }), false)).toBe(DOG_ANIMS.walk);
+  });
+
+  it('sits and looks around during a roaming pause, even with interpolation jitter', () => {
+    expect(dogAnim(npc({ mood: 'roaming', pauseMs: 2000 }), false)).toBe(DOG_ANIMS.idle);
+    expect(dogAnim(npc({ mood: 'roaming', pauseMs: 2000 }), true)).toBe(DOG_ANIMS.idle);
+  });
+
+  it('the bite still wins over roaming', () => {
+    expect(dogAnim(npc({ mood: 'roaming', cooldownMs: BITE }), true)).toBe(DOG_ANIMS.attack);
   });
 });
 
@@ -140,9 +155,11 @@ describe('policeAnim', () => {
     expect(policeAnim(cop({ targetId: 'p1' }), false)).toBe(OFFICER_ANIMS.idle);
   });
 
-  it('walks while leaving', () => {
-    expect(policeAnim(cop({ mood: 'leaving' }), true)).toBe(OFFICER_ANIMS.walk);
-    expect(policeAnim(cop({ mood: 'leaving' }), false)).toBe(OFFICER_ANIMS.walk);
+  it('walks while roaming and stands during a roaming pause', () => {
+    expect(policeAnim(cop({ mood: 'roaming' }), true)).toBe(OFFICER_ANIMS.walk);
+    expect(policeAnim(cop({ mood: 'roaming' }), false)).toBe(OFFICER_ANIMS.walk);
+    expect(policeAnim(cop({ mood: 'roaming', pauseMs: 1000 }), true)).toBe(OFFICER_ANIMS.idle);
+    expect(policeAnim(cop({ mood: 'roaming', pauseMs: 1000 }), false)).toBe(OFFICER_ANIMS.idle);
   });
 
   it('swings the baton during a check', () => {
