@@ -59,14 +59,14 @@ const HINT_CREDITS = 'Pfeile/W S: wählen   Enter öffnet den Link   Esc zurück
  */
 const CREDITS_TOP = 160;
 /**
- * Logo oben mittig (Oberkante LOGO_Y): auf der Hauptseite volle Größe (360 x 138 px, bis y 154), darunter Hinweis
- * und Einträge; auf Einstellungen und Credits halb so groß (bis y 85), Hinweis und Einträge wie bisher.
+ * Logo oben mittig (Oberkante LOGO_Y): auf der Hauptseite volle Größe (480 x 184 px, bis y 196), darunter Hinweis
+ * und Einträge; auf Einstellungen und Credits halb so groß (240 x 92 px, bis y 104), Hinweis und Einträge wie bisher.
  */
-const LOGO_Y = 16;
+const LOGO_Y = 12;
 const LOGO_SCALE_SUB = 0.5;
-const NOTICE_Y_MAIN = 176;
+const NOTICE_Y_MAIN = 216;
 const NOTICE_Y_SUB = 140;
-const ITEMS_TOP_MAIN = 224;
+const ITEMS_TOP_MAIN = 256;
 const ITEMS_TOP_SUB = 200;
 const CREDITS_LAST_Y = 470;
 const CREDITS_ROW_H = Math.min(56, Math.floor((CREDITS_LAST_Y - CREDITS_TOP) / Math.max(1, CREDIT_ITEMS.length - 1)));

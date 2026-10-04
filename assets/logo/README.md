@@ -1,13 +1,13 @@
 # PfandRaiders-Logo
 
-"PFAND" über "RAIDERS" in einer 5x7-Pixelschrift, rechtsbündig, cremefarben mit dunkler Kontur und Schlagschatten nach rechts unten; dahinter vier parallele 45-Grad-Streifen.
+"PFAND" über "RAIDERS" in einer 5x7-Pixelschrift, rechtsbündig, cremefarben mit 1 Einheit dunkler Kontur (volle Ausdehnung um jedes Schriftpixel, Innenräume der Buchstaben dunkel); dahinter vier parallele 45-Grad-Streifen.
 
 | Datei | Verwendung |
 | --- | --- |
 | `logo.svg` | Farbversion (auch `packages/client/public/logo.svg`) |
 | `logo-black.svg` | einfarbig schwarz für helle Hintergründe, Kontur weiß ausgespart |
 | `logo-white.svg` | weiß für dunkle Hintergründe, Kontur `#111111` |
-| `packages/client/public/favicon.svg` | Favicon: dunkles Quadrat, Streifen, Pixel-"P" |
+| `packages/client/public/favicon.svg` | Favicon: dunkles Quadrat, Streifen, Pixel-"P" mit dunkler Kontur und dunklem Innenraum |
 
 ## Farben
 
@@ -18,7 +18,7 @@
 | Grün | `#66bb6a` |
 | Blau | `#42a5f5` |
 | Creme (Schrift) | `#fff6d6` |
-| Dunkel (Kontur, Schatten, Favicon-Grund) | `#1b1b1f` |
+| Dunkel (Kontur, Favicon-Grund) | `#1b1b1f` |
 
 ## Neu erzeugen
 

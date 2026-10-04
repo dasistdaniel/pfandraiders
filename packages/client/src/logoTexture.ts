@@ -4,8 +4,8 @@ import { COLOR_LOGO, buildLogo } from './logo';
 import type { PixelKind } from './logo';
 
 export const LOGO_TEXTURE = 'logo';
-/** Bildpixel je Logo-Einheit: 60 x 23 Einheiten ergeben 360 x 138 px. */
-export const LOGO_PX = 6;
+/** Bildpixel je Logo-Einheit: 60 x 23 Einheiten ergeben 480 x 184 px. */
+export const LOGO_PX = 8;
 
 /** Backt das Logo einmalig als Canvas-Textur und gibt den Schlüssel zurück. */
 export function ensureLogoTexture(scene: Phaser.Scene): string {
@@ -21,7 +21,8 @@ export function ensureLogoTexture(scene: Phaser.Scene): string {
     ctx.closePath();
     ctx.fill();
   }
-  const colors: Record<PixelKind, string> = { shadow: COLOR_LOGO.shadow, outline: COLOR_LOGO.outline, fill: COLOR_LOGO.fill };
+  // Raster Zelle für Zelle: erst die Streifen, darüber Kontur und Füllung (decken sich nicht)
+  const colors: Record<PixelKind, string> = { outline: COLOR_LOGO.outline, fill: COLOR_LOGO.fill };
   for (const p of geo.pixels) {
     ctx.fillStyle = colors[p.kind];
     ctx.fillRect(p.x * LOGO_PX, p.y * LOGO_PX, LOGO_PX, LOGO_PX);
@@ -31,6 +32,6 @@ export function ensureLogoTexture(scene: Phaser.Scene): string {
 }
 
 /** Logo oben mittig; scale 1 auf der Hauptseite, 0.5 auf Unterseiten. */
-export function addLogo(scene: Phaser.Scene, y = 16, scale = 1): Phaser.GameObjects.Image {
+export function addLogo(scene: Phaser.Scene, y = 12, scale = 1): Phaser.GameObjects.Image {
   return scene.add.image(GAME_W / 2, y, ensureLogoTexture(scene)).setOrigin(0.5, 0).setScale(scale);
 }

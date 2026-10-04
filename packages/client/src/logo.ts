@@ -1,8 +1,9 @@
 /**
  * PfandRaiders-Logo als reine Geometrie (ohne Phaser): "PFAND" über "RAIDERS" in einer 5x7-Pixelschrift,
  * beide Zeilen rechtsbündig, dahinter vier parallele 45-Grad-Streifen (rot, gelb, grün, blau).
- * Alle Maße in Einheiten (ein Schriftpixel = 1 Einheit). Daraus entstehen die SVG-Dateien
- * (scripts/generate-logo.mjs) und die Phaser-Textur (logoTexture.ts).
+ * Alle Maße in Einheiten (ein Schriftpixel = 1 Einheit). Der Text ist ein Raster aus Einheitszellen
+ * (Füllung, Kontur oder leer); daraus entstehen die SVG-Dateien (scripts/generate-logo.mjs) und die
+ * Phaser-Textur (logoTexture.ts).
  */
 
 export const LOGO_COLORS = {
@@ -35,7 +36,9 @@ export const LINE_GAP = 3;
 export const STRIPE_W = 4;
 export const STRIPE_GAP = 2;
 
-export type PixelKind = 'fill' | 'outline' | 'shadow';
+export type PixelKind = 'fill' | 'outline';
+/** Eine Rasterzelle: Füllung, Kontur oder leer (null). */
+export type Cell = PixelKind | null;
 export type Point = readonly [number, number];
 
 export interface LogoPixel {
@@ -63,7 +66,9 @@ export interface LogoGeometry {
   lines: LogoLine[];
   /** Streifen von unten links nach oben rechts, hinter dem Text. */
   stripes: LogoStripe[];
-  /** Textpixel; jede Zelle höchstens einmal (fill, outline und shadow überschneiden sich nicht). */
+  /** Deckungsraster des Textes, grid[y][x]. */
+  grid: Cell[][];
+  /** Die belegten Zellen des Rasters, Zeile für Zeile. */
   pixels: LogoPixel[];
 }
 
@@ -80,10 +85,8 @@ function glyph(ch: string): readonly string[] {
   return g;
 }
 
-const key = (x: number, y: number): string => `${x},${y}`;
-
-/** Gesetzte Pixel eines Wortes, verschoben um (ox, oy). */
-function wordPixels(word: string, ox: number, oy: number, scale = 1): Point[] {
+/** Gesetzte Pixel eines Wortes, verschoben um (ox, oy); scale Einheiten je Schriftpixel. */
+export function wordPixels(word: string, ox: number, oy: number, scale = 1): Point[] {
   const out: Point[] = [];
   let x = 0;
   for (const ch of word) {
@@ -101,41 +104,48 @@ function wordPixels(word: string, ox: number, oy: number, scale = 1): Point[] {
   return out;
 }
 
-/** Ausdehnung um r Zellen in alle acht Richtungen. */
-function dilate(cells: Set<string>, r: number): Set<string> {
-  const out = new Set<string>();
-  for (const c of cells) {
-    const [x, y] = c.split(',').map(Number);
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) out.add(key(x + dx, y + dy));
+/**
+ * Deckungsraster: Füllzellen, darum die volle 8-Nachbar-Ausdehnung um 1 Einheit als Kontur (wie im Entwurf).
+ * Zellen, die von Füllung und Kontur ganz eingeschlossen sind (Innenräume, die die Ausdehnung nicht erreicht: die
+ * Mitte des D, ein Loch zwischen R und S, der Innenraum des großen P im Favicon), werden ebenfalls Kontur, damit
+ * nichts durch die Buchstaben scheint. Offene Kerben am Rand bleiben wie im Entwurf.
+ */
+export function coverageGrid(fill: readonly Point[], width: number, height: number): Cell[][] {
+  const grid: Cell[][] = Array.from({ length: height }, () => Array<Cell>(width).fill(null));
+  const inside = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < width && y < height;
+  for (const [x, y] of fill) {
+    if (!inside(x, y)) throw new Error(`Textpixel ${x},${y} außerhalb des Logos`);
+    grid[y][x] = 'fill';
   }
-  return out;
-}
-
-function shift(cells: Set<string>, dx: number, dy: number): Set<string> {
-  const out = new Set<string>();
-  for (const c of cells) {
-    const [x, y] = c.split(',').map(Number);
-    out.add(key(x + dx, y + dy));
-  }
-  return out;
-}
-
-/** Füllung, Kontur (Ausdehnung minus Füllung) und Schlagschatten (Kontur um 1 nach rechts unten, nur außerhalb). */
-function layered(fill: Point[], outlineR: number, shadow: boolean): LogoPixel[] {
-  const f = new Set(fill.map(([x, y]) => key(x, y)));
-  const d = dilate(f, outlineR);
-  const pixels: LogoPixel[] = [];
-  const push = (cells: Iterable<string>, kind: PixelKind): void => {
-    for (const c of cells) {
-      const [x, y] = c.split(',').map(Number);
-      pixels.push({ x, y, kind });
+  for (const [x, y] of fill) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!inside(nx, ny)) throw new Error(`Kontur ${nx},${ny} außerhalb des Logos`);
+        if (grid[ny][nx] === null) grid[ny][nx] = 'outline';
+      }
     }
-  };
-  push(f, 'fill');
-  push([...d].filter((c) => !f.has(c)), 'outline');
-  if (shadow) push([...shift(d, 1, 1)].filter((c) => !d.has(c)), 'shadow');
-  // feste Reihenfolge: Zeile, dann Spalte
-  return pixels.sort((a, b) => a.y - b.y || a.x - b.x);
+  }
+  // Leere Zellen, die vom Rand aus nicht erreichbar sind (4-Nachbarschaft), sind Innenräume
+  const outside = Array.from({ length: height }, () => Array<boolean>(width).fill(false));
+  const stack: [number, number][] = [];
+  for (let x = 0; x < width; x++) stack.push([x, 0], [x, height - 1]);
+  for (let y = 0; y < height; y++) stack.push([0, y], [width - 1, y]);
+  while (stack.length > 0) {
+    const [x, y] = stack.pop()!;
+    if (!inside(x, y) || outside[y][x] || grid[y][x] !== null) continue;
+    outside[y][x] = true;
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (grid[y][x] === null && !outside[y][x]) grid[y][x] = 'outline';
+  return grid;
+}
+
+function gridPixels(grid: Cell[][]): LogoPixel[] {
+  const out: LogoPixel[] = [];
+  grid.forEach((row, y) => row.forEach((kind, x) => kind && out.push({ x, y, kind })));
+  return out;
 }
 
 /** 45-Grad-Streifen über die volle Höhe h: unten bei x = x0 (Breite w), oben um h nach rechts versetzt. */
@@ -166,32 +176,32 @@ export function buildLogo(): LogoGeometry {
     points: stripe(i * (STRIPE_W + STRIPE_GAP), STRIPE_W, height),
     color,
   }));
-  return { width, height, lines, stripes, pixels: layered(fill, 1, true) };
+  const grid = coverageGrid(fill, width, height);
+  return { width, height, lines, stripes, grid, pixels: gridPixels(grid) };
 }
 
-/** Favicon: 32x32 Einheiten, dunkles Quadrat, die vier Streifen diagonal, darauf ein großes "P" (3 Einheiten je Pixel). */
+/**
+ * Favicon: 32x32 Einheiten, dunkles Quadrat, die vier Streifen diagonal, darauf ein großes "P" (4 Einheiten je
+ * Schriftpixel, auf geradem Raster, damit es bei 16 px scharf bleibt) mit 1 Einheit dunkler Kontur; der
+ * Innenraum des P ist dunkel.
+ */
 export const FAVICON_SIZE = 32;
-const FAVICON_SCALE = 3;
+export const FAVICON_SCALE = 4;
 
 export function buildFavicon(): LogoGeometry {
   const s = FAVICON_SIZE;
   const pw = glyph('P')[0].length * FAVICON_SCALE;
   const ph = GLYPH_H * FAVICON_SCALE;
-  const px = Math.ceil((s - pw) / 2);
-  const py = Math.floor((s - ph) / 2);
+  const px = (s - pw) / 2;
+  const py = (s - ph) / 2;
   // Streifenband mittig auf der Diagonale von unten links nach oben rechts
   const band = STRIPE_COLORS.length * STRIPE_W + (STRIPE_COLORS.length - 1) * STRIPE_GAP;
   const stripes = STRIPE_COLORS.map((color, i) => ({
     points: clipToRect(stripe(-band / 2 + i * (STRIPE_W + STRIPE_GAP), STRIPE_W, s), s, s),
     color,
   }));
-  return {
-    width: s,
-    height: s,
-    lines: [{ word: 'P', x: px, y: py, w: pw }],
-    stripes,
-    pixels: layered(wordPixels('P', px, py, FAVICON_SCALE), 2, false),
-  };
+  const grid = coverageGrid(wordPixels('P', px, py, FAVICON_SCALE), s, s);
+  return { width: s, height: s, lines: [{ word: 'P', x: px, y: py, w: pw }], stripes, grid, pixels: gridPixels(grid) };
 }
 
 /** Polygon auf das Rechteck 0..w x 0..h zuschneiden (Sutherland-Hodgman). */
@@ -230,10 +240,35 @@ function lerpAt(a: Point, b: Point, axis: 0 | 1, v: number): Point {
   return p;
 }
 
+/** Raster als Text: '#' Füllung, 'o' Kontur, Streifen als r y g b (Zellmitte im Streifen), sonst '.'. */
+export function geometryAscii(geo: LogoGeometry, stripeChars = 'rygb'): string {
+  return geo.grid
+    .map((row, y) =>
+      row
+        .map((cell, x) => {
+          if (cell === 'fill') return '#';
+          if (cell === 'outline') return 'o';
+          const i = geo.stripes.findIndex((s) => pointInPolygon([x + 0.5, y + 0.5], s.points));
+          return i >= 0 ? stripeChars[i] : '.';
+        })
+        .join(''),
+    )
+    .join('\n');
+}
+
+function pointInPolygon([px, py]: Point, poly: readonly Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 export interface LogoSvgOptions {
   fill: string;
   outline: string;
-  shadow: string;
   /** Je Streifen eine Farbe; oder monoStripe für alle. */
   stripeColors?: readonly string[];
   monoStripe?: string;
@@ -253,9 +288,8 @@ export function cellsPath(cells: readonly { x: number; y: number }[]): string {
     if (r) r.push(x);
     else rows.set(y, [x]);
   }
-  // Läufe je Zeile
-  const runs: { x: number; y: number; w: number; h: number }[] = [];
-  const open = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const rects: { x: number; y: number; w: number; h: number }[] = [];
+  let open = new Map<string, { x: number; y: number; w: number; h: number }>();
   for (const y of [...rows.keys()].sort((a, b) => a - b)) {
     const xs = [...new Set(rows.get(y))].sort((a, b) => a - b);
     const rowRuns: { x: number; w: number }[] = [];
@@ -273,19 +307,18 @@ export function cellsPath(cells: readonly { x: number; y: number }[]): string {
         nextOpen.set(k, prev);
       } else {
         const rect = { x: r.x, y, w: r.w, h: 1 };
-        runs.push(rect);
+        rects.push(rect);
         nextOpen.set(k, rect);
       }
     }
-    open.clear();
-    for (const [k, v] of nextOpen) open.set(k, v);
+    open = nextOpen;
   }
-  return runs.map((r) => `M${r.x} ${r.y}h${r.w}v${r.h}h-${r.w}z`).join('');
+  return rects.map((r) => `M${r.x} ${r.y}h${r.w}v${r.h}h-${r.w}z`).join('');
 }
 
 const num = (n: number): string => String(Math.round(n * 1000) / 1000);
 
-/** SVG aus einer Geometrie: Streifen als Polygone, Text als ein Pfad je Farbe. */
+/** SVG aus einer Geometrie: Streifen als Polygone, darüber Kontur und Füllung als je ein Pfad. */
 export function geometrySvg(geo: LogoGeometry, opts: LogoSvgOptions): string {
   const unit = opts.unit ?? 8;
   const parts: string[] = [];
@@ -295,18 +328,9 @@ export function geometrySvg(geo: LogoGeometry, opts: LogoSvgOptions): string {
     const pts = s.points.map((p) => `${num(p[0])},${num(p[1])}`).join(' ');
     parts.push(`<polygon fill="${color}" points="${pts}"/>`);
   });
-  // Ebenen in Zeichenreihenfolge; gleiche Farben teilen sich einen Pfad
-  const colorOf: Record<PixelKind, string> = { shadow: opts.shadow, outline: opts.outline, fill: opts.fill };
-  const byColor = new Map<string, LogoPixel[]>();
-  for (const kind of ['shadow', 'outline', 'fill'] as const) {
-    const color = colorOf[kind];
-    const list = byColor.get(color) ?? [];
-    list.push(...geo.pixels.filter((p) => p.kind === kind));
-    byColor.set(color, list);
-  }
-  for (const [color, cells] of byColor) {
-    if (cells.length === 0) continue;
-    parts.push(`<path fill="${color}" shape-rendering="crispEdges" d="${cellsPath(cells)}"/>`);
+  for (const kind of ['outline', 'fill'] as const) {
+    const cells = geo.pixels.filter((p) => p.kind === kind);
+    parts.push(`<path fill="${opts[kind]}" shape-rendering="crispEdges" d="${cellsPath(cells)}"/>`);
   }
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${geo.width} ${geo.height}" ` +
@@ -322,13 +346,12 @@ export function logoSvg(opts: LogoSvgOptions): string {
 export const COLOR_LOGO: LogoSvgOptions = {
   fill: LOGO_COLORS.cream,
   outline: LOGO_COLORS.dark,
-  shadow: LOGO_COLORS.dark,
   stripeColors: STRIPE_COLORS,
 };
 /** Einfarbig schwarz für helle Hintergründe; die Kontur ist weiß ausgespart. */
-export const BLACK_LOGO: LogoSvgOptions = { fill: '#000000', outline: '#ffffff', shadow: '#ffffff', monoStripe: '#000000' };
+export const BLACK_LOGO: LogoSvgOptions = { fill: '#000000', outline: '#ffffff', monoStripe: '#000000' };
 /** Weiß für dunkle Hintergründe; Kontur dunkel. */
-export const WHITE_LOGO: LogoSvgOptions = { fill: '#ffffff', outline: '#111111', shadow: '#111111', monoStripe: '#ffffff' };
+export const WHITE_LOGO: LogoSvgOptions = { fill: '#ffffff', outline: '#111111', monoStripe: '#ffffff' };
 
 export function faviconSvg(): string {
   return geometrySvg(buildFavicon(), { ...COLOR_LOGO, background: LOGO_COLORS.dark, unit: 1 });
