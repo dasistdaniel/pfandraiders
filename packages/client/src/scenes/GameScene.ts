@@ -10,6 +10,8 @@ import type { PoseState } from '../pose';
 import { CHAR_ORIGIN_Y, charFrameIndex, characterFor, characterIndex } from '../playerChars';
 import { bakeMapLayers, ensurePlayerTextures } from '../textures';
 import { charTexture, dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
+import { advanceClock, dogAnim, npcLook, policeAnim } from '../npcAnim';
+import type { AnimClock } from '../npcAnim';
 import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
@@ -24,6 +26,8 @@ import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
+/** Maßstab des Polizisten aus dem Bogen (Figur etwa 30 px hoch, Spieler 17 px); zum späteren Feintuning. */
+const POLICE_SCALE = 1;
 
 /** Farbring unter den Füßen: Mitte 4 px unter der Position (Füße enden 5 px darunter), Tiefe zwischen NPCs (4) und Figur (5). */
 const RING = { w: 12, h: 6, dy: 4, depth: 4.5, fillAlpha: 0.25, strokeAlpha: 0.8 };
@@ -59,7 +63,9 @@ export class GameScene extends Phaser.Scene {
   private playerColors = new Map<string, number>();
   private spotSprites: Phaser.GameObjects.Image[] = [];
   private spotFull: boolean[] = [];
-  private npcSprites = new Map<number, Phaser.GameObjects.Image>();
+  private npcSprites = new Map<number, Phaser.GameObjects.Sprite>();
+  /** Uhr der Bogen-Animation je NPC (beginnt bei jedem Wechsel der Animation von vorn). */
+  private npcClocks = new Map<number, AnimClock>();
   private zoneRects: Phaser.GameObjects.Rectangle[] = [];
   private uiCams: Phaser.Cameras.Scene2D.Camera[] = [];
   private zoneLabels: Phaser.GameObjects.Text[] = [];
@@ -158,6 +164,7 @@ export class GameScene extends Phaser.Scene {
     this.warnings = new Map();
     this.drawMap(state.map);
     this.npcSprites = new Map();
+    this.npcClocks = new Map();
     this.zoneRects = [];
     this.zoneLabels = [];
     for (const z of state.zones) {
@@ -476,9 +483,8 @@ export class GameScene extends Phaser.Scene {
       alive.add(npc.id);
       let sprite = this.npcSprites.get(npc.id);
       if (!sprite) {
-        const dog = npc.kind === 'dog';
         sprite = this.add
-          .image(npc.x, npc.y, dog ? dogTexture('a') : policeTexture('a'))
+          .sprite(npc.x, npc.y, npc.kind === 'dog' ? dogTexture('a') : policeTexture('a'))
           .setDepth(4);
         this.npcPoses.set(npc.id, initialPose(npc.x, npc.y));
         for (const ui of this.uiCams) ui.ignore(sprite); // Weltobjekt: nicht in den UI-Kameras
@@ -486,8 +492,27 @@ export class GameScene extends Phaser.Scene {
       }
       const nf = npcFrame(this.npcPoses.get(npc.id)!, npc.x, npc.y, delta);
       this.npcPoses.set(npc.id, nf.state);
-      sprite.setPosition(npc.x, npc.y + bobOffset(nf.state.walkMs, nf.moving));
-      sprite.setTexture(npc.kind === 'dog' ? dogTexture(nf.frame) : policeTexture(nf.frame)).setFlipX(nf.flipX);
+      const dog = npc.kind === 'dog';
+      const anim = dog ? dogAnim(npc, nf.moving) : policeAnim(npc, nf.moving);
+      const clock = advanceClock(this.npcClocks.get(npc.id), anim, delta);
+      this.npcClocks.set(npc.id, clock);
+      // Bogen geladen: Bild aus der Animation, Füße auf der Position, kein Auf-und-ab (der Bogen animiert selbst).
+      // Sonst die gezeichnete Figur wie bisher. Beide blicken nach rechts, flipX = nach links gegangen.
+      const look = npcLook(npc, nf.moving, clock.ms, nf.frame, (key) => this.textures.exists(key));
+      if (look.sheet) {
+        sprite
+          .setTexture(look.texture, look.frame)
+          .setOrigin(0.5, look.originY)
+          .setScale(dog ? 1 : POLICE_SCALE)
+          .setPosition(npc.x, npc.y);
+      } else {
+        sprite
+          .setTexture(look.texture)
+          .setOrigin(0.5)
+          .setScale(1)
+          .setPosition(npc.x, npc.y + bobOffset(nf.state.walkMs, nf.moving));
+      }
+      sprite.setFlipX(nf.flipX);
       sprite.setAlpha(npc.distractedMs > 0 ? 0.5 : 1);
     }
     for (const [id, sprite] of this.npcSprites) {
@@ -495,6 +520,7 @@ export class GameScene extends Phaser.Scene {
       sprite.destroy();
       this.npcSprites.delete(id);
       this.npcPoses.delete(id);
+      this.npcClocks.delete(id);
     }
   }
 

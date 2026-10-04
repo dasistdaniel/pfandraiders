@@ -33,6 +33,20 @@ export const CREDITS: CreditEntry[] = [
     note: 'Grundlage des Tiny Characters Set',
   },
   {
+    title: 'Dog Spritesheets',
+    author: 'Jason of GDN',
+    license: 'CC0',
+    url: 'https://opengameart.org/content/dog-spritesheets',
+    note: 'Hunde',
+  },
+  {
+    title: 'Officer Character',
+    author: 'Chasersgaming',
+    license: 'CC0',
+    url: 'https://opengameart.org/content/officer-character',
+    note: 'Polizist',
+  },
+  {
     title: 'Phaser 3',
     author: 'Photon Storm',
     license: 'MIT',
@@ -44,7 +58,7 @@ export const CREDITS: CreditEntry[] = [
     author: 'dasistdaniel',
     license: 'Eigenes Werk',
     url: 'https://github.com/dasistdaniel/pfandraiders',
-    note: 'Sound, Musik, Hund, Polizist und Karten selbst erzeugt',
+    note: 'Sound, Musik und Karten selbst erzeugt',
   },
 ];
 

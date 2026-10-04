@@ -1,0 +1,19 @@
+Dog Spritesheets
+by Jason of GDN
+https://opengameart.org/content/dog-spritesheets
+License: CC0 1.0 (public domain dedication)
+
+Files: dog-white.png (spritesheet_white_0.png), dog-black.png (spritesheet_black_0.png),
+dog-brown.png (spritesheet_brown.png), renamed only, pixels unchanged.
+Each sheet is 96x80 px = 6 columns x 5 rows of 16x16 px frames, the dog faces right:
+row 0 sitting and looking around, row 1 walk, row 2 sitting with tail wag (columns 0-3) and jump (4-5),
+row 3 run (columns 0-3), row 4 bite/lunge (columns 0-3).
+
+Officer Character
+by Chasersgaming
+https://opengameart.org/content/officer-character
+License: CC0 1.0 (public domain dedication)
+
+File: officer.png (Officer_sheet_unboxed_0.png), renamed only, pixels unchanged.
+320x1313 px = 10 columns of 32x32 px frames (columns 0-6 frames, 7-9 labels), the officer faces right:
+row 0 idle, row 1 walk, row 2 run, row 8 baton attack.
