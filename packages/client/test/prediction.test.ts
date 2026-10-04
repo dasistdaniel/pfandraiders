@@ -296,8 +296,8 @@ describe('Predictor against a simulated server', () => {
           // Eingabe); das kann keine Vorhersage wissen, bei schnellem Antippen summiert es sich bis zur Korrektur.
           // Gemessen (tapTap, 80-ms-Tipper): 60+30 ms ~12.6 px, 120+40 ms ~18.6 px.
           expect(lag).toBeLessThan(10 + (2 * SPEED * jitter) / 1000);
-          // (c) nach dem Stopp genau auf der Serverposition, spätestens 600 ms nach dem Stopp plus eine Rundreise
-          expect(settle).toBeLessThanOrEqual(600 + 2 * latency);
+          // (c) nach dem Stopp spätestens nach 600 ms genau (<= 0.5 px) auf der Serverposition
+          expect(settle).toBeLessThanOrEqual(600);
         }
       });
     }
@@ -460,6 +460,19 @@ describe('Predictor unit behaviour', () => {
     expect(pr.position).toEqual({ x: 100 + SNAP_DIST + 1, y: 100 });
   });
 
+  it('fades a correction while moving in instead of jumping', () => {
+    const pr = new Predictor();
+    pr.reset({ x: 100, y: 100 });
+    for (let t = 0; t <= 200; t += 20) pr.step(20, NO_INPUT, undefined, MAP, t);
+    pr.noteSent(1, 100);
+    pr.onSnapshot({ x: 110, y: 100 }, 1, true, 200);
+    expect(pr.simulatedPosition!.x).toBeCloseTo(100 + 10 * CORRECTION_GAIN, 9);
+    expect(pr.position!.x).toBeCloseTo(100, 9);
+    pr.step(250, NO_INPUT, undefined, MAP, 450);
+    pr.step(250, NO_INPUT, undefined, MAP, 700);
+    expect(pr.position!.x).toBeCloseTo(100 + 10 * CORRECTION_GAIN, 2);
+  });
+
   it('corrects a standing figure by the gain and shifts its history', () => {
     const pr = new Predictor();
     pr.reset({ x: 100, y: 100 });
@@ -467,11 +480,8 @@ describe('Predictor unit behaviour', () => {
     pr.noteSent(1, 100);
     pr.onSnapshot({ x: 104, y: 100 }, 1, false, 200);
     expect(pr.simulatedPosition!.x).toBeCloseTo(100 + 4 * CORRECTION_GAIN, 9);
-    // angezeigt wird die Korrektur erst nach und nach
-    expect(pr.position!.x).toBeCloseTo(100, 9);
-    pr.step(250, NO_INPUT, undefined, MAP, 450);
-    pr.step(250, NO_INPUT, undefined, MAP, 700);
-    expect(pr.position!.x).toBeCloseTo(100 + 4 * CORRECTION_GAIN, 2);
+    // im Stand ist die Korrektur klein und sofort sichtbar
+    expect(pr.position!.x).toBeCloseTo(100 + 4 * CORRECTION_GAIN, 9);
     expect(pr.historyEntries.every((h) => Math.abs(h.x - (100 + 4 * CORRECTION_GAIN)) < 1e-9)).toBe(true);
     // gleiche Abweichung nochmal: zählt nur noch der Rest
     pr.onSnapshot({ x: 104, y: 100 }, 1, false, 250);

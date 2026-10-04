@@ -56,8 +56,9 @@ export const ACK_OFFSET_MS = 25;
  */
 export const ACK_WINDOW_MS = 50;
 /**
- * Eine Korrektur wirkt sofort auf die gerechnete Position, die angezeigte folgt ihr aber über diese Zeitkonstante
- * (ms), damit auch eine Korrektur von mehreren Pixeln nicht als Ruck sichtbar wird.
+ * Eine Korrektur beim Laufen wirkt sofort auf die gerechnete Position, die angezeigte folgt ihr aber über diese
+ * Zeitkonstante (ms), damit auch eine Korrektur von mehreren Pixeln nicht als Ruck sichtbar wird. Im Stand sind
+ * Korrekturen klein (Totzone und Takt-Raster) und werden direkt gezeigt, damit die Figur schnell genau steht.
  */
 export const CORRECTION_SMOOTH_MS = 40;
 /** Größte Zeitspanne, die ein step() rechnet (wie MAX_FRAME_MS in OnlineConnection). */
@@ -292,7 +293,7 @@ export class Predictor {
       const [dx, dy] = d;
       this.pos = { x: this.pos.x + dx, y: this.pos.y + dy };
       shiftHistory(this.history, dx, dy);
-      this.offset = { x: this.offset.x + dx, y: this.offset.y + dy };
+      if (moving) this.offset = { x: this.offset.x + dx, y: this.offset.y + dy };
       this.corrections++;
     }
   }

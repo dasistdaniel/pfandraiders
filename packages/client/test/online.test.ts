@@ -563,6 +563,21 @@ describe('OnlineConnection own-player prediction', () => {
     expect(conn.getState().players.p1.x).toBe(x0);
   });
 
+  it('does not walk after the round has ended', () => {
+    const { socket, conn } = started();
+    socket.receive(ownSnap(1, 0, () => {}));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msg = ownSnap(2, 0) as any;
+    msg.snap.phase = 'ended';
+    msg.snap.timeLeftMs = 0;
+    socket.receive(msg);
+    conn.update(16);
+    const x0 = conn.getState().players.p1.x;
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    for (let i = 0; i < 10; i++) conn.update(16);
+    expect(conn.getState().players.p1.x).toBe(x0);
+  });
+
   it('does not jump on a snapshot that matches the prediction', () => {
     const { socket, conn } = started();
     conn.setInput('p1', { ...NO_INPUT, moveX: 1 });

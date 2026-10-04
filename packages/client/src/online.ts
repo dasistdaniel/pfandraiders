@@ -321,9 +321,11 @@ export class OnlineConnection implements GameConnection {
     const rendered = this.rendered;
     if (!rendered || !this.map || this.buffer.length === 0) return;
     // Container und Zustand aus dem Puffer, nicht aus `rendered` (das trägt schon die vorhergesagte Position)
-    const server = this.buffer[this.buffer.length - 1].snap.players[this.you];
-    // Ohne offene Verbindung geht keine Eingabe hinaus und der Server lässt die Figur stehen: hier ebenso
-    const input = this.status === 'open' ? this.pendingInput : NO_INPUT;
+    const latest = this.buffer[this.buffer.length - 1].snap;
+    const server = latest.players[this.you];
+    // Ohne offene Verbindung geht keine Eingabe hinaus, nach Rundenende rechnet der Server nicht mehr:
+    // in beiden Fällen bleibt die Figur auf dem Server stehen, hier ebenso
+    const input = this.status === 'open' && latest.phase !== 'ended' ? this.pendingInput : NO_INPUT;
     this.predictor.step(dt, input, server, this.map, this.clock);
     const pos = this.predictor.position;
     const shown = rendered.players[this.you];
