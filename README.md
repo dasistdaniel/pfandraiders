@@ -43,9 +43,11 @@ Bäume und Laternen sind weiche Hindernisse (Ebene `soft`): sie blockieren nur e
 
 ## Grafik
 
-Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat, Shop) nutzt die freien Kacheln "Roguelike Modern City" von [Kenney](https://kenney.nl) (CC0, Lizenzdatei unter `packages/client/src/assets/kenney/`). Hunde und Polizisten stammen aus den [Dog Spritesheets](https://opengameart.org/content/dog-spritesheets) von Jason of GDN (CC0, drei Fellfarben) und dem [Officer Character](https://opengameart.org/content/officer-character) von Chasersgaming (CC0); Dateien und `CREDITS.txt` unter `packages/client/src/assets/npc/`, welche Zeile des Bogens wann läuft, steht in `packages/client/src/npcAnim.ts`. Fehlt ein Bogen, zeichnet das Spiel den selbst gezeichneten Hund bzw. Polizisten (`packages/client/src/sprites/`). Welche Zelle des Kachelbogens für welches Bild genutzt wird, steht als reine Tabelle in `packages/client/src/kenneyMap.ts`. Fehlt der Bogen, fällt das Spiel auf die selbst gezeichneten Muster zurück.
+Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat, Shop) nutzt die freien Kacheln "Roguelike Modern City" von [Kenney](https://kenney.nl) (CC0, Lizenzdatei unter `packages/client/src/assets/kenney/`). Welche Zelle des Kachelbogens für welches Bild genutzt wird, steht als reine Tabelle in `packages/client/src/kenneyMap.ts`. Fehlt der Bogen, fällt das Spiel auf die selbst gezeichneten Muster zurück.
 
 Die Spielerfiguren stammen aus dem [Tiny Characters Set](https://opengameart.org/content/tiny-characters-set) von Fleurman (CC0), das auf den [RPG character sprites](https://opengameart.org/content/rpg-character-sprites) von GrafxKid (CC0) beruht (Dateien und `CREDITS.txt` unter `packages/client/src/assets/characters/`). Jeder Spieler bekommt nach seiner Position eine von acht festen Figuren (`packages/client/src/playerChars.ts`) und einen Ring in seiner Spielerfarbe unter den Füßen. Fehlt ein Figurenbogen, zeichnet das Spiel für diesen Spieler die selbst gezeichnete Figur.
+
+Hunde und Polizisten stammen aus den [Dog Spritesheets](https://opengameart.org/content/dog-spritesheets) von Jason of GDN (CC0, drei Fellfarben) und dem [Officer Character](https://opengameart.org/content/officer-character) von Chasersgaming (CC0); Dateien und `CREDITS.txt` liegen unter `packages/client/src/assets/npc/`, welche Zeile des Bogens wann läuft, steht in `packages/client/src/npcAnim.ts`. Fehlt ein Bogen, nutzt das Spiel den selbst gezeichneten Hund bzw. Polizisten (`packages/client/src/sprites/`).
 
 ### Credits
 
