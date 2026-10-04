@@ -27,7 +27,7 @@ import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
 /** Maßstab des Polizisten aus dem Bogen (Figur etwa 30 px hoch, Spieler 17 px); zum späteren Feintuning. */
-const POLICE_SCALE = 1;
+const POLICE_SCALE = 0.6;
 
 /** Farbring unter den Füßen: Mitte 4 px unter der Position (Füße enden 5 px darunter), Tiefe zwischen NPCs (4) und Figur (5). */
 const RING = { w: 12, h: 6, dy: 4, depth: 4.5, fillAlpha: 0.25, strokeAlpha: 0.8 };
