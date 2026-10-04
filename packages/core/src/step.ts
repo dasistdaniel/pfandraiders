@@ -4,7 +4,7 @@ import { updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
 import { cancelSearch, refillSpot, updateSearch } from './search';
-import { cancelSteal, updateSteal } from './theft';
+import { tryInstantSteal } from './theft';
 import { NO_INPUT } from './types';
 import type { GameState, Input, Player } from './types';
 import { updateZones } from './zones';
@@ -44,6 +44,7 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   const stealPressed = input.steal && !p.stealHeld;
   p.stealHeld = input.steal;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
+  p.stealCooldownMs = Math.max(0, p.stealCooldownMs - dt);
 
   if (updateHealth(p, dt)) {
     // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgeführt)
@@ -61,17 +62,14 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
 
   if (input.moveX !== 0 || input.moveY !== 0) {
     cancelSearch(p);
-    cancelSteal(p);
     walk(state.map, p, input, dt);
-  } else if (input.steal && updateSteal(state, p, stealPressed, dt)) {
+  } else if (stealPressed && tryInstantSteal(state, p)) {
     cancelSearch(p);
-  } else if (input.action && !deposited && updateSearch(state, p, dt)) {
-    cancelSteal(p);
+  } else if (input.action && !deposited && updateSearch(state, p, dt, pressed)) {
+    // sucht: eine neue Suche beginnt nur beim Drücken, eine laufende geht beim Halten weiter
   } else {
     cancelSearch(p);
-    cancelSteal(p);
   }
 
-  p.mode =
-    p.stealTargetId !== null ? 'stealing' : p.searchSpotId !== null ? 'searching' : 'walking';
+  p.mode = p.searchSpotId !== null ? 'searching' : 'walking';
 }

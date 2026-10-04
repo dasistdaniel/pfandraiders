@@ -80,7 +80,7 @@ describe('SoundFx', () => {
     let t = 0;
     const fx = new SoundFx(() => ctx as unknown as AudioContext, () => (t += 1000), false);
     fx.unlock();
-    for (const id of ['pickup', 'sell', 'buy', 'stealStart', 'stealSuccess', 'bite', 'knockout', 'policeCheck', 'zoneAnnounced', 'roundEnd', 'tick'] as const) {
+    for (const id of ['pickup', 'sell', 'buy', 'stealSuccess', 'bite', 'knockout', 'policeCheck', 'zoneAnnounced', 'roundEnd', 'tick'] as const) {
       expect(() => fx.play(id)).not.toThrow();
     }
     expect(ctx.createBufferSource).toHaveBeenCalledTimes(1); // nur bite

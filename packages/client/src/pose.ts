@@ -8,7 +8,7 @@ export const ACTION_FRAME_MS = 250;
 /** Gehzyklus der Bogenfiguren: 4 Schritte zu je WALK_FRAME_MS (siehe charFrameIndex). */
 export const WALK_STEPS = 4;
 /**
- * Suchen/Klauen im Stand: Wechsel zwischen Stand (Schritt 0) und Schritt (1) der Vorderansicht alle ACTION_FRAME_MS.
+ * Suchen im Stand: Wechsel zwischen Stand (Schritt 0) und Schritt (1) der Vorderansicht alle ACTION_FRAME_MS.
  * Schritt 0 und 2 wären im Bogen dasselbe Standbild, daher 0 und 1.
  */
 export const ACTION_STEPS = [0, 1] as const;
@@ -70,7 +70,7 @@ export function stepPose(
   const { state, moving } = r;
   if (mode === 'unconscious') return { ...r, dir: 'down', step: 0 };
   if (moving) return { ...r, dir: charDir(state.facing, state.flipX), step: walkStepIndex(state.walkMs) };
-  if (mode === 'searching' || mode === 'stealing') {
+  if (mode === 'searching') {
     return { ...r, dir: 'down', step: ACTION_STEPS[ab(state.walkMs, ACTION_FRAME_MS) === 'a' ? 0 : 1] };
   }
   return { ...r, dir: charDir(state.facing, state.flipX), step: 0 };
@@ -87,7 +87,7 @@ function stepDrawnPose(
   const dx = x - prev.x;
   const dy = y - prev.y;
   const moving = Math.hypot(dx, dy) > MOVE_EPSILON;
-  const acting = mode === 'searching' || mode === 'stealing';
+  const acting = mode === 'searching';
 
   let facing = prev.facing;
   let flipX = prev.flipX;

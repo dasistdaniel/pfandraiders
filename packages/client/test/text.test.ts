@@ -70,16 +70,33 @@ describe('hintLines', () => {
   it('offers stealing next to a victim who carries bottles', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q halten] Klauen');
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Klauen');
     s.players.p1.item = 'bolt_cutters';
     expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Bolzenschneider einsetzen');
+  });
+
+  it('shows the steal cooldown instead of the steal key while it runs', () => {
+    const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
+    s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
+    s.players.p1.stealCooldownMs = 4200;
+    const lines = hintLines(s, s.players.p1, KEYS);
+    expect(lines).toContain('Klauen in 5 s');
+    expect(lines.some((l) => l.includes('[Q]'))).toBe(false);
+    s.players.p1.item = 'bolt_cutters';
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('Klauen in 5 s');
+  });
+
+  it('shows no steal cooldown without a victim nearby', () => {
+    const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
+    s.players.p1.stealCooldownMs = 4200;
+    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Klauen'))).toBe(false);
   });
 
   it('offers stealing even while the player is searching', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p1.mode = 'searching';
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q halten] Klauen');
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Klauen');
   });
 
   it('does not offer stealing with a full container', () => {
@@ -98,13 +115,6 @@ describe('hintLines', () => {
 });
 
 describe('alertText', () => {
-  it('warns while a theft against the player is in progress', () => {
-    const s = shopGame();
-    s.players.p2.stealTargetId = 'p1';
-    s.players.p2.stealProgressMs = 40;
-    expect(alertText(s, s.players.p1)).toBe('! DU WIRST BESTOHLEN !');
-  });
-
   it('shows the shield after a theft and is empty otherwise', () => {
     const s = shopGame();
     expect(alertText(s, s.players.p1)).toBe('');
@@ -141,7 +151,7 @@ describe('labels for other devices', () => {
   it('uses the steal key for stealing', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/ halten] Klauen');
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Klauen');
     s.players.p1.item = 'bolt_cutters';
     expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Bolzenschneider einsetzen');
   });
@@ -251,8 +261,7 @@ describe('final review fixes', () => {
   it('shows at most three alert lines, personal ones first', () => {
     const s = createGame(1, parseMap(['#####', '#@..#', '#####'], ZONES), ['p1', 'p2']);
     s.players.p1.unconsciousMs = 4000;
-    s.players.p2.stealTargetId = 'p1';
-    s.players.p2.stealProgressMs = 40;
+    s.players.p1.shieldMs = 2000;
     s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, mood: 'active', moodMs: 0, targetId: 'p1', cooldownMs: 0, distractedMs: 0, checkMs: 300 });
     s.zones[0].phase = 'announced';
     s.zones[0].timerMs = 5000;

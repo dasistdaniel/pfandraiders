@@ -301,7 +301,7 @@ describe('police', () => {
     runFor(s, {}, 1000);
     expect(cop.x).toBeGreaterThan(60);
     expect(isBeingChecked(s, 'p1')).toBe(false);
-    runFor(s, {}, 4000); // 192 px bei 55 px/s
+    runFor(s, {}, 4000); // reicht bei Polizeitempo bis zum Eingang
     expect(s.npcs).toHaveLength(0);
     expect(totalBottles(s.players.p1.bottles)).toBe(2);
   });
@@ -328,7 +328,7 @@ describe('police', () => {
     const cop = addNpc(s, 'police', 40, 24);
     runSteps(s, {}, 50, 20); // 1000 ms Kontrolle
     expect(cop.checkMs).toBeGreaterThan(0);
-    runSteps(s, { p1: input({ moveX: 1 }) }, 40, 20); // flieht mit 90 px/s, Polizei schafft 55
+    runSteps(s, { p1: input({ moveX: 1 }) }, 40, 20); // flieht mit CONFIG.playerSpeed, Polizei ist langsamer
     expect(cop.checkMs).toBe(0);
     expect(isBeingChecked(s, 'p1')).toBe(false);
     expect(totalBottles(s.players.p1.bottles)).toBe(4);
@@ -361,8 +361,9 @@ describe('npc spawning', () => {
     expect(s.npcs).toHaveLength(1);
     expect(s.npcs[0].mood).toBe('active');
     expect(s.npcs[0].moodMs).toBe(0);
-    // spawnt auf dem N-Feld (40) und läuft schon im Spawn-Tick los (Hund: 1,4 px pro Tick)
-    expect(s.npcs[0].x).toBeGreaterThan(40 - 3);
+    // spawnt auf dem N-Feld (40) und läuft schon im Spawn-Tick los (höchstens zwei Ticks à 20 ms)
+    const maxStep = (Math.max(CONFIG.npc.dog.speed, CONFIG.npc.police.speed) * 40) / 1000;
+    expect(s.npcs[0].x).toBeGreaterThanOrEqual(40 - maxStep - 1e-9);
     expect(s.npcs[0].x).toBeLessThanOrEqual(40);
     expect(s.npcs[0].y).toBe(24);
     expect(s.nextNpcMs).toBeGreaterThanOrEqual(CONFIG.npc.spawnEveryMs[0] - 40);

@@ -57,31 +57,43 @@ describe('detectSounds', () => {
     expect(r).not.toContain('buy');
   });
 
-  it('plays stealStart for thief and victim only when audible', () => {
-    const p = fresh();
-    const n = next(p, (s) => { s.players.a.stealTargetId = 'b'; });
-    expect(detectSounds(p, n, 'all')).toEqual(['stealStart']);
-    expect(detectSounds(p, n, ['a'])).toEqual(['stealStart']);
-    expect(detectSounds(p, n, ['b'])).toEqual(['stealStart']);
-    expect(detectSounds(p, n, ['c'])).toEqual([]);
-    // läuft schon: kein erneuter Start
-    expect(detectSounds(n, snapshotForSound(n), 'all')).toEqual([]);
-  });
-
-  it('plays stealSuccess and no pickup for the thief', () => {
+  it('plays stealSuccess and no pickup for the thief of an instant theft', () => {
     const p = next(fresh(), (s) => {
       s.players.b.bottles.plastic = 4;
-      s.players.a.stealTargetId = 'b';
     });
     const n = next(p, (s) => {
       s.players.b.bottles.plastic = 2;
       s.players.b.shieldMs = CONFIG.steal.shieldMs;
       s.players.a.bottles.plastic = 2;
-      s.players.a.stealTargetId = null;
+      s.players.a.stealCooldownMs = CONFIG.steal.cooldownMs;
     });
     expect(detectSounds(p, n, 'all')).toEqual(['stealSuccess']);
     expect(detectSounds(p, n, ['b'])).toEqual(['stealSuccess']);
     expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
+    expect(detectSounds(p, n, ['c'])).toEqual([]);
+  });
+
+  it('still plays pickup when the bottle gain is not a theft', () => {
+    const p = next(fresh(), (s) => {
+      s.players.a.stealCooldownMs = 2000;
+    });
+    const n = next(p, (s) => {
+      s.players.a.bottles.plastic = 2;
+      s.players.a.stealCooldownMs = 1980; // Abklingzeit läuft nur herunter
+    });
+    expect(detectSounds(p, n, ['a'])).toEqual(['pickup']);
+  });
+
+  it('plays stealSuccess for the victim online, where the cooldown of the thief is hidden', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.bottles.plastic = 4;
+    });
+    const n = next(p, (s) => {
+      s.players.b.bottles.plastic = 2;
+      s.players.b.shieldMs = CONFIG.steal.shieldMs;
+      s.players.a.bottles.plastic = 1; // fremder Container nur als "hat Flaschen"
+    });
+    expect(detectSounds(p, n, ['b'])).toEqual(['stealSuccess']);
   });
 
   it('recognises a bolt-cutter theft and keeps it silent for bystanders', () => {

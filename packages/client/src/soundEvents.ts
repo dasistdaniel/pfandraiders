@@ -5,7 +5,6 @@ export type SoundId =
   | 'pickup'
   | 'sell'
   | 'buy'
-  | 'stealStart'
   | 'stealSuccess'
   | 'bite'
   | 'knockout'
@@ -33,8 +32,10 @@ export function detectSounds(
   const out = new Set<SoundId>();
   const audible = (id: string): boolean => ownIds === 'all' || ownIds.includes(id);
 
-  // Diebstahl: Das Opfer verliert Flaschen und bekommt Schutz (takeLoot). Der Dieb ist, wer es anvisierte
-  // (oder mit Bolzenschneider sein Item verbrauchte) und dabei Flaschen gewann.
+  // Diebstahl: Das Opfer verliert Flaschen und bekommt Schutz (takeLoot). Der Dieb ist, wer dabei Flaschen
+  // gewann und dessen Klau-Abklingzeit neu startete (oder der mit Bolzenschneider sein Item verbrauchte).
+  // Die Abklingzeit sieht online nur ihr Besitzer; für fremde Diebe zählt das nicht, weil der Dieb nur
+  // wichtig ist, wenn er selbst zuhört.
   const thieves = new Set<string>();
   for (const v of Object.values(next.players)) {
     const pv = prev.players[v.id];
@@ -51,7 +52,7 @@ export function detectSounds(
       const pt = prev.players[t.id];
       if (!pt || t.id === v.id) continue;
       if (totalBottles(t.bottles) <= totalBottles(pt.bottles)) continue;
-      if (pt.stealTargetId === v.id || (pt.item === 'bolt_cutters' && t.item === null)) {
+      if (t.stealCooldownMs > pt.stealCooldownMs || (pt.item === 'bolt_cutters' && t.item === null)) {
         thiefId = t.id;
         break;
       }
@@ -65,9 +66,6 @@ export function detectSounds(
     if (!q) continue;
     const own = audible(p.id);
 
-    if (p.stealTargetId !== null && q.stealTargetId === null) {
-      if (own || audible(p.stealTargetId)) out.add('stealStart');
-    }
     if (!own) continue;
 
     const bottlesNow = totalBottles(p.bottles);

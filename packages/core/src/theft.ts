@@ -3,11 +3,6 @@ import { CONFIG } from './config';
 import { capacityOf, distance } from './economy';
 import type { GameState, Player } from './types';
 
-export function cancelSteal(p: Player): void {
-  p.stealTargetId = null;
-  p.stealProgressMs = 0;
-}
-
 /** Kann `victim` jetzt von `thief` bestohlen werden? */
 export function canBeRobbed(thief: Player, victim: Player): boolean {
   return (
@@ -34,13 +29,6 @@ export function findStealTarget(state: GameState, thief: Player): Player | null 
   return best;
 }
 
-/** Läuft gerade ein Diebstahl gegen diesen Spieler? Für die Warnung im Client. */
-export function isBeingRobbed(state: GameState, victimId: string): boolean {
-  return Object.values(state.players).some(
-    (p) => p.stealTargetId === victimId && p.stealProgressMs > 0,
-  );
-}
-
 function takeLoot(thief: Player, victim: Player, fraction: number): void {
   const want = Math.ceil(totalBottles(victim.bottles) * fraction);
   const room = capacityOf(thief) - totalBottles(thief.bottles);
@@ -50,41 +38,24 @@ function takeLoot(thief: Player, victim: Player, fraction: number): void {
 }
 
 /**
- * Ein Diebstahlschritt für einen Spieler, der die Klauen-Taste hält und stillsteht.
- * Gibt true zurück, wenn er gerade klaut (oder in diesem Schritt fertig geworden ist).
- * `pressed` ist true im Schritt, in dem die Klauen-Taste neu gedrückt wurde (löst den Bolzenschneider aus).
- * Bei false verändert die Funktion nichts außer einem veralteten Ziel, das der Aufrufer mit cancelSteal löscht.
+ * Sofort-Diebstahl im Schritt, in dem die Klauen-Taste neu gedrückt wurde.
+ * Nimmt dem nächsten gültigen Opfer CONFIG.steal.fraction seines Containers ab (aufgerundet,
+ * begrenzt durch den freien Platz); mit Bolzenschneider alles, das Item wird verbraucht.
+ * Das Opfer bekommt Schutz, der Dieb eine Abklingzeit. Gibt true zurück, wenn geklaut wurde.
+ * Während der Abklingzeit, mit vollem Container oder ohne Opfer passiert nichts.
  */
-export function updateSteal(
-  state: GameState,
-  thief: Player,
-  pressed: boolean,
-  dtMs: number,
-): boolean {
+export function tryInstantSteal(state: GameState, thief: Player): boolean {
+  if (thief.stealCooldownMs > 0) return false;
   if (totalBottles(thief.bottles) >= capacityOf(thief)) return false;
-
-  const current = thief.stealTargetId === null ? undefined : state.players[thief.stealTargetId];
-  const target =
-    current !== undefined && canBeRobbed(thief, current)
-      ? current
-      : findStealTarget(state, thief);
+  const target = findStealTarget(state, thief);
   if (target === null) return false;
 
-  if (thief.item === 'bolt_cutters' && pressed) {
+  if (thief.item === 'bolt_cutters') {
     takeLoot(thief, target, 1);
     thief.item = null;
-    cancelSteal(thief);
-    return true;
-  }
-
-  if (thief.stealTargetId !== target.id) {
-    thief.stealTargetId = target.id;
-    thief.stealProgressMs = 0;
-  }
-  thief.stealProgressMs += dtMs;
-  if (thief.stealProgressMs >= CONFIG.steal.durationMs) {
+  } else {
     takeLoot(thief, target, CONFIG.steal.fraction);
-    cancelSteal(thief);
   }
+  thief.stealCooldownMs = CONFIG.steal.cooldownMs;
   return true;
 }

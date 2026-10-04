@@ -143,9 +143,6 @@ export class PlayerHud {
     if (p.mode === 'searching') {
       progress = p.searchProgressMs / CONFIG.searchMs;
       this.bar.setFillStyle(0xffee58);
-    } else if (p.mode === 'stealing') {
-      progress = p.stealProgressMs / CONFIG.steal.durationMs;
-      this.bar.setFillStyle(0xff5252);
     }
     this.barBg.setVisible(progress > 0);
     this.bar.setVisible(progress > 0);

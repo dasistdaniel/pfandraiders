@@ -82,7 +82,7 @@ describe('stepPose', () => {
     expect(r.pose.frame).toBe('down_a');
     r = stepPose(r.state, 3, 3, 'searching', 150);
     expect(r.pose.frame).toBe('down_b'); // 250
-    r = stepPose(r.state, 3, 3, 'stealing', 250);
+    r = stepPose(r.state, 3, 3, 'searching', 250);
     expect(r.pose.frame).toBe('down_a'); // 500
   });
 
@@ -231,7 +231,7 @@ describe('stepPose character fields', () => {
     expect(stepPose(initialPose(5, 5), 5, 6, 'walking', 16).dir).toBe('down');
   });
 
-  it('searching and stealing face down and alternate two different steps every ACTION_FRAME_MS', () => {
+  it('searching faces down and alternates two different steps every ACTION_FRAME_MS', () => {
     const [a, b] = ACTION_STEPS;
     expect(charFrameIndex('down', a)).not.toBe(charFrameIndex('down', b));
     const facingUp = stepPose(initialPose(3, 3), 3, 2, 'walking', 16).state;
@@ -240,7 +240,7 @@ describe('stepPose character fields', () => {
     expect(r.step).toBe(a);
     r = stepPose(r.state, 3, 2, 'searching', ACTION_FRAME_MS - 100);
     expect(r.step).toBe(b);
-    r = stepPose(r.state, 3, 2, 'stealing', ACTION_FRAME_MS);
+    r = stepPose(r.state, 3, 2, 'searching', ACTION_FRAME_MS);
     expect(r.step).toBe(a);
   });
 
@@ -259,9 +259,8 @@ describe('moving flag', () => {
     expect(stepPose(initialPose(0, 0), 0.01, 0, 'walking', 16).moving).toBe(false);
   });
 
-  it('stepPose: false while searching, stealing or unconscious, even when position changes', () => {
+  it('stepPose: false while searching or unconscious, even when position changes', () => {
     expect(stepPose(initialPose(0, 0), 0, 0, 'searching', 16).moving).toBe(false);
-    expect(stepPose(initialPose(0, 0), 0, 0, 'stealing', 16).moving).toBe(false);
     expect(stepPose(initialPose(0, 0), 5, 0, 'unconscious', 16).moving).toBe(false);
   });
 
