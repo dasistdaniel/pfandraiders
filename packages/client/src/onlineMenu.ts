@@ -85,7 +85,7 @@ export function showOnlineMenu(
   socketFactory: SocketFactory = (u) => new WebSocket(u) as unknown as ReturnType<SocketFactory>,
 ): Promise<OnlineConnection | null> {
   return new Promise((resolve) => {
-    const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;box-sizing:border-box;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
+    const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
     const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;width:440px;min-height:340px;max-width:90vw;box-sizing:border-box');
     root.appendChild(box);
     // Phaser hängt am window und verschluckt gefangene Tasten (E, O, Leertaste ...), also hier stoppen
