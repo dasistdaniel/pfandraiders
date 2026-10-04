@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+<title>PfandRaiders</title>
+<rect width="32" height="32" fill="#1b1b1f"/>
+<polygon fill="#ef5350" points="0,21 0,25 25,0 21,0"/>
+<polygon fill="#ffca28" points="0,27 0,31 31,0 27,0"/>
+<polygon fill="#66bb6a" points="32,1 1,32 5,32 32,5"/>
+<polygon fill="#42a5f5" points="32,7 7,32 11,32 32,11"/>
+<path fill="#1b1b1f" shape-rendering="crispEdges" d="M7 3h16v2h-16zM7 5h2v21h-2zM21 5h2v1h-2zM21 6h5v2h-5zM12 8h9v2h-9zM24 8h2v6h-2zM12 10h2v2h-2zM19 10h2v2h-2zM12 12h9v2h-9zM21 14h5v2h-5zM21 16h2v1h-2zM12 17h11v2h-11zM12 19h2v7h-2zM7 26h7v2h-7z"/>
+<path fill="#fff6d6" shape-rendering="crispEdges" d="M9 5h12v3h-12zM9 8h3v6h-3zM21 8h3v6h-3zM9 14h12v3h-12zM9 17h3v9h-3z"/>
+</svg>

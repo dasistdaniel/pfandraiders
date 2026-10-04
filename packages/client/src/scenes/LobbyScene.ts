@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { KEYBOARD_LAYOUTS, PLAYER_COLORS } from '../devices';
 import type { DeviceRef, PlayerSlot } from '../devices';
-import { GAME_H, GAME_W } from '../layout';
+import { GAME_W } from '../layout';
+import { addLogo } from '../logoTexture';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
+/** Oberkante des Lobby-Textes unter dem Logo. */
+const TEXT_TOP = 176;
 const MAX_PLAYERS = 4;
 const PAD_START_BUTTON = 9;
 
@@ -54,7 +57,8 @@ export class LobbyScene extends Phaser.Scene {
     this.joinKeys = KEYBOARD_LAYOUTS.map((l) => this.input.keyboard!.addKey(l.action));
     this.startKey = this.input.keyboard!.addKey('SPACE');
     this.backKey = this.input.keyboard!.addKey('ESC');
-    this.text = this.add.text(GAME_W / 2, GAME_H / 2, '', { ...FONT, align: 'center' }).setOrigin(0.5);
+    addLogo(this); // oben mittig, bis y 154
+    this.text = this.add.text(GAME_W / 2, TEXT_TOP, '', { ...FONT, align: 'center' }).setOrigin(0.5, 0);
   }
 
   update(): void {
@@ -101,7 +105,7 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private lines(): string[] {
-    const lines = ['PfandRaiders', '', 'Beitreten: Tastatur 1 = E, Tastatur 2 = Enter, Gamepad = A', ''];
+    const lines = ['Beitreten: Tastatur 1 = E, Tastatur 2 = Enter, Gamepad = A', ''];
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const slot = this.slots[i];
       lines.push(slot ? `P${i + 1}: ${describe(slot.device)}` : `P${i + 1}: (frei)`);

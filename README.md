@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo/logo.svg" alt="PfandRaiders-Logo" width="480"></p>
+
 # PfandRaiders
 
 Retro-Top-Down-Spiel: Pfandflaschen sammeln, abgeben, Container ausbauen. Design: `docs/superpowers/specs/`, Pläne: `docs/superpowers/plans/`.
