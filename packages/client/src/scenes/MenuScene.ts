@@ -4,7 +4,7 @@ import { KEYBOARD_LAYOUTS } from '../devices';
 import { GAME_H, GAME_W } from '../layout';
 import { buildLabel, currentBuild } from '../buildInfo';
 import { addLogo } from '../logoTexture';
-import { controlLines, MenuModel } from '../menuModel';
+import { arrowAt, controlLines, MenuModel } from '../menuModel';
 import type { MenuItem } from '../menuModel';
 import { showOnlineMenu } from '../onlineMenu';
 import { music, sfx } from '../sfx';
@@ -262,14 +262,15 @@ export class MenuScene extends Phaser.Scene {
       this.model.select(i);
       this.render();
     });
-    t.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    t.on('pointerdown', (_pointer: Phaser.Input.Pointer, localX: number) => {
       if (this.busy) return;
       this.model.select(i);
       this.render();
       const id = this.model.activate();
       if (id === 'volume' || id === 'music') {
-        // Linke Hälfte der Zeile leiser, rechte lauter
-        this.adjustVolume(pointer.x < t.x ? -1 : 1);
+        // Nur ein Klick auf einen der Pfeile ändert die Lautstärke
+        const dir = arrowAt(this.labelFor(this.model.items[i]), localX, t.width);
+        if (dir !== 0) this.adjustVolume(dir);
         return;
       }
       this.activate(id);

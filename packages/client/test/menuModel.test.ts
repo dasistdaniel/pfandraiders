@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ default: {} }));
 
 import { KEYBOARD_LAYOUTS } from '../src/devices';
-import { controlLines, MenuModel } from '../src/menuModel';
+import { controlLines, MenuModel, arrowAt } from '../src/menuModel';
 import { PAD_LABELS } from '../src/sources';
 
 const items = [
@@ -66,5 +66,35 @@ describe('controlLines', () => {
       expect(lines[i]).toContain(l.labels.action);
     });
     expect(lines[lines.length - 1]).toContain('Gamepad');
+  });
+});
+
+describe('arrowAt', () => {
+  const label = 'Lautstärke: ◄ 70 % ►';
+  const width = label.length * 10; // 10 px pro Zeichen
+  const x = (index: number) => index * 10 + 5; // Mitte des Zeichens
+  it('hits the left arrow and its neighbours', () => {
+    const i = label.indexOf('◄');
+    expect(arrowAt(label, x(i), width)).toBe(-1);
+    expect(arrowAt(label, x(i - 1), width)).toBe(-1);
+    expect(arrowAt(label, x(i + 1), width)).toBe(-1);
+  });
+  it('hits the right arrow and its neighbours', () => {
+    const i = label.indexOf('►');
+    expect(arrowAt(label, x(i), width)).toBe(1);
+    expect(arrowAt(label, x(i - 1), width)).toBe(1);
+    expect(arrowAt(label, x(i + 1), width)).toBe(1);
+  });
+  it('ignores clicks on the name and on the value', () => {
+    expect(arrowAt(label, x(2), width)).toBe(0);
+    expect(arrowAt(label, x(label.indexOf('70')), width)).toBe(0);
+    expect(arrowAt(label, x(label.length + 5), width)).toBe(0);
+  });
+  it('is safe for garbage input', () => {
+    expect(arrowAt('', 5, 100)).toBe(0);
+    expect(arrowAt(label, NaN, width)).toBe(0);
+    expect(arrowAt(label, 5, 0)).toBe(0);
+    expect(arrowAt(label, -50, width)).toBe(0);
+    expect(arrowAt('Ton: an', 30, 70)).toBe(0);
   });
 });
