@@ -3,7 +3,7 @@ import type { GameState, Player } from '@pfandraiders/core';
 
 export type SoundId =
   | 'pickup'
-  | 'sell'
+  | 'pling'
   | 'buy'
   | 'stealSuccess'
   | 'bite'
@@ -17,11 +17,28 @@ export type SoundId =
 const BITE_MIN_DROP = CONFIG.npc.dog.biteDamage - 1;
 const BITE_NEAR = CONFIG.npc.dog.biteRadius + 6;
 
+/** Höchstens so viele Plings pro Frame (online kann ein Snapshot mehrere Abgaben enthalten). */
+export const PLING_MAX_PER_FRAME = 4;
+/** Nach so langer Pause ohne Pling beginnt die Tonleiter wieder unten. */
+export const PLING_RESET_MS = 700;
+/** Höchste Stufe der Pling-Tonleiter (Stufen 0 bis PLING_MAX_STEP). */
+export const PLING_MAX_STEP = 7;
+
+/**
+ * Tonstufe des nächsten Plings: folgt er innerhalb von PLING_RESET_MS auf den vorigen, eine Stufe
+ * höher (bis PLING_MAX_STEP), sonst wieder Stufe 0. `lastMs` null = noch kein Pling.
+ */
+export function plingStep(lastMs: number | null, nowMs: number, prevStep: number): number {
+  if (lastMs === null || nowMs - lastMs > PLING_RESET_MS) return 0;
+  return Math.min(prevStep + 1, PLING_MAX_STEP);
+}
+
 /**
  * Vergleicht zwei aufeinanderfolgende Zustände und liefert die Sounds, die dazu gehören.
  * Rein und ohne Phaser/WebAudio. Nur diskrete Felder werden verglichen (keine Positionen).
  * `ownIds`: Spieler, deren persönliche Sounds hörbar sind ('all' = alle, Splitscreen).
- * Jede Sound-ID kommt höchstens einmal vor.
+ * Jede Sound-ID kommt höchstens einmal vor, außer 'pling': einmal pro abgegebener Flasche
+ * (höchstens PLING_MAX_PER_FRAME), damit der Aufrufer die Töne nacheinander abspielen kann.
  */
 export function detectSounds(
   prev: GameState | null,
@@ -30,6 +47,7 @@ export function detectSounds(
 ): SoundId[] {
   if (prev === null) return [];
   const out = new Set<SoundId>();
+  let plings = 0;
   const audible = (id: string): boolean => ownIds === 'all' || ownIds.includes(id);
 
   // Diebstahl: Das Opfer verliert Flaschen und bekommt Schutz (takeLoot). Der Dieb ist, wer dabei Flaschen
@@ -71,7 +89,8 @@ export function detectSounds(
     const bottlesNow = totalBottles(p.bottles);
     const bottlesBefore = totalBottles(q.bottles);
     if (bottlesNow > bottlesBefore && !thieves.has(p.id)) out.add('pickup');
-    if (p.money > q.money && bottlesNow < bottlesBefore) out.add('sell');
+    // Abgabe am Pfandautomaten: pro Flasche ein Pling
+    if (p.money > q.money && bottlesNow < bottlesBefore) plings += bottlesBefore - bottlesNow;
 
     // Geld sinkt bei Bewusstsein nur durch Käufe (Umfallen verliert Geld, aber bewusstlos)
     const spent = p.money < q.money && q.unconsciousMs === 0 && p.unconsciousMs === 0;
@@ -106,7 +125,8 @@ export function detectSounds(
     if (b < a && b <= 10 && b >= 1) out.add('tick');
   }
 
-  return [...out];
+  const plingIds: SoundId[] = Array.from({ length: Math.min(plings, PLING_MAX_PER_FRAME) }, () => 'pling');
+  return [...out, ...plingIds];
 }
 
 function dogNear(state: GameState, p: Player): boolean {

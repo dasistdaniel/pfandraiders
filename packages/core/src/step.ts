@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import { deposit, isNear, tryBuy } from './economy';
+import { tryBuy, updateDeposit } from './economy';
 import { updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
@@ -49,23 +49,21 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   if (updateHealth(p, dt)) {
     // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgeführt)
     p.mode = 'unconscious';
+    p.depositMs = 0;
     return;
   }
 
   if (input.buy !== null) tryBuy(state, p, input.buy);
 
-  let deposited = false;
-  if (pressed && isNear(state.map.dropoffs, p)) {
-    deposit(p);
-    deposited = true;
-  }
+  // Abgabe hat Vorrang: wer mit Flaschen am Automaten drückt, beginnt im selben Tick keine Suche
+  const depositing = updateDeposit(state, p, input, dt, pressed);
 
   if (input.moveX !== 0 || input.moveY !== 0) {
     cancelSearch(p);
     walk(state.map, p, input, dt);
   } else if (stealPressed && tryInstantSteal(state, p)) {
     cancelSearch(p);
-  } else if (input.action && !deposited && updateSearch(state, p, dt, pressed)) {
+  } else if (input.action && !depositing && updateSearch(state, p, dt, pressed)) {
     // sucht: eine neue Suche beginnt nur beim Drücken, eine laufende geht beim Halten weiter
   } else {
     cancelSearch(p);

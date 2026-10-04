@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SoundFx } from '../src/sound';
+import { PLING_GAP_SEC, SoundFx } from '../src/sound';
 
 function fakeContext() {
   const osc = () => ({
@@ -37,7 +37,7 @@ describe('SoundFx', () => {
 
   it('survives a throwing AudioContext constructor', () => {
     const fx = new SoundFx(() => { throw new Error('nope'); }, () => 0, false);
-    expect(() => { fx.unlock(); fx.play('sell'); }).not.toThrow();
+    expect(() => { fx.unlock(); fx.play('pling'); }).not.toThrow();
   });
 
   it('creates the context only on unlock and resumes it', () => {
@@ -63,7 +63,7 @@ describe('SoundFx', () => {
     t = 50;
     fx.play('pickup');
     expect(ctx.createOscillator).toHaveBeenCalledTimes(1);
-    fx.play('sell'); // andere ID ist nicht betroffen (zwei Noten)
+    fx.play('pling'); // andere ID ist nicht betroffen (zwei Noten)
     expect(ctx.createOscillator).toHaveBeenCalledTimes(3);
     t = 100;
     fx.play('pickup');
@@ -80,7 +80,7 @@ describe('SoundFx', () => {
     let t = 0;
     const fx = new SoundFx(() => ctx as unknown as AudioContext, () => (t += 1000), false);
     fx.unlock();
-    for (const id of ['pickup', 'sell', 'buy', 'stealSuccess', 'bite', 'knockout', 'policeCheck', 'zoneAnnounced', 'roundEnd', 'tick'] as const) {
+    for (const id of ['pickup', 'pling', 'buy', 'stealSuccess', 'bite', 'knockout', 'policeCheck', 'zoneAnnounced', 'roundEnd', 'tick'] as const) {
       expect(() => fx.play(id)).not.toThrow();
     }
     expect(ctx.createBufferSource).toHaveBeenCalledTimes(1); // nur bite
@@ -127,5 +127,65 @@ describe('SoundFx', () => {
     fx.unlock();
     const master = ctx.createGain.mock.results[0].value;
     expect(master.gain.value).toBeCloseTo(0.15 * 0.5);
+  });
+});
+
+describe('SoundFx delay and pling', () => {
+  type Osc = { start: ReturnType<typeof vi.fn>; frequency: { setValueAtTime: ReturnType<typeof vi.fn> } };
+  const oscs = (ctx: ReturnType<typeof fakeContext>): Osc[] =>
+    ctx.createOscillator.mock.results.map((r) => r.value as Osc);
+
+  it('schedules a sound delaySec after the current audio time', () => {
+    const ctx = fakeContext();
+    ctx.currentTime = 2;
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => 0, false);
+    fx.unlock();
+    fx.play('pickup', 0.25);
+    expect(oscs(ctx)[0].start).toHaveBeenCalledWith(2.25);
+  });
+
+  it('plays a burst of four plings from one frame, spaced by the gap', () => {
+    expect(PLING_GAP_SEC * 1000).toBeGreaterThanOrEqual(80); // sonst schluckt die Sperre die Folgetöne
+    const ctx = fakeContext();
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => 1000, false);
+    fx.unlock();
+    for (let k = 0; k < 4; k++) fx.play('pling', k * PLING_GAP_SEC);
+    const starts = oscs(ctx).map((o) => o.start.mock.calls[0][0] as number);
+    expect(starts).toHaveLength(8); // zwei Noten je Pling
+    for (let k = 0; k < 4; k++) expect(starts[2 * k]).toBeCloseTo(k * PLING_GAP_SEC);
+  });
+
+  it('raises the pitch of consecutive plings and resets after a pause', () => {
+    const ctx = fakeContext();
+    let t = 0;
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => t, false);
+    fx.unlock();
+    const firstFreq = (i: number): number => oscs(ctx)[2 * i].frequency.setValueAtTime.mock.calls[0][0] as number;
+    fx.play('pling');
+    t = 150;
+    fx.play('pling');
+    t = 300;
+    fx.play('pling');
+    expect(firstFreq(1)).toBeGreaterThan(firstFreq(0));
+    expect(firstFreq(2)).toBeGreaterThan(firstFreq(1));
+    t = 2000;
+    fx.play('pling');
+    expect(firstFreq(3)).toBeCloseTo(firstFreq(0));
+  });
+
+  it('does not advance the pitch for a swallowed pling', () => {
+    const ctx = fakeContext();
+    let t = 0;
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => t, false);
+    fx.unlock();
+    const firstFreq = (i: number): number => oscs(ctx)[2 * i].frequency.setValueAtTime.mock.calls[0][0] as number;
+    fx.play('pling');
+    t = 10;
+    fx.play('pling'); // innerhalb der Sperre: verschluckt
+    t = 150;
+    fx.play('pling');
+    expect(oscs(ctx)).toHaveLength(4);
+    const semitone = firstFreq(1) / firstFreq(0);
+    expect(semitone).toBeCloseTo(2 ** (2 / 12)); // genau ein Schritt der Pentatonik höher
   });
 });

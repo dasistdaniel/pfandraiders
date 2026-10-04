@@ -23,6 +23,8 @@ export const CONFIG = {
   slideMaxPx: 9,
   interactRadius: 20,
   searchMs: 1500,
+  /** Am Pfandautomaten wird alle so viele ms eine Flasche abgegeben (die erste sofort beim Drücken) */
+  depositEveryMs: 150,
   refillMs: 30000,
   /** Wahrscheinlichkeit, dass ein Spot zu Rundenbeginn gefüllt ist */
   spotActiveChance: 0.85,

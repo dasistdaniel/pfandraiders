@@ -2,6 +2,7 @@ import { CONFIG, createGame, parseMap } from '@pfandraiders/core';
 import type { GameState } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
+import { formatMoney } from '../src/format';
 import { alertText, hintLines, playerName, resultFooter, resultLines, resultRows, statusLines } from '../src/text';
 
 const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' };
@@ -111,6 +112,33 @@ describe('hintLines', () => {
     const s = shopGame();
     s.phase = 'ended';
     expect(hintLines(s, s.players.p1, KEYS)).toEqual([]);
+  });
+});
+
+describe('dropoff and search hints', () => {
+  // p1 (24,24) steht 16 px vom Pfandautomaten (40,24); der Spot (104,24) liegt außer Reichweite
+  function dropoffGame(): GameState {
+    return createGame(1, parseMap(['########', '#@D...b#', '########']), ['p1']);
+  }
+
+  it('offers holding the key to deposit with the value of the carried bottles', () => {
+    const s = dropoffGame();
+    s.players.p1.bottles = { plastic: 2, glass: 1, crate: 0 };
+    const value = 2 * CONFIG.bottleValue.plastic + CONFIG.bottleValue.glass;
+    expect(hintLines(s, s.players.p1, KEYS)).toContain(`[E halten] Pfand abgeben (${formatMoney(value)})`);
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain(`[Enter halten] Pfand abgeben (${formatMoney(value)})`);
+  });
+
+  it('says there is nothing to deposit with an empty container', () => {
+    const s = dropoffGame();
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('Pfandautomat: nichts zum Abgeben');
+  });
+
+  it('asks for a fresh press to search', () => {
+    const s = createGame(1, parseMap(['######', '#@b..#', '######']), ['p1']);
+    s.spots[0].contents = { plastic: 1, glass: 0, crate: 0 };
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[E drücken, halten] Suchen');
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[Enter drücken, halten] Suchen');
   });
 });
 

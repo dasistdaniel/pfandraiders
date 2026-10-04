@@ -1,4 +1,5 @@
 import { DEFAULT_VOLUME, loadVolume, saveVolume } from './settings';
+import { plingStep } from './soundEvents';
 import type { SoundId } from './soundEvents';
 
 export type { SoundId } from './soundEvents';
@@ -6,6 +7,10 @@ export type { SoundId } from './soundEvents';
 const MASTER_GAIN = 0.15;
 const MIN_REPEAT_MS = 80;
 const STORAGE_KEY = 'pfandraiders.muted';
+/** Abstand der Plings eines Frames in s; mindestens MIN_REPEAT_MS, sonst schluckt die Sperre sie. */
+export const PLING_GAP_SEC = 0.09;
+/** Pling-Tonleiter: Halbtöne über dem Grundton je Stufe (Dur-Pentatonik) */
+const PLING_SEMITONES = [0, 2, 4, 7, 9, 12, 14, 16];
 
 type Wave = 'square' | 'triangle' | 'sawtooth' | 'sine';
 /** Frequenz in Hz (0 = Pause), Dauer in s. `to` gleitet innerhalb der Note zu dieser Frequenz. */
@@ -24,7 +29,8 @@ interface Recipe {
 
 const RECIPES: Record<SoundId, Recipe> = {
   pickup: { wave: 'square', gain: 0.5, notes: [{ f: 1200, d: 0.06 }] },
-  sell: { wave: 'square', gain: 0.5, notes: [{ f: 988, d: 0.07 }, { f: 1319, d: 0.14 }] },
+  /** eine Flasche am Pfandautomaten: kurzer heller Münz-Blip, Tonhöhe steigt pro Flasche */
+  pling: { wave: 'triangle', gain: 0.55, notes: [{ f: 1047, d: 0.035 }, { f: 1568, d: 0.09 }] },
   buy: { wave: 'triangle', gain: 0.8, notes: [{ f: 400, d: 0.18, to: 900 }] },
   stealSuccess: { wave: 'square', gain: 0.5, notes: [{ f: 700, d: 0.3, to: 200 }] },
   bite: { wave: 'sawtooth', gain: 0.9, notes: [{ f: 0, d: 0.12 }], noise: true },
@@ -85,6 +91,8 @@ export class SoundFx {
   private master: GainNode | null = null;
   private lastPlayed = new Map<SoundId, number>();
   private noiseBuffer: AudioBuffer | null = null;
+  private plingLastMs: number | null = null;
+  private plingPrevStep = 0;
   muted: boolean;
   volume: number;
   /** Wird nach jedem Umschalten der Stummschaltung aufgerufen (z. B. für die Musik). */
@@ -143,23 +151,35 @@ export class SoundFx {
     return this.muted;
   }
 
-  play(id: SoundId): void {
+  /**
+   * Spielt einen Sound, auf Wunsch `delaySec` Sekunden später (für mehrere Plings aus einem Frame).
+   * Die Wiederholsperre rechnet mit dem geplanten Zeitpunkt.
+   */
+  play(id: SoundId, delaySec = 0): void {
     if (this.muted || !this.ctx || !this.master) return;
-    const t = this.now();
+    const delay = Number.isFinite(delaySec) ? Math.max(0, delaySec) : 0;
+    const t = this.now() + delay * 1000;
     const last = this.lastPlayed.get(id);
     if (last !== undefined && t - last < MIN_REPEAT_MS) return;
     this.lastPlayed.set(id, t);
+    let ratio = 1;
+    if (id === 'pling') {
+      const step = plingStep(this.plingLastMs, t, this.plingPrevStep);
+      this.plingLastMs = t;
+      this.plingPrevStep = step;
+      ratio = 2 ** (PLING_SEMITONES[step] / 12);
+    }
     try {
-      this.synth(RECIPES[id]);
+      this.synth(RECIPES[id], delay, ratio);
     } catch {
       // Audio darf das Spiel nie stören
     }
   }
 
-  private synth(recipe: Recipe): void {
+  private synth(recipe: Recipe, delaySec = 0, ratio = 1): void {
     const ctx = this.ctx!;
     const out = this.master!;
-    let at = ctx.currentTime;
+    let at = ctx.currentTime + delaySec;
     if (recipe.noise) {
       const dur = recipe.notes[0].d;
       const src = ctx.createBufferSource();
@@ -175,7 +195,10 @@ export class SoundFx {
       return;
     }
     for (const note of recipe.notes) {
-      if (note.f > 0) this.tone(recipe, note, at, out);
+      if (note.f > 0) {
+        const scaled = ratio === 1 ? note : { ...note, f: note.f * ratio, to: note.to === undefined ? undefined : note.to * ratio };
+        this.tone(recipe, scaled, at, out);
+      }
       at += note.d;
     }
   }

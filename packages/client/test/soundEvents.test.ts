@@ -1,7 +1,7 @@
 import { CITY_MAP, CONFIG, createGame } from '@pfandraiders/core';
 import type { GameState, Npc } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
-import { detectSounds, snapshotForSound } from '../src/soundEvents';
+import { detectSounds, PLING_MAX_STEP, PLING_RESET_MS, plingStep, snapshotForSound } from '../src/soundEvents';
 
 function fresh(): GameState {
   return createGame(1, CITY_MAP, ['a', 'b']);
@@ -34,10 +34,26 @@ describe('detectSounds', () => {
     expect(detectSounds(p, n, 'all')).toEqual(['pickup']);
   });
 
-  it('plays sell when money rises while bottles drop', () => {
+  it('plays one pling per deposited bottle', () => {
     const p = next(fresh(), (s) => { s.players.a.bottles.glass = 3; });
-    const n = next(p, (s) => { s.players.a.bottles.glass = 0; s.players.a.money += 45; });
-    expect(detectSounds(p, n, 'all')).toEqual(['sell']);
+    const one = next(p, (s) => { s.players.a.bottles.glass = 2; s.players.a.money += 15; });
+    expect(detectSounds(p, one, 'all')).toEqual(['pling']);
+    const three = next(p, (s) => { s.players.a.bottles.glass = 0; s.players.a.money += 45; });
+    expect(detectSounds(p, three, 'all')).toEqual(['pling', 'pling', 'pling']);
+  });
+
+  it('caps the plings of one frame at four', () => {
+    const p = next(fresh(), (s) => { s.players.a.bottles.plastic = 10; });
+    const n = next(p, (s) => { s.players.a.bottles.plastic = 0; s.players.a.money += 80; });
+    expect(detectSounds(p, n, 'all')).toEqual(['pling', 'pling', 'pling', 'pling']);
+  });
+
+  it('plays plings only for audible players and not for a robbery', () => {
+    const p = next(fresh(), (s) => { s.players.a.bottles.plastic = 2; });
+    const deposit = next(p, (s) => { s.players.a.bottles.plastic = 1; s.players.a.money += 8; });
+    expect(detectSounds(p, deposit, ['b'])).toEqual([]);
+    const robbed = next(p, (s) => { s.players.a.bottles.plastic = 1; });
+    expect(detectSounds(p, robbed, ['a'])).not.toContain('pling');
   });
 
   it('plays buy for upgrade, item and food', () => {
@@ -184,7 +200,7 @@ describe('detectSounds', () => {
     expect(detectSounds(p, n, ['a']).sort()).toEqual(['pickup', 'zoneAnnounced']);
   });
 
-  it('returns each id at most once', () => {
+  it('returns each id at most once (except one pling per bottle)', () => {
     const p = fresh();
     const n = next(p, (s) => {
       s.players.a.bottles.plastic += 1;
@@ -202,5 +218,33 @@ describe('snapshotForSound', () => {
     s.timeLeftMs = 1;
     expect(copy.players.a.bottles.plastic).toBe(0);
     expect(copy.timeLeftMs).not.toBe(1);
+  });
+});
+
+describe('plingStep', () => {
+  it('starts at 0 without a previous pling', () => {
+    expect(plingStep(null, 1000, 5)).toBe(0);
+  });
+
+  it('rises by one while plings follow each other closely', () => {
+    expect(plingStep(1000, 1150, 0)).toBe(1);
+    expect(plingStep(1150, 1300, 1)).toBe(2);
+    expect(plingStep(1000, 1000 + PLING_RESET_MS, 3)).toBe(4);
+  });
+
+  it('resets after a pause', () => {
+    expect(plingStep(1000, 1001 + PLING_RESET_MS, 4)).toBe(0);
+  });
+
+  it('caps at the highest step', () => {
+    expect(PLING_MAX_STEP).toBe(7);
+    expect(plingStep(1000, 1100, PLING_MAX_STEP)).toBe(PLING_MAX_STEP);
+    let step = 0;
+    let last: number | null = null;
+    for (let t = 0; t < 30 * 150; t += 150) {
+      step = plingStep(last, t, step);
+      last = t;
+    }
+    expect(step).toBe(PLING_MAX_STEP);
   });
 });

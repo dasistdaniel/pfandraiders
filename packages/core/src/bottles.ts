@@ -3,8 +3,8 @@ import type { BottleKind, Bottles } from './types';
 
 export const BOTTLE_KINDS: readonly BottleKind[] = ['plastic', 'glass', 'crate'];
 
-/** Wertvollstes zuerst, wird bei knapper Kapazität in dieser Reihenfolge umgefüllt */
-const VALUE_ORDER: readonly BottleKind[] = ['crate', 'glass', 'plastic'];
+/** Wertvollstes zuerst: so wird bei knapper Kapazität umgefüllt und am Pfandautomaten abgegeben */
+export const VALUE_ORDER: readonly BottleKind[] = ['crate', 'glass', 'plastic'];
 
 export function emptyBottles(): Bottles {
   return { plastic: 0, glass: 0, crate: 0 };

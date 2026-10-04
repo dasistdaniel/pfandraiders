@@ -70,6 +70,11 @@ export interface Player {
   mode: Mode;
   searchSpotId: number | null;
   searchProgressMs: number;
+  /**
+   * Abgabe am Pfandautomaten: Restzeit bis zur nächsten Flasche (Countdown, der Rest eines Schritts
+   * wird übertragen). 0 = gibt gerade nicht ab; während der Abgabe immer > 0.
+   */
+  depositMs: number;
   /** Aktionstaste im vorigen Tick gedrückt, für Flankenerkennung */
   actionHeld: boolean;
   /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Klauen wirkt nur beim Drücken) */
