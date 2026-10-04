@@ -83,8 +83,9 @@ Umgebungsvariablen des Servers:
 - `PORT`: Listen-Port, Standard 8080.
 - `ALLOWED_ORIGINS`: kommagetrennte Liste erlaubter Origins, zum Beispiel `https://dasistdaniel.github.io`. Ist sie leer, darf jede Origin verbinden (nur für die Entwicklung, der Server warnt beim Start).
 
-- `ROUND_MS`: optionale Rundenlänge in Millisekunden (für kurze Testrunden), Standard 10 Minuten.
+- `ROUND_MS`: optionale Rundenlänge in Millisekunden (für kurze Testrunden), mindestens 1000, Standard 10 Minuten.
 - `GRACE_MS`: wie lange der Server den Platz eines getrennten Spielers hält, ganze Zahl in Millisekunden, 5000 bis 3600000, Standard 120000 (2 Minuten). Ungültige Werte ergeben eine Warnung und den Standardwert. Ein leerer Raum bleibt mindestens so lange bestehen wie die Frist plus 15 s. Folge: Eine getrennte Figur steht bis zu 2 Minuten regungslos in der Runde und kann in dieser Zeit beklaut werden.
+- Leere Werte (wie sie `docker-compose.yml` für nicht gesetzte `ROUND_MS`, `GRACE_MS` und `MAP_ID` weitergibt) gelten als nicht gesetzt: Standardwert, keine Warnung.
 
 Im Hauptmenü öffnet "Online spielen" einen Dialog (Raum erstellen oder mit Code beitreten). Die Server-Adresse kommt aus `?server=ws://…`, sonst aus der Build-Variable `VITE_SERVER_URL`, sonst `ws://localhost:8080`. Nach einem Verbindungsabbruch verbindet der Client automatisch neu: 30 s lang im 2-s-Takt, danach fragt er "Weiter versuchen?" (Enter = Ja, jede Runde wieder 30 s; Esc = Menü). Der Server hält den Platz 2 Minuten (siehe `GRACE_MS`); ist die Runde inzwischen vorbei, geht es mit einem Hinweis ins Menü. Das Token liegt nur im sessionStorage, die Wiederverbindung klappt also beim Neuladen oder in einem duplizierten Tab, nicht in einem ganz neuen Tab. Wer online über „Spiel verlassen“ geht, gibt seinen Platz sofort frei (Nachricht `leave`): Das Token gilt danach nicht mehr, die Figur bleibt bis Rundenende als Statist stehen und ihr Geld zählt für die Rangliste.
 
@@ -95,7 +96,15 @@ Bauen: `npm run build:server` erzeugt `packages/server/dist/server.cjs` (eine ei
 Auf dem VPS (Docker, der Nginx Proxy Manager übernimmt HTTPS; das externe Docker-Netz `proxy-net` muss existieren):
 
     cd deploy
-    ALLOWED_ORIGINS=https://dasistdaniel.github.io docker compose up -d --build
+    echo "ALLOWED_ORIGINS=https://dasistdaniel.github.io" > .env   # einmalig; optional auch ROUND_MS, GRACE_MS, MAP_ID
+    ./update.sh
+
+`update.sh` holt den neuesten Stand (`git pull --ff-only`) und baut den Container mit Buildinfo neu. Von Hand geht es so:
+
+    cd deploy
+    GIT_SHA=$(git rev-parse --short=7 HEAD) BUILD_NUMBER=$(git rev-list --count HEAD) docker compose up -d --build
+
+Buildinfo: Die Buildnummer des Servers ist die Anzahl der Commits (`git rev-list --count HEAD`), der Hash der Kurz-Hash des Commits. Beides steht in der Startmeldung des Servers und in der Online-Lobby ("Server: Build #… · …"). Die Nummer des Clients ist dagegen die Laufnummer von GitHub Actions; die Nummern unterscheiden sich also immer. Verglichen wird nur der Hash: Weicht er ab, warnt die Lobby, dass Client und Server verschiedene Versionen haben. Ohne `GIT_SHA` bleibt der Hash im Docker-Build leer (dort gibt es kein `.git`), dann entfällt die Warnung. `npm run build:server` liest Hash und Nummer aus `GIT_SHA` und `BUILD_NUMBER`, der Hash fällt sonst auf `git rev-parse` zurück, die Nummer auf `dev`.
 
 Der Client für GitHub Pages wird mit der Repository-Variable `SERVER_URL` gebaut (zum Beispiel `wss://play.example.org`).
 

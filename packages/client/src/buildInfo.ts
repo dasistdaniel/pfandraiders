@@ -14,6 +14,16 @@ export function currentBuild(): BuildInfo {
   };
 }
 
+/**
+ * Laufen Client und Server mit verschiedenem Code? Verglichen wird nur der Kurz-Hash
+ * (die Nummern zählen unterschiedlich: GitHub-Lauf beim Client, Commit-Anzahl beim Server).
+ * Unbekannter oder leerer Hash auf einer Seite: false.
+ */
+export function versionMismatch(client: BuildInfo, server: BuildInfo | null): boolean {
+  if (!server || !client.sha || !server.sha) return false;
+  return client.sha.toLowerCase() !== server.sha.toLowerCase();
+}
+
 /** Text für die Menüecke, zum Beispiel "Build #123 · a1b2c3d" oder "Build dev · a1b2c3d". */
 export function buildLabel(info: BuildInfo): string {
   const num = /^\d+$/.test(info.number) ? `#${info.number}` : info.number;

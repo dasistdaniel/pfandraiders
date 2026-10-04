@@ -4,3 +4,6 @@ dist
 .superpowers
 assets-src/
 .tmp/
+
+# Server-Konfiguration auf dem VPS (ALLOWED_ORIGINS usw.)
+deploy/.env

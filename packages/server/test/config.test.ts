@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseGraceMs, SERVER_CONFIG } from '../src/config';
+import { DEFAULT_MAP_ID } from '@pfandraiders/core';
+import { parseGraceMs, parseMapId, parseRoundMs, SERVER_CONFIG } from '../src/config';
 
 describe('parseGraceMs', () => {
   const fb = SERVER_CONFIG.graceMs;
@@ -24,5 +25,31 @@ describe('parseGraceMs', () => {
     expect(parseGraceMs('5000', fb)).toBe(5000);
     expect(parseGraceMs('180000', fb)).toBe(180_000);
     expect(parseGraceMs('  7000 ', fb)).toBe(7000);
+  });
+});
+
+describe('parseRoundMs', () => {
+  it('treats missing, empty and blank values as unset without a warning', () => {
+    for (const raw of [undefined, '', '   ']) expect(parseRoundMs(raw)).toEqual({ value: undefined, invalid: false });
+  });
+  it('accepts values from 1000 ms', () => {
+    expect(parseRoundMs('1000')).toEqual({ value: 1000, invalid: false });
+    expect(parseRoundMs(' 60000 ')).toEqual({ value: 60_000, invalid: false });
+  });
+  it('flags invalid values', () => {
+    for (const raw of ['999', 'abc', '-5', 'Infinity']) expect(parseRoundMs(raw)).toEqual({ value: undefined, invalid: true });
+  });
+});
+
+describe('parseMapId', () => {
+  it('treats missing, empty and blank values as the default without a warning', () => {
+    for (const raw of [undefined, '', '  ']) expect(parseMapId(raw)).toEqual({ value: DEFAULT_MAP_ID, invalid: false });
+  });
+  it('accepts known maps', () => {
+    expect(parseMapId('retro')).toEqual({ value: 'retro', invalid: false });
+    expect(parseMapId(' city ')).toEqual({ value: 'city', invalid: false });
+  });
+  it('flags unknown maps', () => {
+    expect(parseMapId('moon')).toEqual({ value: DEFAULT_MAP_ID, invalid: true });
   });
 });

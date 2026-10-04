@@ -1,6 +1,7 @@
 import { CITY_MAP, DEFAULT_MAP_ID, MAX_ROOM_PLAYERS, NO_INPUT, RETRO_MAP } from '@pfandraiders/core';
 import type { Input, MapId, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
+import { currentBuild } from '../src/buildInfo';
 import { SERVER_CONFIG } from '../src/config';
 import { Room } from '../src/room';
 import type { Conn } from '../src/room';
@@ -508,5 +509,27 @@ describe('leaving for good', () => {
     const before = JSON.stringify(room.roster());
     room.leaveForGood(new FakeConn());
     expect(JSON.stringify(room.roster())).toBe(before);
+  });
+});
+
+describe('joined build info', () => {
+  it('sends the server build with joined, also on a token return', () => {
+    const build = { number: '42', sha: 'abcdef1' };
+    const room = new Room('ABCD', { now: () => 0, random: () => 0.5, build });
+    const a = new FakeConn();
+    const r = room.join('Anna', a);
+    room.join('Bob', new FakeConn());
+    if (!r.ok) throw new Error('join failed');
+    expect(a.last('joined').build).toEqual(build);
+    expect(room.start(r.value.id).ok).toBe(true);
+    room.leave(a);
+    const a2 = new FakeConn();
+    room.join('Anna', a2, r.value.token);
+    expect(a2.last('joined').build).toEqual(build);
+  });
+
+  it('defaults to the current server build', () => {
+    const { a } = twoPlayers();
+    expect(a.last('joined').build).toEqual(currentBuild());
   });
 });

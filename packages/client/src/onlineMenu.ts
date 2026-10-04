@@ -1,4 +1,5 @@
 import type { ErrorCode, RosterEntry } from '@pfandraiders/core';
+import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
 import { OnlineConnection } from './online';
 import type { SocketFactory } from './online';
 
@@ -153,7 +154,20 @@ export function showOnlineMenu(
     const renderLobby = () => {
       box.replaceChildren();
       box.appendChild(el('div', { textContent: `Raum ${conn.room}` }, 'font-size:26px;letter-spacing:4px;margin-bottom:4px'));
-      box.appendChild(el('div', { textContent: 'Code weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:14px;margin-bottom:10px'));
+      box.appendChild(el('div', { textContent: 'Code weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:14px;margin-bottom:4px'));
+      if (conn.serverBuild) {
+        box.appendChild(el('div', { textContent: `Server: ${buildLabel(conn.serverBuild)}` }, 'color:#888;font-size:12px;margin-bottom:4px'));
+      }
+      if (versionMismatch(currentBuild(), conn.serverBuild)) {
+        box.appendChild(
+          el(
+            'div',
+            { textContent: 'Achtung: Client und Server haben verschiedene Versionen. Seite neu laden (Strg+F5) oder den Host informieren.' },
+            'color:#ffa726;font-size:13px;margin-bottom:4px',
+          ),
+        );
+      }
+      box.appendChild(el('div', {}, 'margin-bottom:6px'));
       const list = el('div', {}, 'margin-bottom:10px');
       const draw = (players: RosterEntry[]) => {
         list.replaceChildren();

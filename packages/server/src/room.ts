@@ -17,9 +17,11 @@ import type {
   MapId,
   RoomPhase,
   RosterEntry,
+  ServerBuild,
   ServerMessage,
 } from '@pfandraiders/core';
 import { randomUUID } from 'node:crypto';
+import { currentBuild } from './buildInfo';
 import { SERVER_CONFIG } from './config';
 
 /** Übertragungsweg zu einem Spieler. Der Raum kennt keine Sockets. */
@@ -54,6 +56,8 @@ export interface RoomOptions {
   roundMs?: number;
   now?: () => number;
   random?: () => number;
+  /** Build des Servers für joined (Standard currentBuild()). */
+  build?: ServerBuild;
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; code: ErrorCode; message: string };
@@ -76,6 +80,7 @@ export class Room {
   private readonly roundMs: number | undefined;
   private readonly now: () => number;
   private readonly random: () => number;
+  private readonly build: ServerBuild;
 
   constructor(
     readonly code: string,
@@ -90,6 +95,7 @@ export class Room {
     this.roundMs = opts.roundMs;
     this.now = opts.now ?? (() => Date.now());
     this.random = opts.random ?? Math.random;
+    this.build = opts.build ?? currentBuild();
     this.lastActive = this.now();
   }
 
@@ -136,7 +142,7 @@ export class Room {
       if (back) {
         back.conn = conn;
         back.disconnectedAt = null;
-        conn.send({ t: 'joined', room: this.code, you: back.id, token: back.token });
+        conn.send({ t: 'joined', room: this.code, you: back.id, token: back.token, build: this.build });
         if (this.phase === 'running' && this.state) this.sendStart(back);
         this.broadcastLobby();
         return { ok: true, value: back };
@@ -163,7 +169,7 @@ export class Room {
       ackSeq: 0,
     };
     this.members.push(member);
-    conn.send({ t: 'joined', room: this.code, you: member.id, token: member.token });
+    conn.send({ t: 'joined', room: this.code, you: member.id, token: member.token, build: this.build });
     this.broadcastLobby();
     return { ok: true, value: member };
   }

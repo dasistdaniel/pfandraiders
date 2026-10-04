@@ -18,6 +18,15 @@ export const ROOM_COLORS = [
   0xef5350, 0xab47bc, 0x26c6da, 0xec407a, 0xffa726, 0x66bb6a, 0x8d6e63, 0x5c6bc0,
 ];
 
+/** Größte Länge von Buildnummer und Kurz-Hash in der joined-Nachricht */
+export const MAX_BUILD_FIELD_LENGTH = 16;
+
+/** Build des Servers: Nummer (Commit-Anzahl oder "dev") und Kurz-Hash (leer = unbekannt). */
+export interface ServerBuild {
+  number: string;
+  sha: string;
+}
+
 export type ErrorCode =
   | 'bad_message'
   | 'room_not_found'
@@ -49,7 +58,7 @@ export type RoomPhase = 'lobby' | 'running' | 'ended';
 
 export type ServerMessage =
   | { t: 'error'; code: ErrorCode; message: string }
-  | { t: 'joined'; room: string; you: string; token: string }
+  | { t: 'joined'; room: string; you: string; token: string; build?: ServerBuild }
   | { t: 'lobby'; room: string; host: string; players: RosterEntry[]; phase: RoomPhase }
   | { t: 'start'; mapId: MapId; map: MapData; you: string; players: RosterEntry[]; snap: Snapshot }
   | { t: 'snap'; snap: Snapshot; ack: number };
@@ -68,6 +77,15 @@ function cleanRoom(raw: unknown): string | null {
   if (code.length !== ROOM_CODE_LENGTH) return null;
   for (const ch of code) if (!ROOM_CODE_CHARS.includes(ch)) return null;
   return code;
+}
+
+/** Prüft das build-Feld aus joined: zwei Zeichenketten, höchstens MAX_BUILD_FIELD_LENGTH lang. null = ungültig oder fehlend. */
+export function parseServerBuild(raw: unknown): ServerBuild | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const { number, sha } = raw as Record<string, unknown>;
+  if (typeof number !== 'string' || typeof sha !== 'string') return null;
+  if (number.length > MAX_BUILD_FIELD_LENGTH || sha.length > MAX_BUILD_FIELD_LENGTH) return null;
+  return { number, sha };
 }
 
 /** Prüft eine Client-Nachricht (bereits aus JSON geparst). null = ungültig. */
