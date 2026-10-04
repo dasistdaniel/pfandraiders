@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CREDITS, creditDetail, creditLine } from '../credits';
 import { KEYBOARD_LAYOUTS } from '../devices';
 import { GAME_H, GAME_W } from '../layout';
+import { buildLabel, currentBuild } from '../buildInfo';
 import { addLogo } from '../logoTexture';
 import { controlLines, MenuModel } from '../menuModel';
 import type { MenuItem } from '../menuModel';
@@ -132,6 +133,10 @@ export class MenuScene extends Phaser.Scene {
     this.controlsText = this.add
       .text(GAME_W / 2, 400, '', { fontFamily: 'monospace', fontSize: '14px', color: '#cccccc', align: 'center' })
       .setOrigin(0.5, 0);
+    // Buildnummer oben rechts (Version des Clients, hilfreich bei Fehlermeldungen)
+    this.add
+      .text(GAME_W - 8, 6, buildLabel(currentBuild()), { fontFamily: 'monospace', fontSize: '12px', color: '#8a9a9f' })
+      .setOrigin(1, 0);
     this.hintText = this.add
       .text(GAME_W / 2, GAME_H - 24, HINT_DEFAULT, {
         fontFamily: 'monospace',
