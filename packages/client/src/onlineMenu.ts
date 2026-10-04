@@ -85,8 +85,8 @@ export function showOnlineMenu(
   socketFactory: SocketFactory = (u) => new WebSocket(u) as unknown as ReturnType<SocketFactory>,
 ): Promise<OnlineConnection | null> {
   return new Promise((resolve) => {
-    const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
-    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;min-width:320px;max-width:90vw;box-sizing:border-box');
+    const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;box-sizing:border-box;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
+    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;width:440px;min-height:340px;max-width:90vw;box-sizing:border-box');
     root.appendChild(box);
     // Phaser hängt am window und verschluckt gefangene Tasten (E, O, Leertaste ...), also hier stoppen
     for (const type of ['keydown', 'keyup', 'keypress']) root.addEventListener(type, (e) => e.stopPropagation());
@@ -163,7 +163,7 @@ export function showOnlineMenu(
         const b = el(
           'button',
           { textContent: tabLabels[id], role: 'tab', tabIndex: active ? 0 : -1 },
-          `flex:1;font:inherit;color:${active ? '#fff' : '#999'};background:${active ? '#333' : '#1a1a1a'};border:0;border-bottom:3px solid ${active ? '#ffca28' : 'transparent'};padding:8px 12px;cursor:pointer`,
+          `flex:1 1 0;min-width:0;font:inherit;color:${active ? '#fff' : '#999'};background:${active ? '#333' : '#1a1a1a'};border:0;border-bottom:3px solid ${active ? '#ffca28' : 'transparent'};padding:8px 12px;cursor:pointer`,
         );
         b.setAttribute('aria-selected', String(active));
         b.onclick = () => switchTab(id, false);
