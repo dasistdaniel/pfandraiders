@@ -34,7 +34,9 @@ export type ClientMessage =
   | { t: 'create'; name: string }
   | { t: 'join'; room: string; name: string; token?: string }
   | { t: 'start' }
-  | { t: 'input'; seq: number; input: Input };
+  | { t: 'input'; seq: number; input: Input }
+  /** Spieler verlässt den Raum absichtlich: sein Platz wird sofort frei, keine Rückkehr mit dem Token. */
+  | { t: 'leave' };
 
 export interface RosterEntry {
   id: string;
@@ -94,6 +96,8 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return null;
       return { t: 'input', seq, input: sanitizeInput(m.input) };
     }
+    case 'leave':
+      return { t: 'leave' };
     default:
       return null;
   }

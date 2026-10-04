@@ -177,6 +177,16 @@ export class OnlineConnection implements GameConnection {
     if (this.isHost()) this.sendMsg({ t: 'start' });
   }
 
+  /** Raum absichtlich verlassen: der Server gibt den Platz sofort frei. Schließt die Verbindung nicht selbst. */
+  leave(): void {
+    if (this.status !== 'open') return;
+    try {
+      this.sendMsg({ t: 'leave' });
+    } catch {
+      // Socket schon im Schließen: dann verfällt der Platz nach der Frist
+    }
+  }
+
   /** Alias für requestStart. */
   startGame(): void {
     this.requestStart();

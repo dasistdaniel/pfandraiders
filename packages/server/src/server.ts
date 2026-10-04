@@ -234,6 +234,15 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
       session.room.setInput(session.member, msg.seq, msg.input);
       return;
     }
+    case 'leave': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return; // veraltete Verbindung darf den Platz der neuen nicht freigeben
+      session.room.leaveForGood(conn);
+      session.room = null;
+      session.member = null;
+      sock.close(1000, 'left');
+      return;
+    }
   }
 }
 

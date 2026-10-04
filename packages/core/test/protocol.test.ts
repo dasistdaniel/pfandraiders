@@ -51,6 +51,11 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage({ t: 'start' })).toEqual({ t: 'start' });
   });
 
+  it('accepts leave and drops extra fields', () => {
+    expect(parseClientMessage({ t: 'leave' })).toEqual({ t: 'leave' });
+    expect(parseClientMessage({ t: 'leave', room: 'ABCD', junk: [1, 2] })).toEqual({ t: 'leave' });
+  });
+
   it('accepts input and sanitizes its payload', () => {
     expect(parseClientMessage({ t: 'input', seq: 7, input: { moveX: 5, action: true } })).toEqual({
       t: 'input',
