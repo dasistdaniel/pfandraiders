@@ -157,3 +157,63 @@ describe('makeSender backpressure', () => {
     expect(sock.send).not.toHaveBeenCalled();
   });
 });
+
+describe('leave message', () => {
+  function inRoom() {
+    const s = setup();
+    const a = fakeConn();
+    const b = fakeConn();
+    const created = s.manager.create('Anna', a.conn);
+    if (!created.ok) throw new Error('create failed');
+    const { room, member } = created.value;
+    const bob = room.join('Bob', b.conn);
+    if (!bob.ok) throw new Error('join failed');
+    const sock = fakeSock();
+    s.sockets.set(a.conn, sock);
+    const session: Session = { ...newSession(1000), room, member };
+    return { ...s, a, b, room, member, sock, session };
+  }
+
+  it('releases the seat in the lobby, clears the session and closes the socket', () => {
+    const { env, a, b, room, sock, session } = inRoom();
+    handleMessage(env, session, a.conn, sock, JSON.stringify({ t: 'leave' }));
+    expect(room.members.map((m) => m.name)).toEqual(['Bob']);
+    expect(room.hostId()).toBe('p2');
+    expect(session.room).toBeNull();
+    expect(session.member).toBeNull();
+    expect(sock.close).toHaveBeenCalledWith(1000, 'left');
+    const lobby = b.sent.filter((m) => m.t === 'lobby').pop();
+    expect(lobby).toMatchObject({ host: 'p2' });
+  });
+
+  it('keeps the figure in a running round but the token no longer works', () => {
+    const { env, a, room, member, sock, session } = inRoom();
+    room.start(member.id);
+    handleMessage(env, session, a.conn, sock, JSON.stringify({ t: 'leave' }));
+    expect(room.state!.players[member.id]).toBeDefined();
+    expect(room.roster().find((r) => r.id === member.id)?.connected).toBe(false);
+    expect(room.join('Anna', fakeConn().conn, member.token)).toMatchObject({ ok: false, code: 'already_started' });
+  });
+
+  it('answers not_in_room for a socket without a room', () => {
+    const { env, room } = inRoom();
+    const c = fakeConn();
+    const sock = fakeSock();
+    const before = room.members.length;
+    handleMessage(env, newSession(1000), c.conn, sock, JSON.stringify({ t: 'leave' }));
+    expect(c.sent).toEqual([expect.objectContaining({ t: 'error', code: 'not_in_room' })]);
+    expect(room.members.length).toBe(before);
+    expect(sock.close).not.toHaveBeenCalled();
+  });
+
+  it('does not release the seat from a replaced connection', () => {
+    const { env, a, room, member, sock, session } = inRoom();
+    room.start(member.id);
+    const fresh = fakeConn();
+    expect(room.join('Anna', fresh.conn, member.token).ok).toBe(true);
+    handleMessage(env, session, a.conn, sock, JSON.stringify({ t: 'leave' }));
+    expect(sock.close).toHaveBeenCalledWith(4000, 'replaced');
+    expect(member.conn).toBe(fresh.conn);
+    expect(member.expired).toBe(false);
+  });
+});

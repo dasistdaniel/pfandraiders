@@ -182,6 +182,25 @@ export class Room {
     this.broadcastLobby();
   }
 
+  /**
+   * Absichtliches Verlassen: der Platz wird sofort frei, das Token gilt nicht mehr (keine Frist).
+   * In der Lobby und nach Rundenende verschwindet der Spieler; während der Runde bleibt die Figur
+   * als Statist stehen (ihr Geld zählt für die Rangliste) und fällt wie ein abgelaufener Platz heraus.
+   */
+  leaveForGood(conn: Conn): void {
+    const member = this.members.find((m) => m.conn === conn);
+    if (!member) return;
+    this.lastActive = this.now();
+    member.conn = null;
+    member.disconnectedAt = this.now();
+    member.expired = true;
+    member.input = { ...NO_INPUT };
+    if (this.phase !== 'running') {
+      this.members = this.members.filter((m) => m !== member);
+    }
+    this.broadcastLobby();
+  }
+
   start(byId: string): Result<void> {
     this.lastActive = this.now();
     if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann starten.');

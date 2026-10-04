@@ -457,3 +457,56 @@ describe('review fixes', () => {
     expect(r.value.token).not.toBe('foreign-token-0000');
   });
 });
+
+describe('leaving for good', () => {
+  it('removes the player from the lobby at once', () => {
+    const { room, a, ma, mb } = twoPlayers();
+    room.leaveForGood(mb.conn!);
+    expect(room.members.map((m) => m.id)).toEqual([ma.id]);
+    expect(a.last('lobby').players).toHaveLength(1);
+  });
+
+  it('keeps the figure in a running round, invalidates the token and leaves the others playing', () => {
+    const { room, b, ma } = twoPlayers();
+    room.start('p1');
+    room.leaveForGood(ma.conn!);
+    expect(room.state!.players.p1).toBeDefined(); // Statist, Geld zählt für die Rangliste
+    expect(b.last('lobby').players.find((p) => p.id === 'p1')?.connected).toBe(false);
+    // Sofort, ohne Frist: das Token gilt nicht mehr
+    expect(room.join('Anna', new FakeConn(), ma.token)).toMatchObject({ ok: false, code: 'already_started' });
+    const before = b.of('snap').length;
+    room.tick();
+    expect(b.of('snap').length).toBe(before + 1);
+    expect(room.hostId()).toBe('p2');
+  });
+
+  it('frees the name after the round so the player can join again with a fresh seat', () => {
+    const { room, advance, ma } = twoPlayers({ roundMs: 1000 });
+    room.start('p1');
+    room.leaveForGood(ma.conn!);
+    for (let i = 0; i < 200 && room.phase === 'running'; i++) {
+      advance(SERVER_CONFIG.stepMs);
+      room.tick();
+    }
+    expect(room.phase).toBe('ended');
+    room.tick(); // nach Rundenende räumt der nächste Schritt den freigegebenen Platz ab
+    expect(room.members.map((m) => m.id)).toEqual(['p2']);
+    const r = room.join('Anna', new FakeConn(), ma.token);
+    if (!r.ok) throw new Error('join failed');
+    expect(r.value.id).toBe('p3');
+  });
+
+  it('moves the host role when the host leaves', () => {
+    const { room, b, ma } = twoPlayers();
+    room.leaveForGood(ma.conn!);
+    expect(room.hostId()).toBe('p2');
+    expect(b.last('lobby').host).toBe('p2');
+  });
+
+  it('ignores an unknown connection', () => {
+    const { room } = twoPlayers();
+    const before = JSON.stringify(room.roster());
+    room.leaveForGood(new FakeConn());
+    expect(JSON.stringify(room.roster())).toBe(before);
+  });
+});

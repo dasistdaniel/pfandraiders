@@ -151,6 +151,20 @@ describe('OnlineConnection messages', () => {
     conn.requestStart();
     expect(socket.sent.filter((m) => m.t === 'start')).toHaveLength(1);
   });
+
+  it('sends leave only on an open socket and never throws', () => {
+    const { socket, conn } = setup();
+    conn.leave();
+    expect(socket.sent).toEqual([{ t: 'leave' }]);
+    socket.send = () => {
+      throw new Error('socket is closing');
+    };
+    expect(() => conn.leave()).not.toThrow();
+    socket.close();
+    socket.sent = [];
+    conn.leave();
+    expect(socket.sent).toEqual([]);
+  });
 });
 
 describe('OnlineConnection input', () => {

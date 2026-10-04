@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { createGame, DEFAULT_MAP_ID, isBeingRobbed, isMapId, MAP_DEFS, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
+import { createGame, DEFAULT_MAP_ID, isBeingRobbed, isMapId, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
 import type { GameState, MapData, MapId, Npc, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
@@ -18,7 +18,9 @@ import { PlayerHud } from '../hud';
 import { music, sfx, unlockAudio } from '../sfx';
 import { detectSounds, snapshotForSound } from '../soundEvents';
 import { buildInput } from '../input';
-import { viewportsFor, WORLD_ZOOM } from '../layout';
+import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
+import { PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../pauseMenu';
+import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
 import type { InputSource } from '../sources';
 import { playerName } from '../text';
@@ -40,6 +42,33 @@ const COLOR = {
 };
 // Weltraum-Text: Kamerazoom 2 vergrößert ihn, daher doppelte Texturauflösung für scharfe Kanten.
 const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', resolution: WORLD_ZOOM };
+
+/** Esc-Menü: Feld mittig über dem ganzen Bild, Zeilenabstand der Einträge, Tiefe über HUD und Wiederverbindungstext. */
+const PAUSE = { w: 340, pad: 16, titleH: 32, rowH: 30, hintGap: 10, hintH: 20, depth: 40, maxItems: 3 };
+const PAUSE_COLOR = { normal: '#ffffff', selected: '#ffee58', hint: '#aaaaaa' };
+const PAD_START_BUTTON = 9;
+const STICK_THRESHOLD = 0.5;
+type NavKey = 'up' | 'down' | 'w' | 's' | 'enter' | 'e' | 'space';
+interface PadNav {
+  up: boolean;
+  down: boolean;
+  a: boolean;
+  b: boolean;
+  start: boolean;
+}
+/** Eingaben des Esc-Menüs in einem Frame (Flanken, gehaltene Tasten zählen nicht). */
+interface MenuNav {
+  move: -1 | 0 | 1;
+  confirm: boolean;
+  back: boolean;
+  start: boolean;
+}
+interface PauseUi {
+  bg: Phaser.GameObjects.Rectangle;
+  title: Phaser.GameObjects.Text;
+  items: Phaser.GameObjects.Text[];
+  hint: Phaser.GameObjects.Text;
+}
 
 export class GameScene extends Phaser.Scene {
   private slots: PlayerSlot[] = [];
@@ -86,6 +115,18 @@ export class GameScene extends Phaser.Scene {
   private enterKey!: Phaser.Input.Keyboard.Key;
   /** Rundenlänge für den Musikfortschritt: größte gesehene Restzeit (online erst ab dem ersten Zustand bekannt). */
   private roundTotalMs = 0;
+  /** Esc-Menü (lokal pausiert es das Spiel, online läuft es weiter). */
+  private pause = new PauseMenu();
+  /** Eigene Kamera über dem ganzen Bild, die nur das Esc-Menü zeigt. */
+  private pauseCam: Phaser.Cameras.Scene2D.Camera | null = null;
+  private pauseUi: PauseUi | null = null;
+  /**
+   * Menütasten. E, Enter, W, S und Pfeile sind dieselben Key-Objekte wie die der Spieler-Eingabequellen;
+   * JustDown darauf würde denen den Druck wegnehmen, daher eigene Flanken aus isDown.
+   */
+  private navKeys!: Record<NavKey, Phaser.Input.Keyboard.Key>;
+  private navPrev: Partial<Record<NavKey, boolean>> = {};
+  private padNavPrev: Record<number, PadNav> = {};
 
   constructor() {
     super('game');
@@ -110,6 +151,11 @@ export class GameScene extends Phaser.Scene {
     this.padBPrev = {};
     this.prevSoundState = null;
     this.roundTotalMs = 0;
+    this.pause = new PauseMenu();
+    this.pauseCam = null;
+    this.pauseUi = null;
+    this.navPrev = {};
+    this.padNavPrev = {};
     let state: GameState;
     this.playerColors = new Map();
     let localParams: URLSearchParams | null = null;
@@ -277,10 +323,22 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    this.createPauseMenu([...cams, ...this.uiCams]);
+
     this.restartKey = this.input.keyboard!.addKey('R');
     this.enterKey = this.input.keyboard!.addKey('ENTER');
     this.menuKey = this.input.keyboard!.addKey('ESC');
     this.muteKey = this.input.keyboard!.addKey('M');
+    const kb = this.input.keyboard!;
+    this.navKeys = {
+      up: kb.addKey('UP'),
+      down: kb.addKey('DOWN'),
+      w: kb.addKey('W'),
+      s: kb.addKey('S'),
+      enter: kb.addKey('ENTER'),
+      e: kb.addKey('E'),
+      space: kb.addKey('SPACE'),
+    };
     this.ownSoundIds = this.online ? [this.online.you] : 'all';
     // Verbindung schon vor dem Szenenwechsel weg (Rennen zwischen Menü und Spielszene)
     if (online && online.status === 'closed') this.beginReconnect();
@@ -294,19 +352,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Esc genau einmal je Frame lesen (kein alter Druck bleibt liegen); die Menütasten ebenfalls jeden Frame.
+    const escPressed = Phaser.Input.Keyboard.JustDown(this.menuKey);
+    const nav = this.readMenuNav();
+    // Das Esc-Menü gibt es nur in der laufenden Runde ohne Wiederverbindung; sonst gilt das bisherige Esc.
+    const menuAllowed = !this.plan && this.conn.getState().phase !== 'ended';
+    if (!menuAllowed) {
+      if (this.pause.isOpen) this.closePause();
+    } else if (this.handlePauseInput(escPressed, nav)) {
+      return; // Spiel verlassen
+    }
+    const paused = this.pause.isOpen;
+    // Lokal hält das Menü die Runde an (auch den Rundentimer). Online läuft sie weiter und die eigene Figur
+    // steht still; update() schickt weiter das Lebenszeichen. Die Quellen werden trotzdem gelesen,
+    // damit ihre Flanken (Kauftasten) nach dem Schließen nicht nachträglich auslösen.
+    const frozen = paused && !this.online;
     this.slots.forEach((slot, i) => {
-      this.conn.setInput(slot.id, buildInput(this.sources[i].read()));
+      const keys = this.sources[i].read();
+      this.conn.setInput(slot.id, paused ? { ...NO_INPUT } : buildInput(keys));
     });
-    this.conn.update(delta);
+    if (!frozen) this.conn.update(delta);
+    const viewDelta = frozen ? 0 : delta;
 
     const state = this.conn.getState();
-    this.updateMusic(state);
+    this.updateMusic(state, frozen);
     // JustDown und confirmPressed jeden Frame abfragen und so Druck aus der Spielphase verwerfen,
     // sonst löst ein alter Tastendruck beim Rundenende sofort einen Neustart aus.
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
     const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
+    // Esc zählt hier nur, wenn das Esc-Menü nicht zuständig war (Rundenende, Wiederverbindung).
     // Online nur Esc: das Gamepad-B gehört keinem lokalen Slot und soll nicht versehentlich verlassen
-    const menuPressed = Phaser.Input.Keyboard.JustDown(this.menuKey) || (!this.online && this.padBPressed());
+    const padB = !this.online && this.padBPressed();
+    const menuPressed = (!menuAllowed && escPressed) || padB;
     if (this.plan && this.tickReconnect(delta, menuPressed)) return;
     if (state.phase === 'ended') this.endedForMs += delta;
     if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && menuPressed) {
@@ -327,7 +404,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.muteKey)) sfx.toggleMute();
+    if (Phaser.Input.Keyboard.JustDown(this.muteKey)) {
+      sfx.toggleMute();
+      this.renderPause(); // Beschriftung "Ton: an/aus" im offenen Menü
+    }
     for (const id of detectSounds(this.prevSoundState, state, this.ownSoundIds)) sfx.play(id);
     this.prevSoundState = snapshotForSound(state);
 
@@ -338,13 +418,13 @@ export class GameScene extends Phaser.Scene {
       this.spotSprites[i].setTexture(spotTexture(this.tileset, spot.type, full));
     });
     this.renderZones(state.zones);
-    this.renderNpcs(state.npcs, delta);
+    this.renderNpcs(state.npcs, viewDelta);
     for (const p of Object.values(state.players)) {
       const body = this.bodies.get(p.id);
       if (!body) continue; // Spieler, die nach dem Start nicht in der Liste waren
       this.followTargets.get(p.id)?.setPosition(p.x, p.y);
       const color = this.playerColors.get(p.id) ?? 0xffffff;
-      const { state: poseState, pose, moving, dir, step } = stepPose(this.poses.get(p.id) ?? initialPose(p.x, p.y), p.x, p.y, p.mode, delta);
+      const { state: poseState, pose, moving, dir, step } = stepPose(this.poses.get(p.id) ?? initialPose(p.x, p.y), p.x, p.y, p.mode, viewDelta);
       this.poses.set(p.id, poseState);
       const unconscious = p.mode === 'unconscious';
       const charKey = this.charKeys.get(p.id) ?? null;
@@ -370,12 +450,152 @@ export class GameScene extends Phaser.Scene {
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
   }
 
-  /** Musik folgt der Runde: schneller und dichter gegen Ende, nach Rundenende leise und ruhig. */
-  private updateMusic(state: GameState): void {
+  /** Musik folgt der Runde: schneller und dichter gegen Ende, nach Rundenende und in der lokalen Pause leise und ruhig. */
+  private updateMusic(state: GameState, paused: boolean): void {
     if (Number.isFinite(state.timeLeftMs) && state.timeLeftMs > this.roundTotalMs) this.roundTotalMs = state.timeLeftMs;
     const progress = this.roundTotalMs > 0 ? 1 - state.timeLeftMs / this.roundTotalMs : 0;
     music.setProgress(progress);
-    music.setMode(state.phase === 'ended' ? 'ended' : 'game');
+    music.setMode(state.phase === 'ended' || paused ? 'ended' : 'game');
+  }
+
+  /**
+   * Esc-Menü als ein Overlay über dem ganzen Bild, auch im Splitscreen: eine zusätzliche Kamera (Zoom 1,
+   * ganze Fläche, zuletzt angelegt und damit obenauf) zeigt nur die Menüobjekte; alle anderen Kameras
+   * ignorieren sie. Später erzeugte Weltobjekte (NPCs) ignoriert sie in renderNpcs.
+   */
+  private createPauseMenu(otherCams: Phaser.Cameras.Scene2D.Camera[]): void {
+    const others = [...this.children.list];
+    const text = (size: number, color: string): Phaser.GameObjects.Text =>
+      this.add
+        .text(GAME_W / 2, 0, '', {
+          fontFamily: 'monospace',
+          fontSize: `${size}px`,
+          color,
+          align: 'center',
+          wordWrap: { width: PAUSE.w - 2 * PAUSE.pad },
+        })
+        .setOrigin(0.5, 0);
+    const bg = this.add
+      .rectangle(GAME_W / 2, 0, PAUSE.w, 100, 0x000000, 0.82)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(2, 0x888888, 1);
+    const title = text(20, PAUSE_COLOR.selected);
+    const items = Array.from({ length: PAUSE.maxItems }, (_, i) => {
+      const t = text(18, PAUSE_COLOR.normal).setInteractive({ useHandCursor: true });
+      // Maus: Überfahren wählt die Zeile, Klick löst sie aus (wie Enter)
+      t.on('pointerover', () => {
+        if (!this.pause.isOpen || i >= this.pause.items.length) return;
+        this.pause.select(i);
+        this.renderPause();
+      });
+      t.on('pointerdown', () => {
+        if (!this.pause.isOpen || i >= this.pause.items.length) return;
+        this.pause.select(i);
+        this.runPauseAction(this.pause.activate());
+      });
+      return t;
+    });
+    const hint = text(16, PAUSE_COLOR.hint);
+    const objects = [bg, title, ...items, hint];
+    for (const o of objects) o.setScrollFactor(0).setDepth(PAUSE.depth);
+    bg.setDepth(PAUSE.depth - 1);
+    for (const cam of otherCams) cam.ignore(objects);
+    this.pauseCam = this.cameras.add(0, 0, GAME_W, GAME_H);
+    this.pauseCam.ignore(others);
+    this.pauseUi = { bg, title, items, hint };
+    this.renderPause();
+  }
+
+  /** Flanken der Menütasten und Gamepads in diesem Frame. Liest immer alles, damit kein alter Druck liegen bleibt. */
+  private readMenuNav(): MenuNav {
+    const edge = (name: NavKey): boolean => {
+      const down = this.navKeys[name].isDown;
+      const was = this.navPrev[name] ?? true; // erster Blick: gehaltene Taste zählt nicht
+      this.navPrev[name] = down;
+      return down && !was;
+    };
+    const up = [edge('up'), edge('w')].some(Boolean);
+    const down = [edge('down'), edge('s')].some(Boolean);
+    const confirm = [edge('enter'), edge('e'), edge('space')].some(Boolean);
+    const nav: MenuNav = { move: up ? -1 : down ? 1 : 0, confirm, back: false, start: false };
+    for (const pad of this.input.gamepad?.gamepads ?? []) {
+      if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
+      const cur: PadNav = {
+        up: pad.up || pad.leftStick.y < -STICK_THRESHOLD,
+        down: pad.down || pad.leftStick.y > STICK_THRESHOLD,
+        a: pad.A,
+        b: pad.B,
+        start: pad.buttons[PAD_START_BUTTON]?.pressed ?? false,
+      };
+      const prev = this.padNavPrev[pad.index];
+      this.padNavPrev[pad.index] = cur;
+      if (!prev) continue; // erster Blick: gehaltene Tasten nicht als Druck werten
+      if (nav.move === 0) nav.move = cur.up && !prev.up ? -1 : cur.down && !prev.down ? 1 : 0;
+      if (cur.a && !prev.a) nav.confirm = true;
+      if (cur.b && !prev.b) nav.back = true;
+      if (cur.start && !prev.start) nav.start = true;
+    }
+    return nav;
+  }
+
+  /** Ein Frame Esc-Menü (nur in der laufenden Runde). Gibt true zurück, wenn die Szene verlassen wurde. */
+  private handlePauseInput(escPressed: boolean, nav: MenuNav): boolean {
+    const p = this.pause;
+    if (!p.isOpen && !escPressed && !nav.start) return false;
+    // Nur eine Aktion pro Frame
+    if (escPressed || nav.start) p.toggle();
+    else if (nav.back) p.back();
+    else if (nav.move !== 0) p.move(nav.move);
+    else if (nav.confirm && this.runPauseAction(p.activate())) return true;
+    this.renderPause();
+    return false;
+  }
+
+  /** Führt eine Menüaktion aus. true = Szene verlassen. */
+  private runPauseAction(action: PauseAction | null): boolean {
+    if (action === 'toggleSound') sfx.toggleMute();
+    if (action === 'leave') {
+      // Online zuerst dem Server Bescheid geben (Platz sofort frei), dann absichtlich schließen
+      this.online?.leave();
+      this.leaveToMenu();
+      return true;
+    }
+    this.renderPause();
+    return false;
+  }
+
+  private closePause(): void {
+    this.pause.close();
+    this.renderPause();
+  }
+
+  private renderPause(): void {
+    const ui = this.pauseUi;
+    if (!ui) return;
+    const p = this.pause;
+    const open = p.isOpen;
+    this.pauseCam?.setVisible(open);
+    for (const o of [ui.bg, ui.title, ui.hint, ...ui.items]) o.setVisible(open);
+    if (!open) return;
+    const online = this.online !== null;
+    const n = p.items.length;
+    const itemsTop = PAUSE.pad + PAUSE.titleH;
+    const height = itemsTop + n * PAUSE.rowH + PAUSE.hintGap + PAUSE.hintH + PAUSE.pad;
+    const top = Math.round((GAME_H - height) / 2);
+    ui.bg.setPosition(GAME_W / 2, top).setSize(PAUSE.w, height);
+    ui.title.setText(pauseTitle(p.view, online)).setPosition(GAME_W / 2, top + PAUSE.pad);
+    ui.items.forEach((t, i) => {
+      const item = p.items[i];
+      t.setVisible(item !== undefined);
+      if (!item) return;
+      const sel = i === p.selected;
+      t.setText(`${sel ? '> ' : '  '}${pauseLabel(item, sfx.muted)}`)
+        .setColor(sel ? PAUSE_COLOR.selected : PAUSE_COLOR.normal)
+        .setPosition(GAME_W / 2, top + itemsTop + i * PAUSE.rowH);
+    });
+    ui.hint
+      .setText(pauseHint(p.view, online))
+      .setPosition(GAME_W / 2, top + itemsTop + n * PAUSE.rowH + PAUSE.hintGap);
   }
 
   /** Verbindung verloren: Wiederverbindungsplan anlegen (oder direkt ins Menü, wenn kein Beitritt bekannt ist). */
@@ -387,6 +607,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.plan = new ReconnectPlan();
+    if (this.pause.isOpen) this.closePause(); // Esc gehört jetzt wieder dem Wiederverbindungs-Hinweis
     online.onJoined = () => {
       if (!this.plan) return;
       this.joinedSeen = true;
@@ -488,6 +709,7 @@ export class GameScene extends Phaser.Scene {
           .setDepth(4);
         this.npcPoses.set(npc.id, initialPose(npc.x, npc.y));
         for (const ui of this.uiCams) ui.ignore(sprite); // Weltobjekt: nicht in den UI-Kameras
+        this.pauseCam?.ignore(sprite); // und nicht in der Menükamera
         this.npcSprites.set(npc.id, sprite);
       }
       const nf = npcFrame(this.npcPoses.get(npc.id)!, npc.x, npc.y, delta);
