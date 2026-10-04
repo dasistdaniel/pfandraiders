@@ -1,5 +1,6 @@
 import { DEFAULT_MAP_ID, isMapId, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
 import type {
+  ChatMessage,
   ClientMessage,
   ErrorCode,
   GameState,
@@ -12,6 +13,7 @@ import type {
   Snapshot,
 } from '@pfandraiders/core';
 import { NO_INPUT } from '@pfandraiders/core';
+import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
 import type { GameConnection } from './connection';
 import { interpolateSnapshot } from './interpolate';
 import { isValidSnapshot } from './snapshotGuard';
@@ -63,9 +65,13 @@ export class OnlineConnection implements GameConnection {
   mapId: MapId = DEFAULT_MAP_ID;
   /** Build des Servers aus joined; null = unbekannt (älterer Server oder ungültige Angabe). */
   serverBuild: ServerBuild | null = null;
+  /** Lobby-Chat, älteste zuerst (höchstens CLIENT_CHAT_SIZE). chathistory ersetzt die Liste. */
+  chat: ChatMessage[] = [];
 
   onJoined: (() => void) | null = null;
   onLobby: (() => void) | null = null;
+  /** Neue Chatnachricht oder neuer Verlauf in `chat`. */
+  onChat: (() => void) | null = null;
   onStart: (() => void) | null = null;
   onError: ((code: ErrorCode, message: string) => void) | null = null;
   onClosed: (() => void) | null = null;
@@ -190,6 +196,12 @@ export class OnlineConnection implements GameConnection {
     }
   }
 
+  /** Chatnachricht senden (der Server bereinigt und prüft; leerer Text wird nicht gesendet). */
+  sendChat(text: string): void {
+    if (this.status !== 'open' || text.trim().length === 0) return;
+    this.sendMsg({ t: 'chat', text });
+  }
+
   /** Alias für requestStart. */
   startGame(): void {
     this.requestStart();
@@ -237,6 +249,25 @@ export class OnlineConnection implements GameConnection {
         this.buffer.push({ at: this.clock, snap: msg.snap });
         if (this.buffer.length > MAX_BUFFER) this.buffer.splice(0, this.buffer.length - MAX_BUFFER);
         break;
+      case 'chat': {
+        const chat = parseChatMessage(msg);
+        if (!chat) break;
+        this.chat.push(chat);
+        if (this.chat.length > CLIENT_CHAT_SIZE) this.chat.splice(0, this.chat.length - CLIENT_CHAT_SIZE);
+        this.onChat?.();
+        break;
+      }
+      case 'chathistory': {
+        if (!Array.isArray(msg.messages)) break;
+        const list: ChatMessage[] = [];
+        for (const raw of msg.messages.slice(-CLIENT_CHAT_SIZE)) {
+          const chat = parseChatMessage(raw);
+          if (chat) list.push(chat);
+        }
+        this.chat = list;
+        this.onChat?.();
+        break;
+      }
       case 'error':
         this.onError?.(msg.code, msg.message);
         break;

@@ -234,6 +234,13 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
       session.room.setInput(session.member, msg.seq, msg.input);
       return;
     }
+    case 'chat': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.chat(conn, msg.text);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
     case 'leave': {
       if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
       if (!isCurrent()) return; // veraltete Verbindung darf den Platz der neuen nicht freigeben

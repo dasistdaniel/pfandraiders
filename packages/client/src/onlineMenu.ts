@@ -1,6 +1,7 @@
-import type { ErrorCode, RosterEntry } from '@pfandraiders/core';
+import type { ChatMessage, ErrorCode, RosterEntry } from '@pfandraiders/core';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
-import { ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import { MAX_CHAT_LENGTH, ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import { chatColorHex, rosterDiff } from './chatLogic';
 import { nextTab, parseTab, sanitizeRoomCode } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
@@ -63,6 +64,8 @@ const ERRORS: Record<ErrorCode, string> = {
   not_in_room: 'Du bist in keinem Raum.',
   rate_limited: 'Zu viele Nachrichten.',
   too_many_rooms: 'Der Server ist ausgelastet.',
+  chat_too_fast: 'Zu schnell.',
+  chat_closed: 'Chat gibt es nur in der Lobby.',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -86,7 +89,7 @@ export function showOnlineMenu(
 ): Promise<OnlineConnection | null> {
   return new Promise((resolve) => {
     const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
-    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;width:440px;min-height:340px;max-width:90vw;box-sizing:border-box');
+    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;width:440px;min-height:340px;max-width:90vw;max-height:90vh;overflow:auto;box-sizing:border-box');
     root.appendChild(box);
     // Phaser hängt am window und verschluckt gefangene Tasten (E, O, Leertaste ...), also hier stoppen
     for (const type of ['keydown', 'keyup', 'keypress']) root.addEventListener(type, (e) => e.stopPropagation());
@@ -102,6 +105,7 @@ export function showOnlineMenu(
       conn.onError = null;
       conn.onLobby = null;
       conn.onJoined = null;
+      conn.onChat = null;
       root.remove();
       if (result === null) conn.close();
       resolve(result);
@@ -255,12 +259,54 @@ export function showOnlineMenu(
       const draw = (players: RosterEntry[]) => {
         list.replaceChildren();
         for (const p of players) {
-          const hex = Number.isInteger(p.color) ? `#${p.color.toString(16).padStart(6, '0')}` : '#fff';
-          const row = el('div', { textContent: `${p.name}${p.id === conn.host ? ' (Host)' : ''}${p.connected ? '' : ' (getrennt)'}` }, `color:${hex}`);
+          const row = el('div', { textContent: `${p.name}${p.id === conn.host ? ' (Host)' : ''}${p.connected ? '' : ' (getrennt)'}` });
+          row.style.color = chatColorHex(p.color);
           list.appendChild(row);
         }
       };
       draw(conn.roster);
+
+      // Chat: Nachrichten vom Server und Systemzeilen (Beitritt/Abgang aus dem Vergleich der Spielerlisten).
+      // Alles nur per textContent/Textknoten, nie als HTML.
+      const chatLog = el('div', { role: 'log' }, 'height:140px;max-height:22vh;overflow-y:auto;background:#111;border:1px solid #555;padding:4px 6px;font-size:14px;margin-bottom:6px;overflow-wrap:anywhere');
+      chatLog.setAttribute('aria-label', 'Chat');
+      const chatInput = el('input', { placeholder: 'Nachricht…', maxLength: MAX_CHAT_LENGTH }, 'width:100%;box-sizing:border-box;margin-bottom:10px;font:inherit');
+      chatInput.setAttribute('aria-label', 'Chatnachricht');
+      const shown = new WeakSet<ChatMessage>();
+      const MAX_LINES = 80;
+      const append = (line: HTMLElement) => {
+        const atBottom = chatLog.scrollTop + chatLog.clientHeight >= chatLog.scrollHeight - 4;
+        chatLog.appendChild(line);
+        while (chatLog.childElementCount > MAX_LINES) chatLog.firstElementChild?.remove();
+        if (atBottom) chatLog.scrollTop = chatLog.scrollHeight;
+      };
+      const chatLine = (m: ChatMessage) => {
+        const line = el('div');
+        const who = el('span', { textContent: m.name });
+        who.style.color = chatColorHex(m.color);
+        if (m.id === conn.you) who.style.fontWeight = 'bold';
+        line.append(who, document.createTextNode(`: ${m.text}`));
+        return line;
+      };
+      const systemLine = (text: string) => el('div', { textContent: text }, 'color:#888;font-style:italic');
+      const showChat = () => {
+        for (const m of conn.chat) {
+          if (shown.has(m)) continue;
+          shown.add(m);
+          append(chatLine(m));
+        }
+      };
+      showChat();
+      chatInput.onkeydown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const text = chatInput.value;
+        if (text.trim().length === 0) return;
+        conn.sendChat(text);
+        chatInput.value = '';
+      };
+      conn.onChat = showChat;
+
       const start = el('button', { textContent: 'Spiel starten' }, 'font:inherit;margin-right:8px');
       const hint = el('div', { textContent: 'Warte auf den Host…' }, 'color:#aaa');
       const leave = el('button', { textContent: 'Verlassen' }, 'font:inherit');
@@ -270,13 +316,20 @@ export function showOnlineMenu(
         hint.style.display = conn.isHost() ? 'none' : 'block';
         start.disabled = conn.roster.filter((p) => p.connected).length < 2;
       };
+      // Die erste Spielerliste nach dem Beitritt wird nicht gemeldet
+      let prevRoster: RosterEntry[] | null = null;
+      const onLobby = () => {
+        for (const text of rosterDiff(prevRoster, conn.roster)) append(systemLine(text));
+        prevRoster = [...conn.roster];
+        refresh();
+      };
       start.onclick = () => conn.requestStart();
       leave.onclick = () => {
         safeRemove(TOKEN_KEY(conn.room));
         finish(null);
       };
-      box.append(list, start, hint, leave, message);
-      conn.onLobby = refresh;
+      box.append(list, chatLog, chatInput, start, hint, leave, message);
+      conn.onLobby = onLobby;
       refresh();
     };
 
