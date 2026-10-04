@@ -1,19 +1,49 @@
 import { loadMusicVolume, saveMusicVolume } from '../settings';
 import {
+  BASS_FILTER_CLOSE_SEC,
+  BASS_FILTER_FROM_HZ,
+  BASS_FILTER_OPEN_SEC,
+  BASS_FILTER_PEAK_HZ,
+  BASS_FILTER_Q,
+  BASS_SUB_MIX,
   BPM_ENDED,
   BPM_MENU,
+  COMPRESSOR_ATTACK_SEC,
+  COMPRESSOR_KNEE_DB,
+  COMPRESSOR_RATIO,
+  COMPRESSOR_RELEASE_SEC,
+  COMPRESSOR_THRESHOLD_DB,
+  DUCK_ATTACK_SEC,
+  DUCK_HOLD_SEC,
+  DUCK_LEVEL,
+  DUCK_RELEASE_SEC,
   ENDED_LEVEL,
   FADE_TIME_CONSTANT,
-  LAYER_GAIN,
+  HAT_DECAY_SEC,
+  HAT_HIGHPASS_HZ,
+  KICK_CLICK_LEVEL,
+  KICK_CLICK_SEC,
+  KICK_DECAY_SEC,
+  KICK_DROP_SEC,
+  KICK_END_HZ,
+  KICK_START_HZ,
   LOWPASS_HZ,
   MUSIC_MAX_GAIN,
+  SNARE_BANDPASS_HZ,
+  SNARE_BANDPASS_Q,
+  SNARE_BODY_HZ,
+  SNARE_BODY_LEVEL,
+  SNARE_BODY_SEC,
+  SNARE_DECAY_SEC,
   VIBRATO_CENTS,
   VIBRATO_HZ,
+  layerGain,
   layersFor,
   midiToHz,
   notesAtStep,
   smoothBpm,
   stepDurationSec,
+  subOctaveMidi,
   tempoFor,
 } from './score';
 import type { LayerName, MusicMode, NoteEvent } from './score';
@@ -34,7 +64,8 @@ const LOOKAHEAD_SEC = 0.15;
 /** Abstand der ersten Note nach Start oder nach einem Hänger, damit nichts in der Vergangenheit liegt. */
 const RESYNC_DELAY_SEC = 0.05;
 const MAX_STEPS_PER_TICK = 16;
-const HAT_HIGHPASS_HZ = 6000;
+/** Länge des einmal erzeugten Rauschpuffers (Snare, Hi-Hat, Kick-Klick); Startpunkte darin wechseln. */
+const NOISE_SEC = 0.5;
 
 interface Voice {
   wave: OscillatorType;
@@ -47,11 +78,15 @@ interface Voice {
   vibrato: boolean;
 }
 
-const VOICES: Record<Exclude<LayerName, 'hat' | 'kick'>, Voice> = {
-  bass: { wave: 'triangle', attack: 0.008, release: 0.08, sustain: 0.6, mono: true, vibrato: false },
+type ToneLayer = Extract<LayerName, 'bass' | 'chords' | 'melodyA' | 'melodyB' | 'arp'>;
+
+/** Hüllkurven der Tonstimmen. Der Bass ist Rechteck plus Dreieck-Suboktave (siehe BASS_* in score.ts). */
+const VOICES: Record<ToneLayer, Voice> = {
+  bass: { wave: 'square', attack: 0.004, release: 0.05, sustain: 0.45, mono: true, vibrato: false },
   chords: { wave: 'triangle', attack: 0.06, release: 0.25, sustain: 0.5, mono: false, vibrato: false },
   melodyA: { wave: 'square', attack: 0.008, release: 0.09, sustain: 0.55, mono: true, vibrato: true },
   melodyB: { wave: 'triangle', attack: 0.008, release: 0.09, sustain: 0.5, mono: true, vibrato: true },
+  arp: { wave: 'square', attack: 0.003, release: 0.03, sustain: 0.3, mono: true, vibrato: false },
 };
 
 function clampVolume(v: number): number {
@@ -67,12 +102,17 @@ const defaultTimers: Timers = {
  * Erzeugte Hintergrundmusik per WebAudio mit Vorausplanung: ein Takt alle 25 ms plant die nächsten
  * Sechzehntel auf der Audio-Uhr. Das Tempo gleitet mit dem Rundenfortschritt. Ohne AudioContext
  * sind alle Aufrufe stille No-Ops; Fehler dringen nie ins Spiel.
+ *
+ * Signalweg: Akkorde, Melodien, Arpeggio → Tiefpass → Duck (pumpt mit dem Kick) → out;
+ * Bass (eigener Filter je Note), Kick, Snare, Hi-Hat → out; out → Kompressor → Ausgang.
  */
 export class MusicPlayer {
   private ctx: AudioContext | null = null;
   private out: GainNode | null = null;
+  private duck: GainNode | null = null;
   private lowpass: BiquadFilterNode | null = null;
   private hatFilter: BiquadFilterNode | null = null;
+  private snareFilter: BiquadFilterNode | null = null;
   private vibratoDepth: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private timer: unknown = null;
@@ -155,16 +195,35 @@ export class MusicPlayer {
     if (!ctx) return;
     const out = ctx.createGain();
     out.gain.value = 0;
-    out.connect(ctx.destination);
+    if (typeof ctx.createDynamicsCompressor === 'function') {
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = COMPRESSOR_THRESHOLD_DB;
+      comp.knee.value = COMPRESSOR_KNEE_DB;
+      comp.ratio.value = COMPRESSOR_RATIO;
+      comp.attack.value = COMPRESSOR_ATTACK_SEC;
+      comp.release.value = COMPRESSOR_RELEASE_SEC;
+      out.connect(comp);
+      comp.connect(ctx.destination);
+    } else {
+      out.connect(ctx.destination);
+    }
+    const duck = ctx.createGain();
+    duck.gain.value = 1;
+    duck.connect(out);
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
     lowpass.frequency.value = LOWPASS_HZ;
     lowpass.Q.value = 0.5;
-    lowpass.connect(out);
+    lowpass.connect(duck);
     const hatFilter = ctx.createBiquadFilter();
     hatFilter.type = 'highpass';
     hatFilter.frequency.value = HAT_HIGHPASS_HZ;
     hatFilter.connect(out);
+    const snareFilter = ctx.createBiquadFilter();
+    snareFilter.type = 'bandpass';
+    snareFilter.frequency.value = SNARE_BANDPASS_HZ;
+    snareFilter.Q.value = SNARE_BANDPASS_Q;
+    snareFilter.connect(out);
     const lfo = ctx.createOscillator();
     lfo.type = 'sine';
     lfo.frequency.value = VIBRATO_HZ;
@@ -174,8 +233,10 @@ export class MusicPlayer {
     lfo.start(0);
     this.ctx = ctx;
     this.out = out;
+    this.duck = duck;
     this.lowpass = lowpass;
     this.hatFilter = hatFilter;
+    this.snareFilter = snareFilter;
     this.vibratoDepth = depth;
     this.appliedLevel = 0;
   }
@@ -247,10 +308,40 @@ export class MusicPlayer {
   }
 
   private play(note: NoteEvent, at: number, stepDur: number): void {
-    const peak = LAYER_GAIN[note.layer] * note.velocity;
-    if (note.layer === 'hat') this.hat(at, peak);
-    else if (note.layer === 'kick') this.kick(note.midi ?? 36, at, peak);
-    else if (note.midi !== null) this.tone(VOICES[note.layer], note.midi, at, note.lengthSteps * stepDur, peak);
+    const peak = layerGain(note.layer, this.mode) * note.velocity;
+    switch (note.layer) {
+      case 'kick':
+      case 'kickSync':
+        this.kick(at, peak);
+        return;
+      case 'snare':
+        this.snare(at, peak);
+        return;
+      case 'hat':
+      case 'hat16':
+        this.hat(at, peak);
+        return;
+      case 'bass':
+        if (note.midi !== null) this.bass(note.midi, at, note.lengthSteps * stepDur, peak);
+        return;
+      default:
+        if (note.midi !== null) this.tone(VOICES[note.layer], note.midi, at, note.lengthSteps * stepDur, peak);
+    }
+  }
+
+  /** Ende des gehaltenen Teils einer Note (Monostimmen klingen vor der nächsten Note aus). */
+  private noteEnd(v: Voice, at: number, dur: number): number {
+    return v.mono ? at + Math.max(v.attack + 0.02, dur - v.release) : at + dur;
+  }
+
+  private envelope(v: Voice, at: number, end: number, peak: number): GainNode {
+    const env = this.ctx!.createGain();
+    env.gain.value = 0;
+    env.gain.setValueAtTime(0, at);
+    env.gain.linearRampToValueAtTime(peak, at + v.attack);
+    env.gain.linearRampToValueAtTime(peak * v.sustain, end);
+    env.gain.linearRampToValueAtTime(0, end + v.release);
+    return env;
   }
 
   private tone(v: Voice, midi: number, at: number, dur: number, peak: number): void {
@@ -258,13 +349,8 @@ export class MusicPlayer {
     const osc = ctx.createOscillator();
     osc.type = v.wave;
     osc.frequency.setValueAtTime(midiToHz(midi), at);
-    const end = v.mono ? at + Math.max(v.attack + 0.02, dur - v.release) : at + dur;
-    const env = ctx.createGain();
-    env.gain.value = 0;
-    env.gain.setValueAtTime(0, at);
-    env.gain.linearRampToValueAtTime(peak, at + v.attack);
-    env.gain.linearRampToValueAtTime(peak * v.sustain, end);
-    env.gain.linearRampToValueAtTime(0, end + v.release);
+    const end = this.noteEnd(v, at, dur);
+    const env = this.envelope(v, at, end, peak);
     osc.connect(env);
     env.connect(this.lowpass!);
     if (v.vibrato && this.vibratoDepth) {
@@ -282,43 +368,108 @@ export class MusicPlayer {
     osc.stop(end + v.release + 0.02);
   }
 
-  private kick(midi: number, at: number, peak: number): void {
+  /** Rechteck plus Dreieck-Suboktave durch einen Tiefpass, der sich je Note kurz öffnet („Wub“). */
+  private bass(midi: number, at: number, dur: number, peak: number): void {
+    const ctx = this.ctx!;
+    const v = VOICES.bass;
+    const end = this.noteEnd(v, at, dur);
+    const stopAt = end + v.release + 0.02;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = BASS_FILTER_Q;
+    filter.frequency.setValueAtTime(BASS_FILTER_FROM_HZ, at);
+    filter.frequency.exponentialRampToValueAtTime(BASS_FILTER_PEAK_HZ, at + BASS_FILTER_OPEN_SEC);
+    filter.frequency.exponentialRampToValueAtTime(BASS_FILTER_FROM_HZ, at + BASS_FILTER_OPEN_SEC + BASS_FILTER_CLOSE_SEC);
+    filter.connect(this.out!);
+    const parts: [OscillatorType, number, number][] = [
+      [v.wave, midi, peak * (1 - BASS_SUB_MIX)],
+      ['triangle', subOctaveMidi(midi), peak * BASS_SUB_MIX],
+    ];
+    for (const [wave, m, level] of parts) {
+      const osc = ctx.createOscillator();
+      osc.type = wave;
+      osc.frequency.setValueAtTime(midiToHz(m), at);
+      const env = this.envelope(v, at, end, level);
+      osc.connect(env);
+      env.connect(filter);
+      osc.start(at);
+      osc.stop(stopAt);
+    }
+  }
+
+  /** Sinus mit schnellem Tonhöhenfall plus kurzer Klick; Akkorde und Melodien ducken sich dabei. */
+  private kick(at: number, peak: number): void {
     const ctx = this.ctx!;
     const osc = ctx.createOscillator();
     osc.type = 'sine';
-    const base = midiToHz(midi);
-    osc.frequency.setValueAtTime(base * 2.2, at);
-    osc.frequency.exponentialRampToValueAtTime(base, at + 0.12);
+    osc.frequency.setValueAtTime(KICK_START_HZ, at);
+    osc.frequency.exponentialRampToValueAtTime(KICK_END_HZ, at + KICK_DROP_SEC);
     const env = ctx.createGain();
     env.gain.value = 0;
     env.gain.setValueAtTime(0, at);
-    env.gain.linearRampToValueAtTime(peak, at + 0.006);
-    env.gain.linearRampToValueAtTime(0, at + 0.2);
+    env.gain.linearRampToValueAtTime(peak, at + 0.003);
+    env.gain.linearRampToValueAtTime(peak * 0.6, at + KICK_DROP_SEC);
+    env.gain.linearRampToValueAtTime(0, at + KICK_DECAY_SEC);
     osc.connect(env);
-    env.connect(this.lowpass!);
+    env.connect(this.out!);
     osc.start(at);
-    osc.stop(at + 0.22);
+    osc.stop(at + KICK_DECAY_SEC + 0.02);
+    this.noiseHit(this.snareFilter!, at, peak * KICK_CLICK_LEVEL, 0.001, KICK_CLICK_SEC);
+    this.duckAt(at);
+  }
+
+  /** Rauschstoß durch den Bandpass plus ein kurzer, fallender Ton als Körper. */
+  private snare(at: number, peak: number): void {
+    const ctx = this.ctx!;
+    this.noiseHit(this.snareFilter!, at, peak, 0.002, SNARE_DECAY_SEC);
+    const body = ctx.createOscillator();
+    body.type = 'triangle';
+    body.frequency.setValueAtTime(SNARE_BODY_HZ, at);
+    body.frequency.exponentialRampToValueAtTime(SNARE_BODY_HZ * 0.7, at + SNARE_BODY_SEC);
+    const env = ctx.createGain();
+    env.gain.value = 0;
+    env.gain.setValueAtTime(0, at);
+    env.gain.linearRampToValueAtTime(peak * SNARE_BODY_LEVEL, at + 0.002);
+    env.gain.linearRampToValueAtTime(0, at + SNARE_BODY_SEC);
+    body.connect(env);
+    env.connect(this.out!);
+    body.start(at);
+    body.stop(at + SNARE_BODY_SEC + 0.02);
   }
 
   private hat(at: number, peak: number): void {
+    this.noiseHit(this.hatFilter!, at, peak, 0.002, HAT_DECAY_SEC);
+  }
+
+  /** Kurzer Rauschstoß aus dem gemeinsamen Puffer (ab wechselnder Stelle) in einen festen Filter. */
+  private noiseHit(dest: AudioNode, at: number, peak: number, attack: number, decay: number): void {
     const ctx = this.ctx!;
     const src = ctx.createBufferSource();
     src.buffer = this.noise();
     const env = ctx.createGain();
     env.gain.value = 0;
     env.gain.setValueAtTime(0, at);
-    env.gain.linearRampToValueAtTime(peak, at + 0.003);
-    env.gain.linearRampToValueAtTime(0, at + 0.05);
+    env.gain.linearRampToValueAtTime(peak, at + attack);
+    env.gain.linearRampToValueAtTime(0, at + decay);
     src.connect(env);
-    env.connect(this.hatFilter!);
-    src.start(at);
-    src.stop(at + 0.07);
+    env.connect(dest);
+    const offset = Math.random() * Math.max(0, NOISE_SEC - decay - 0.03);
+    src.start(at, offset);
+    src.stop(at + decay + 0.02);
+  }
+
+  /** Pumpen: der Duck-Knoten fällt beim Kick auf DUCK_LEVEL und steigt nach etwa 100 ms wieder auf 1. */
+  private duckAt(at: number): void {
+    const g = this.duck?.gain;
+    if (!g) return;
+    g.setTargetAtTime(DUCK_LEVEL, at, DUCK_ATTACK_SEC);
+    g.setTargetAtTime(1, at + DUCK_HOLD_SEC, DUCK_RELEASE_SEC);
   }
 
   private noise(): AudioBuffer {
     if (this.noiseBuffer) return this.noiseBuffer;
     const ctx = this.ctx!;
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.1), ctx.sampleRate);
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * NOISE_SEC), ctx.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     this.noiseBuffer = buf;

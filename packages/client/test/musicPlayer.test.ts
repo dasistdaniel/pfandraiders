@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MusicPlayer } from '../src/music/player';
 import type { Timers } from '../src/music/player';
-import { BPM_END, ENDED_LEVEL, MUSIC_MAX_GAIN } from '../src/music/score';
+import { BASS_FILTER_FROM_HZ, BASS_FILTER_PEAK_HZ, BPM_END, DUCK_LEVEL, ENDED_LEVEL, MUSIC_MAX_GAIN } from '../src/music/score';
 
 function param(value = 0) {
   return {
@@ -34,6 +34,14 @@ function fakeContext() {
       stop: vi.fn(),
     })),
     createBiquadFilter: vi.fn(() => ({ ...node(), type: 'lowpass', frequency: param(350), Q: param(1) })),
+    createDynamicsCompressor: vi.fn(() => ({
+      ...node(),
+      threshold: param(-24),
+      knee: param(30),
+      ratio: param(12),
+      attack: param(0.003),
+      release: param(0.25),
+    })),
     createBuffer: vi.fn(() => ({ getChannelData: () => new Float32Array(10) })),
     createBufferSource: vi.fn(() => ({ ...node(), buffer: null, start: vi.fn((t: number) => starts.push(t)), stop: vi.fn() })),
   };
@@ -113,14 +121,25 @@ describe('MusicPlayer', () => {
   it('start is idempotent: one timer, one graph', () => {
     const { player, timers, ctx } = setup();
     player.start();
+    // der erste start() plant schon Noten ein (Bassfilter je Note); danach darf nichts mehr dazukommen
     const gains = ctx.createGain.mock.calls.length;
+    const filters = ctx.createBiquadFilter.mock.calls.length;
     player.start();
     player.setMode('game');
     player.start();
     expect(timers.setInterval).toHaveBeenCalledTimes(1);
     expect(timers.active()).toBe(1);
-    expect(ctx.createBiquadFilter).toHaveBeenCalledTimes(2); // Tiefpass und Hi-Hat-Hochpass
+    expect(ctx.createDynamicsCompressor).toHaveBeenCalledTimes(1);
+    expect(ctx.createBiquadFilter.mock.calls.length).toBe(filters);
     expect(ctx.createGain.mock.calls.length).toBe(gains);
+  });
+
+  it('routes the music through a compressor to the destination', () => {
+    const { player, ctx, out } = setup();
+    player.start();
+    const comp = ctx.createDynamicsCompressor.mock.results[0].value as { connect: ReturnType<typeof vi.fn> };
+    expect((out() as unknown as { connect: ReturnType<typeof vi.fn> }).connect).toHaveBeenCalledWith(comp);
+    expect(comp.connect).toHaveBeenCalledWith(ctx.destination);
   });
 
   it('fades the music in to its level and never above the budget', () => {
@@ -233,8 +252,8 @@ describe('MusicPlayer', () => {
     player.setMode('game');
     player.setProgress(1);
     run(ctx, timers, 1);
-    expect(player.currentBpm).toBeGreaterThan(80);
-    expect(player.currentBpm).toBeLessThanOrEqual(86.5);
+    expect(player.currentBpm).toBeGreaterThan(90);
+    expect(player.currentBpm).toBeLessThanOrEqual(96.5);
     run(ctx, timers, 10);
     expect(player.currentBpm).toBe(BPM_END);
     player.setMode('menu');
@@ -242,16 +261,69 @@ describe('MusicPlayer', () => {
     expect(player.currentBpm).toBeLessThan(BPM_END);
   });
 
-  it('adds the beat late in the round (noise for the hi-hat)', () => {
+  it('plays no drums in the menu, but from the first second of a round (noise for hats and kick click)', () => {
     const { player, timers, ctx } = setup();
     player.start();
-    player.setMode('game');
-    player.setProgress(0.1);
     run(ctx, timers, 4);
     expect(ctx.createBufferSource).not.toHaveBeenCalled();
-    player.setProgress(0.8);
-    run(ctx, timers, 4);
+    player.setMode('game');
+    player.setProgress(0);
+    run(ctx, timers, 1);
     expect(ctx.createBufferSource).toHaveBeenCalled();
+  });
+
+  it('builds the noise buffer once and reuses it', () => {
+    const { player, timers, ctx } = setup();
+    player.setMode('game');
+    player.setProgress(1);
+    player.start();
+    run(ctx, timers, 3);
+    expect(ctx.createBufferSource.mock.calls.length).toBeGreaterThan(10);
+    expect(ctx.createBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('pumps chords and melodies on every kick in a round, never in the menu', () => {
+    const { player, timers, ctx } = setup();
+    player.start();
+    const duck = ctx.createGain.mock.results[1].value as { gain: ReturnType<typeof param> };
+    run(ctx, timers, 3);
+    expect(duck.gain.setTargetAtTime).not.toHaveBeenCalled();
+    player.setMode('game');
+    run(ctx, timers, 2);
+    const calls = duck.gain.setTargetAtTime.mock.calls;
+    expect(calls.length).toBeGreaterThanOrEqual(4);
+    expect(calls.some((c) => c[0] === DUCK_LEVEL)).toBe(true);
+    expect(calls.at(-1)![0]).toBe(1); // kommt immer zurück
+    for (let i = 1; i < calls.length; i++) expect(calls[i][1]).toBeGreaterThanOrEqual(calls[i - 1][1]);
+  });
+
+  it('opens and closes a filter on every bass note', () => {
+    const { player, timers, ctx } = setup();
+    player.start();
+    run(ctx, timers, 2);
+    const wubs = ctx.createBiquadFilter.mock.results
+      .map((r) => r.value as { frequency: ReturnType<typeof param> })
+      .filter((f) => f.frequency.exponentialRampToValueAtTime.mock.calls.some((c) => c[0] === BASS_FILTER_PEAK_HZ));
+    expect(wubs.length).toBeGreaterThanOrEqual(6); // zwei Sekunden bei 90 BPM: 12 Sechzehntel
+    for (const f of wubs) expect(f.frequency.setValueAtTime.mock.calls[0][0]).toBe(BASS_FILTER_FROM_HZ);
+  });
+
+  it('schedules a sane number of voices at full intensity', () => {
+    const { player, timers, ctx } = setup();
+    player.setMode('game');
+    player.setProgress(1);
+    player.start();
+    run(ctx, timers, 10); // Tempo erreicht 132 BPM
+    const osc = ctx.createOscillator.mock.calls.length;
+    const noise = ctx.createBufferSource.mock.calls.length;
+    run(ctx, timers, 2);
+    const steps = (2 * 132 * 4) / 60; // etwa 17,6 Sechzehntel in zwei Sekunden
+    const perStepOsc = (ctx.createOscillator.mock.calls.length - osc) / steps;
+    const perStepNoise = (ctx.createBufferSource.mock.calls.length - noise) / steps;
+    expect(perStepOsc).toBeGreaterThan(1.5); // Arpeggio plus Bass laufen durch
+    expect(perStepOsc).toBeLessThan(6);
+    expect(perStepNoise).toBeGreaterThanOrEqual(1); // Hi-Hats in Sechzehnteln
+    expect(perStepNoise).toBeLessThan(3);
   });
 
   it('keeps going when a node method throws', () => {
