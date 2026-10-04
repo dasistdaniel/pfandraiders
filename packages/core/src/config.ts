@@ -67,30 +67,44 @@ export const CONFIG = {
     spawnShieldMs: 3000,
   },
   npc: {
-    /** Höchstzahl aktiver NPCs (sitzende und gehende zählen nicht) */
+    /** Neue NPCs erscheinen nur, solange weniger als so viele jagen (sitzende und streunende zählen nicht) */
     maxCount: 3,
-    /** Harte Obergrenze aller NPCs inklusive sitzender und gehender */
-    maxTotal: 8,
-    /** Längstens so lange geht ein NPC zum Eingang, danach verschwindet er einfach */
-    leaveMs: 15000,
-    /** So nah am Eingang gilt er als angekommen (px) */
-    leaveArriveRadius: 10,
+    /** Harte Obergrenze aller NPCs inklusive sitzender und streunender (NPCs verschwinden nie) */
+    maxTotal: 6,
+    /** Nach einem Biss, einer Kontrolle oder dem Aufgeben lässt der NPC diesen Spieler so lange in Ruhe */
+    restMs: 20000,
+    /** Streunen: Ziele liegen höchstens so weit von der aktuellen Position (px, 5 Kacheln) */
+    wanderRadius: 80,
+    /** So viele Zufallsversuche für ein begehbares Ziel, sonst bleibt er stehen */
+    wanderTries: 6,
+    /** So nah am Ziel gilt er als angekommen (px) */
+    wanderArriveRadius: 6,
+    /** Kommt er so lange nicht um wanderProgressPx näher, sucht er sich (nach einer Pause) ein neues Ziel */
+    wanderStuckMs: 1200,
+    wanderProgressPx: 4,
+    /** Pause zwischen zwei Wegstücken */
+    wanderPauseMs: [1500, 4000] as Range,
     firstSpawnMs: 15000,
     spawnEveryMs: [20000, 40000] as Range,
     dogChance: 0.6,
     dog: {
       speed: 100,
+      /** Streunen mit diesem Anteil der Geschwindigkeit */
+      roamSpeedMult: 0.6,
+      /** Ausdauer: so lange jagt er ohne Biss, dann gibt er auf (setzt sich) */
       lifeMs: 30000,
       senseRadius: 160,
       biteRadius: 12,
       biteDamage: 15,
       biteCooldownMs: 1500,
       distractedMs: 8000,
-      /** Nach einem Biss (oder am Ende seiner Zeit) sitzt der Hund so lange, dann geht er */
+      /** Nach einem Biss (oder wenn er aufgibt) sitzt der Hund so lange, dann streunt er */
       sitMs: 8000,
     },
     police: {
       speed: 80,
+      roamSpeedMult: 0.7,
+      /** Ausdauer: so lange verfolgt er ohne Kontrolle, dann gibt er auf (streunt) */
       lifeMs: 20000,
       senseRadius: 140,
       controlRadius: 22,

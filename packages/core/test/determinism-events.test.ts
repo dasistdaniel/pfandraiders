@@ -20,6 +20,7 @@ interface Stats {
   maxNpcs: number;
   sawDog: boolean;
   sawPolice: boolean;
+  sawRoaming: boolean;
   zoneActive: boolean;
   minHealth: number;
   someUnconscious: boolean;
@@ -31,6 +32,7 @@ function play(seed: number): { state: GameState; stats: Stats } {
     maxNpcs: 0,
     sawDog: false,
     sawPolice: false,
+    sawRoaming: false,
     zoneActive: false,
     minHealth: 100,
     someUnconscious: false,
@@ -40,6 +42,7 @@ function play(seed: number): { state: GameState; stats: Stats } {
     stats.maxNpcs = Math.max(stats.maxNpcs, s.npcs.length);
     if (s.npcs.some((n) => n.kind === 'dog')) stats.sawDog = true;
     if (s.npcs.some((n) => n.kind === 'police')) stats.sawPolice = true;
+    if (s.npcs.some((n) => n.mood === 'roaming')) stats.sawRoaming = true;
     if (s.zones.some((z) => z.phase === 'active')) stats.zoneActive = true;
     for (const p of Object.values(s.players)) {
       stats.minHealth = Math.min(stats.minHealth, p.health);
@@ -61,6 +64,7 @@ describe('determinism with events', () => {
   it('really exercises npcs and zones in that scenario', () => {
     const { stats } = play(5);
     expect(stats.maxNpcs).toBeGreaterThan(0);
+    expect(stats.sawRoaming).toBe(true);
     expect(stats.zoneActive).toBe(true);
     expect(stats.minHealth).toBeLessThan(100); // players take damage in that scenario
   });

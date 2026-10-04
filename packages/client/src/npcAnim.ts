@@ -66,12 +66,13 @@ export function dogCoat(npcId: number): DogCoat {
 
 /**
  * Stimmung vor Bewegung, damit ein sitzender Hund nicht durch Ruckeln der Interpolation losrennt:
- * Biss, dann Gehen zum Eingang (walk), Sitzen nach dem Biss (wag), Jagen (run), Ablenkung (wag), sonst Sitzen.
+ * Biss, Sitzen nach dem Biss (wag), Streunen (Pause: Sitzen und Umschauen, sonst walk), Jagen (run),
+ * Ablenkung (wag), sonst Sitzen.
  */
 export function dogAnim(npc: Npc, moving: boolean): NpcAnim {
   if (npc.cooldownMs > 0 && npc.cooldownMs > CONFIG.npc.dog.biteCooldownMs - ATTACK_WINDOW_MS) return DOG_ANIMS.attack;
-  if (npc.mood === 'leaving') return DOG_ANIMS.walk;
   if (npc.mood === 'idle') return DOG_ANIMS.wag;
+  if (npc.mood === 'roaming') return npc.pauseMs > 0 ? DOG_ANIMS.idle : DOG_ANIMS.walk;
   if (moving) return npc.targetId !== null ? DOG_ANIMS.run : DOG_ANIMS.walk;
   if (npc.distractedMs > 0) return DOG_ANIMS.wag;
   return DOG_ANIMS.idle;
@@ -79,7 +80,7 @@ export function dogAnim(npc: Npc, moving: boolean): NpcAnim {
 
 export function policeAnim(npc: Npc, moving: boolean): NpcAnim {
   if (npc.checkMs > 0) return OFFICER_ANIMS.baton;
-  if (npc.mood === 'leaving') return OFFICER_ANIMS.walk;
+  if (npc.mood === 'roaming') return npc.pauseMs > 0 ? OFFICER_ANIMS.idle : OFFICER_ANIMS.walk;
   if (moving) return npc.targetId !== null ? OFFICER_ANIMS.run : OFFICER_ANIMS.walk;
   return OFFICER_ANIMS.idle;
 }

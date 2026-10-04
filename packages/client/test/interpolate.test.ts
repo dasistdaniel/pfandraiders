@@ -8,7 +8,7 @@ function snapAt(x2: number, xn = 0, ids = ['p1', 'p2']): Snapshot {
   s.players.p1.x = 24;
   if (s.players.p2) s.players.p2.x = x2;
   s.npcs = xn
-    ? [{ id: 7, kind: 'dog', x: xn, y: 24, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, cooldownMs: 0, distractedMs: 0, checkMs: 0 }]
+    ? [{ id: 7, kind: 'dog', x: xn, y: 24, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 0 }]
     : [];
   return projectSnapshot(s, 'p1');
 }
