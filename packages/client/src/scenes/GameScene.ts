@@ -16,6 +16,7 @@ import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
 import { music, sfx, unlockAudio } from '../sfx';
+import { PLING_GAP_SEC } from '../sound';
 import { detectSounds, snapshotForSound } from '../soundEvents';
 import { buildInput } from '../input';
 import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
@@ -396,7 +397,11 @@ export class GameScene extends Phaser.Scene {
       sfx.toggleMute();
       this.renderPause(); // Beschriftung "Ton: an/aus" im offenen Menü
     }
-    for (const id of detectSounds(this.prevSoundState, state, this.ownSoundIds)) sfx.play(id);
+    // Mehrere Plings eines Frames (online: mehrere Flaschen pro Snapshot) nacheinander abspielen
+    let plings = 0;
+    for (const id of detectSounds(this.prevSoundState, state, this.ownSoundIds)) {
+      sfx.play(id, id === 'pling' ? PLING_GAP_SEC * plings++ : 0);
+    }
     this.prevSoundState = snapshotForSound(state);
 
     state.spots.forEach((spot, i) => {

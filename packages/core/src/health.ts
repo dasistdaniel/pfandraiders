@@ -11,6 +11,7 @@ export function knockOut(p: Player): void {
   p.money -= Math.floor(p.money * CONFIG.health.moneyLossFraction);
   p.item = null;
   cancelSearch(p);
+  p.depositMs = 0;
   p.mode = 'unconscious';
 }
 

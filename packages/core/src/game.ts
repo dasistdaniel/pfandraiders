@@ -52,6 +52,7 @@ function newPlayer(id: string, at: Point): Player {
     mode: 'walking',
     searchSpotId: null,
     searchProgressMs: 0,
+    depositMs: 0,
     actionHeld: false,
     stealHeld: false,
     item: null,

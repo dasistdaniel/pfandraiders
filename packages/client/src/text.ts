@@ -51,14 +51,14 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   } else if (isNear(state.map.dropoffs, p)) {
     lines.push(
       totalBottles(p.bottles) > 0
-        ? `[${labels.action}] Pfand abgeben ${formatMoney(bottlesValue(p.bottles))}`
+        ? `[${labels.action} halten] Pfand abgeben (${formatMoney(bottlesValue(p.bottles))})`
         : 'Pfandautomat: nichts zum Abgeben',
     );
   }
 
   const full = totalBottles(p.bottles) >= capacityOf(p);
   if (findSearchableSpot(state, p)) {
-    lines.push(full ? 'Container voll' : `[${labels.action} halten] Suchen`);
+    lines.push(full ? 'Container voll' : `[${labels.action} drücken, halten] Suchen`);
   }
   if (!full && findStealTarget(state, p)) {
     if (p.stealCooldownMs > 0) lines.push(`Klauen in ${Math.ceil(p.stealCooldownMs / 1000)} s`);

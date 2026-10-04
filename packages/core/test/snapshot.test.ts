@@ -72,6 +72,15 @@ describe('projectSnapshot', () => {
     expect(snap.players.p2.stealCooldownMs).toBe(0);
   });
 
+  it('hides the deposit timer of other players but keeps the own one', () => {
+    const s = game();
+    s.players.p1.depositMs = 90;
+    s.players.p2.depositMs = 120;
+    const snap = projectSnapshot(s, 'p1');
+    expect(snap.players.p1.depositMs).toBe(90);
+    expect(snap.players.p2.depositMs).toBe(0);
+  });
+
   it('keeps the public shield of other players', () => {
     const s = game();
     s.players.p2.shieldMs = 2500;
@@ -140,7 +149,7 @@ describe('projectSnapshot', () => {
 // (und in snapshot.ts entscheiden, ob das Feld öffentlich ist).
 describe('snapshot key sets', () => {
   const PLAYER_KEYS = [
-    'actionHeld', 'bottles', 'containerLevel', 'health', 'id', 'item', 'mode', 'money', 'searchProgressMs',
+    'actionHeld', 'bottles', 'containerLevel', 'depositMs', 'health', 'id', 'item', 'mode', 'money', 'searchProgressMs',
     'searchSpotId', 'shieldMs', 'spawn', 'stealCooldownMs', 'stealHeld', 'unconsciousMs', 'x', 'y',
   ];
 

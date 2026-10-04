@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CONFIG } from '../src/config';
 import { createGame } from '../src/game';
 import { CITY_MAP } from '../src/maps';
 import { step } from '../src/step';
@@ -34,6 +35,7 @@ function comprehensive(seed: number): {
   moneyBeforeDeposit: number;
   moneyAfterDeposit: number;
   depositAmount: number;
+  bottlesAfterDeposit: number;
   upgradeSucceeded: boolean;
 } {
   // Short round: 90 seconds = 900 steps of 100ms
@@ -55,9 +57,13 @@ function comprehensive(seed: number): {
   let moneyBeforeDeposit = 0;
   let moneyAfterDeposit = 0;
   let depositAmount = 0;
+  let bottlesAfterDeposit = -1;
   let upgradeSucceeded = false;
 
   let phase = 0;
+  // Die Abgabe dauert: erste Flasche beim Drücken, danach alle CONFIG.depositEveryMs eine.
+  // Phase 1 hält die Taste, bis alles abgegeben ist; die späteren Phasen beginnen relativ dazu.
+  let depositEnd = -1;
 
   for (let t = 0; t < 900; t++) {
     const dt = 100;
@@ -74,18 +80,19 @@ function comprehensive(seed: number): {
         phase = 1;
       }
     } else if (phase === 1) {
-      // Phase 1: teleport to dropoff and deposit
+      // Phase 1: teleport to dropoff, press and hold until every bottle is deposited
       player.x = dropoff.x;
       player.y = dropoff.y;
-      const pressAction = t === 32; // Deposit on step 32
-      const input: Input = { moveX: 0, moveY: 0, action: pressAction, steal: false, buy: null };
       if (t === 32) {
         moneyBeforeDeposit = player.money;
         depositAmount = player.bottles.plastic + player.bottles.glass + player.bottles.crate;
+        depositEnd = 32 + Math.ceil(((depositAmount - 1) * CONFIG.depositEveryMs) / dt);
       }
+      const input: Input = { moveX: 0, moveY: 0, action: true, steal: false, buy: null };
       step(s, { a: input }, dt);
-      if (t === 32) {
+      if (t === depositEnd) {
         moneyAfterDeposit = player.money;
+        bottlesAfterDeposit = player.bottles.plastic + player.bottles.glass + player.bottles.crate;
         phase = 2;
       }
     } else if (phase === 2) {
@@ -93,22 +100,22 @@ function comprehensive(seed: number): {
       player.x = firstSpot.x;
       player.y = firstSpot.y;
       // a new search needs a fresh press: release once after the deposit press, then hold
-      const holdAction = t > 33 && t < 32 + 451; // 451 steps to ensure > 45s wait
+      const holdAction = t > depositEnd + 1 && t < depositEnd + 451; // 451 steps to ensure > 45s wait
       const input: Input = { moveX: 0, moveY: 0, action: holdAction, steal: false, buy: null };
       step(s, { a: input }, dt);
-      if (t === 32 + 451) phase = 3;
+      if (t === depositEnd + 451) phase = 3;
     } else if (phase === 3) {
       // Phase 3: fund player and attempt upgrade at shop
       player.x = shop.x;
       player.y = shop.y;
       // Fund player with enough money for first upgrade (150 cents) before attempting
-      if (t === 32 + 452) {
+      if (t === depositEnd + 452) {
         player.money = 200; // Enough for upgrade (costs 150)
       }
-      const attemptUpgrade = t === 32 + 453; // Attempt upgrade one step after funding
+      const attemptUpgrade = t === depositEnd + 453; // Attempt upgrade one step after funding
       const input: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: attemptUpgrade ? 'upgrade' : null };
       step(s, { a: input }, dt);
-      if (t === 32 + 453) {
+      if (t === depositEnd + 453) {
         upgradeSucceeded = player.containerLevel === 1 && player.money === 50;
         phase = 4;
       }
@@ -139,6 +146,7 @@ function comprehensive(seed: number): {
     moneyBeforeDeposit,
     moneyAfterDeposit,
     depositAmount,
+    bottlesAfterDeposit,
     upgradeSucceeded,
   };
 }
@@ -173,8 +181,9 @@ describe('determinism', () => {
     // Sanity: refill must happen after empty
     expect(first.spotRefillStep).toBeGreaterThan(-1);
 
-    // Verify deposit at dropoff: money increased by bottles value
+    // Verify deposit at dropoff: every bottle deposited, money increased
     expect(first.depositAmount).toBeGreaterThan(0);
+    expect(first.bottlesAfterDeposit).toBe(0);
     expect(first.moneyAfterDeposit).toBeGreaterThan(first.moneyBeforeDeposit);
     expect(first.moneyAfterDeposit - first.moneyBeforeDeposit).toBeGreaterThan(0);
 
