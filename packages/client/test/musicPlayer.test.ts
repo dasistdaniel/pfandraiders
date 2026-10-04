@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MusicPlayer } from '../src/music/player';
 import type { Timers } from '../src/music/player';
-import { BASS_FILTER_FROM_HZ, BASS_FILTER_PEAK_HZ, BPM_END, DUCK_LEVEL, ENDED_LEVEL, MUSIC_MAX_GAIN } from '../src/music/score';
+import { BPM_END, BPM_MENU, DUCK_LEVEL, ENDED_LEVEL, GUITAR_GATE_SEC, MUSIC_MAX_GAIN } from '../src/music/score';
 
 function param(value = 0) {
   return {
@@ -121,7 +121,7 @@ describe('MusicPlayer', () => {
   it('start is idempotent: one timer, one graph', () => {
     const { player, timers, ctx } = setup();
     player.start();
-    // der erste start() plant schon Noten ein (Bassfilter je Note); danach darf nichts mehr dazukommen
+    // der erste start() plant schon Noten ein (Hüllkurven je Note); danach darf nichts mehr dazukommen
     const gains = ctx.createGain.mock.calls.length;
     const filters = ctx.createBiquadFilter.mock.calls.length;
     player.start();
@@ -252,8 +252,8 @@ describe('MusicPlayer', () => {
     player.setMode('game');
     player.setProgress(1);
     run(ctx, timers, 1);
-    expect(player.currentBpm).toBeGreaterThan(90);
-    expect(player.currentBpm).toBeLessThanOrEqual(96.5);
+    expect(player.currentBpm).toBeGreaterThan(BPM_MENU);
+    expect(player.currentBpm).toBeLessThanOrEqual(BPM_MENU + 8.5);
     run(ctx, timers, 10);
     expect(player.currentBpm).toBe(BPM_END);
     player.setMode('menu');
@@ -297,15 +297,36 @@ describe('MusicPlayer', () => {
     for (let i = 1; i < calls.length; i++) expect(calls[i][1]).toBeGreaterThanOrEqual(calls[i - 1][1]);
   });
 
-  it('opens and closes a filter on every bass note', () => {
+  it('creates all filters once when attaching, none per note', () => {
     const { player, timers, ctx } = setup();
+    player.setMode('game');
+    player.setProgress(1);
     player.start();
+    const filters = ctx.createBiquadFilter.mock.calls.length;
+    expect(filters).toBeGreaterThanOrEqual(5);
+    run(ctx, timers, 3);
+    expect(ctx.createBiquadFilter.mock.calls.length).toBe(filters);
+  });
+
+  it('plays palm-muted power chords in a round, but no guitar in the menu', () => {
+    const { player, timers, ctx } = setup();
+    const saws = () =>
+      ctx.createOscillator.mock.results.map((r) => r.value as { type: string; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }).filter((o) => o.type === 'sawtooth');
+    player.start();
+    run(ctx, timers, 3);
+    const menuSaws = saws().length; // nur der Sägezahn-Anteil des Leads
+    player.setMode('game');
+    player.setProgress(0);
     run(ctx, timers, 2);
-    const wubs = ctx.createBiquadFilter.mock.results
-      .map((r) => r.value as { frequency: ReturnType<typeof param> })
-      .filter((f) => f.frequency.exponentialRampToValueAtTime.mock.calls.some((c) => c[0] === BASS_FILTER_PEAK_HZ));
-    expect(wubs.length).toBeGreaterThanOrEqual(6); // zwei Sekunden bei 90 BPM: 12 Sechzehntel
-    for (const f of wubs) expect(f.frequency.setValueAtTime.mock.calls[0][0]).toBe(BASS_FILTER_FROM_HZ);
+    const gameSaws = saws().slice(menuSaws);
+    expect(gameSaws.length).toBeGreaterThan(20);
+    // die meisten Gitarrentöne sind abgedämpft: Gate plus kurzer Ausklang
+    const short = gameSaws.filter((o) => {
+      const started = o.start.mock.calls[0]?.[0] as number;
+      const stopped = o.stop.mock.calls[0]?.[0] as number;
+      return stopped - started <= GUITAR_GATE_SEC + 0.06;
+    });
+    expect(short.length).toBeGreaterThan(gameSaws.length / 2);
   });
 
   it('schedules a sane number of voices at full intensity', () => {
@@ -313,15 +334,15 @@ describe('MusicPlayer', () => {
     player.setMode('game');
     player.setProgress(1);
     player.start();
-    run(ctx, timers, 10); // Tempo erreicht 132 BPM
+    run(ctx, timers, 10); // Tempo erreicht 165 BPM
     const osc = ctx.createOscillator.mock.calls.length;
     const noise = ctx.createBufferSource.mock.calls.length;
     run(ctx, timers, 2);
-    const steps = (2 * 132 * 4) / 60; // etwa 17,6 Sechzehntel in zwei Sekunden
+    const steps = (2 * BPM_END * 4) / 60; // 22 Sechzehntel in zwei Sekunden
     const perStepOsc = (ctx.createOscillator.mock.calls.length - osc) / steps;
     const perStepNoise = (ctx.createBufferSource.mock.calls.length - noise) / steps;
-    expect(perStepOsc).toBeGreaterThan(1.5); // Arpeggio plus Bass laufen durch
-    expect(perStepOsc).toBeLessThan(6);
+    expect(perStepOsc).toBeGreaterThan(3); // Gitarre, Bass und Arpeggio laufen durch
+    expect(perStepOsc).toBeLessThan(9);
     expect(perStepNoise).toBeGreaterThanOrEqual(1); // Hi-Hats in Sechzehnteln
     expect(perStepNoise).toBeLessThan(3);
   });
