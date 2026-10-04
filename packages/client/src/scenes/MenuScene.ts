@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { CREDITS, creditDetail, creditLine } from '../credits';
 import { KEYBOARD_LAYOUTS } from '../devices';
 import { GAME_H, GAME_W } from '../layout';
+import { buildLabel, currentBuild } from '../buildInfo';
+import { addLogo } from '../logoTexture';
 import { controlLines, MenuModel } from '../menuModel';
 import type { MenuItem } from '../menuModel';
 import { showOnlineMenu } from '../onlineMenu';
@@ -57,6 +59,16 @@ const HINT_CREDITS = 'Pfeile/W S: wählen   Enter öffnet den Link   Esc zurück
  * bei spätestens CREDITS_LAST_Y steht, über der Hilfezeile (GAME_H - 24); höchstens 56 px.
  */
 const CREDITS_TOP = 160;
+/**
+ * Logo oben mittig (Oberkante LOGO_Y): auf der Hauptseite volle Größe (480 x 184 px, bis y 216), darunter Hinweis
+ * und Einträge; auf Einstellungen und Credits halb so groß (240 x 92 px, bis y 124), Hinweis und Einträge wie bisher.
+ */
+const LOGO_Y = 32;
+const LOGO_SCALE_SUB = 0.5;
+const NOTICE_Y_MAIN = 236;
+const NOTICE_Y_SUB = 140;
+const ITEMS_TOP_MAIN = 276;
+const ITEMS_TOP_SUB = 200;
 const CREDITS_LAST_Y = 470;
 const CREDITS_ROW_H = Math.min(56, Math.floor((CREDITS_LAST_Y - CREDITS_TOP) / Math.max(1, CREDIT_ITEMS.length - 1)));
 const CREDITS_WRAP = GAME_W - 64;
@@ -71,6 +83,8 @@ export class MenuScene extends Phaser.Scene {
   /** Zweite, kleine Zeile je Eintrag (nur Credits: Link und Hinweis). */
   private detailTexts: Phaser.GameObjects.Text[] = [];
   private hintText!: Phaser.GameObjects.Text;
+  private logo!: Phaser.GameObjects.Image;
+  private noticeText: Phaser.GameObjects.Text | null = null;
   private controlsText!: Phaser.GameObjects.Text;
   private keys!: Record<KeyName, Phaser.Input.Keyboard.Key>;
   private padPrev: Record<number, PadPrev> = {};
@@ -104,17 +118,25 @@ export class MenuScene extends Phaser.Scene {
 
     this.add.tileSprite(0, 0, GAME_W, GAME_H, tileTexture('city', 'floor_0')).setOrigin(0).setTileScale(2);
     this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.65).setOrigin(0);
-    this.add
-      .text(GAME_W / 2, 90, 'PfandRaiders', { fontFamily: 'monospace', fontSize: '32px', color: COLOR_SELECTED })
-      .setOrigin(0.5);
-    if (this.notice) {
-      this.add
-        .text(GAME_W / 2, 140, this.notice, { fontFamily: 'monospace', fontSize: '16px', color: '#ff8a65', align: 'center' })
-        .setOrigin(0.5);
-    }
+    // Lage und Größe von Logo und Hinweis setzt rebuild() je Seite
+    this.logo = addLogo(this, LOGO_Y);
+    this.noticeText = this.notice
+      ? this.add
+          .text(GAME_W / 2, NOTICE_Y_MAIN, this.notice, {
+            fontFamily: 'monospace',
+            fontSize: '16px',
+            color: '#ff8a65',
+            align: 'center',
+          })
+          .setOrigin(0.5)
+      : null;
     this.controlsText = this.add
       .text(GAME_W / 2, 400, '', { fontFamily: 'monospace', fontSize: '14px', color: '#cccccc', align: 'center' })
       .setOrigin(0.5, 0);
+    // Buildnummer oben rechts (Version des Clients, hilfreich bei Fehlermeldungen)
+    this.add
+      .text(GAME_W - 8, 6, buildLabel(currentBuild()), { fontFamily: 'monospace', fontSize: '12px', color: '#8a9a9f' })
+      .setOrigin(1, 0);
     this.hintText = this.add
       .text(GAME_W / 2, GAME_H - 24, HINT_DEFAULT, {
         fontFamily: 'monospace',
@@ -193,7 +215,11 @@ export class MenuScene extends Phaser.Scene {
     for (const t of this.detailTexts) t.destroy();
     this.detailTexts = [];
     const credits = this.page === 'credits';
+    const main = this.page === 'main';
     this.hintText.setText(credits ? HINT_CREDITS : HINT_DEFAULT);
+    this.logo.setScale(main ? 1 : LOGO_SCALE_SUB);
+    this.noticeText?.setY(main ? NOTICE_Y_MAIN : NOTICE_Y_SUB);
+    const itemsTop = main ? ITEMS_TOP_MAIN : ITEMS_TOP_SUB;
     this.itemTexts = this.model.items.map((item, i) => {
       const t = credits
         ? this.add
@@ -206,7 +232,7 @@ export class MenuScene extends Phaser.Scene {
             })
             .setOrigin(0.5, 0)
         : this.add
-            .text(GAME_W / 2, 200 + i * 44, '', { fontFamily: 'monospace', fontSize: '24px', color: COLOR_NORMAL })
+            .text(GAME_W / 2, itemsTop + i * 44, '', { fontFamily: 'monospace', fontSize: '24px', color: COLOR_NORMAL })
             .setOrigin(0.5);
       this.bindPointer(t, i);
       const entry = this.creditFor(item.id);
