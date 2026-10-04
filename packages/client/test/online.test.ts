@@ -1,5 +1,5 @@
-import { CITY_MAP, DEFAULT_MAP_ID, RETRO_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
-import type { ClientMessage, ServerMessage } from '@pfandraiders/core';
+import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, RETRO_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
+import type { ClientMessage, Player, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
 import type { SocketLike } from '../src/online';
@@ -246,7 +246,7 @@ describe('OnlineConnection rendering state', () => {
     expect(conn.getState().players.p2.x).toBe(80);
   });
 
-  it('keeps the own player at the latest server position', () => {
+  it('snaps the own player to a far away server position', () => {
     const { socket, conn } = setup();
     socket.receive(startMessage(0));
     const s = createGame(1, CITY_MAP, ['p1', 'p2']);
@@ -509,5 +509,140 @@ describe('OnlineConnection reopen', () => {
     fail = true;
     expect(() => conn.reopen()).toThrow('boom');
     expect(conn.status).toBe('closed');
+  });
+});
+
+describe('OnlineConnection own-player prediction', () => {
+  const SPEED = CONFIG.playerSpeed;
+
+  function ownSnap(tickValue: number, ack: number, mutate: (p: Player) => void = () => {}): ServerMessage {
+    const s = createGame(1, CITY_MAP, ['p1', 'p2']);
+    s.tick = tickValue;
+    mutate(s.players.p1);
+    return { t: 'snap', snap: projectSnapshot(s, 'p1'), ack };
+  }
+  function spawn() {
+    return createGame(1, CITY_MAP, ['p1', 'p2']).players.p1;
+  }
+  function lastSeq(socket: FakeSocket): number {
+    const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
+    return inputs[inputs.length - 1].seq;
+  }
+  function started() {
+    const ctx = setup();
+    ctx.socket.receive(startMessage(0, 40));
+    ctx.conn.update(16);
+    return ctx;
+  }
+
+  it('moves the own figure at once, before any snapshot arrives', () => {
+    const { conn } = started();
+    const x0 = conn.getState().players.p1.x;
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    conn.update(16);
+    expect(conn.getState().players.p1.x).toBeCloseTo(x0 + (SPEED * 16) / 1000, 6);
+    conn.update(100);
+    expect(conn.getState().players.p1.x).toBeCloseTo(x0 + (SPEED * 116) / 1000, 6);
+    expect(conn.bufferedSnapshots()).toBe(1);
+  });
+
+  it('stands still with the menu input (NO_INPUT)', () => {
+    const { conn } = started();
+    const x0 = conn.getState().players.p1.x;
+    conn.setInput('p1', { ...NO_INPUT });
+    for (let i = 0; i < 10; i++) conn.update(16);
+    expect(conn.getState().players.p1.x).toBe(x0);
+  });
+
+  it('does not walk while the connection is down', () => {
+    const { socket, conn } = started();
+    const x0 = conn.getState().players.p1.x;
+    socket.close();
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    for (let i = 0; i < 10; i++) conn.update(16);
+    expect(conn.getState().players.p1.x).toBe(x0);
+  });
+
+  it('does not jump on a snapshot that matches the prediction', () => {
+    const { socket, conn } = started();
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    for (let i = 0; i < 6; i++) conn.update(16);
+    const seq = lastSeq(socket);
+    const before = conn.getState().players.p1.x;
+    // Server ist etwas zurück (er sieht die Eingabe später), liegt aber auf dem eigenen Weg
+    socket.receive(ownSnap(1, seq, (p) => (p.x = spawn().x + 5)));
+    conn.update(16);
+    expect(conn.getState().players.p1.x).toBeCloseTo(before + (SPEED * 16) / 1000, 6);
+  });
+
+  it('corrects a standing figure gently towards the server position', () => {
+    const { socket, conn } = started();
+    for (let i = 0; i < 10; i++) conn.update(16);
+    const x0 = conn.getState().players.p1.x;
+    const seq = lastSeq(socket);
+    socket.receive(ownSnap(1, seq, (p) => (p.x = x0 + 4)));
+    conn.update(16);
+    const x1 = conn.getState().players.p1.x;
+    expect(x1).toBeGreaterThan(x0);
+    expect(x1).toBeLessThan(x0 + 4 * 0.35 + 1e-9);
+    for (let k = 2; k < 30; k++) {
+      socket.receive(ownSnap(k, seq, (p) => (p.x = x0 + 4)));
+      conn.update(50);
+    }
+    expect(conn.getState().players.p1.x).toBeCloseTo(x0 + 4, 0);
+    expect(Math.abs(conn.getState().players.p1.x - (x0 + 4))).toBeLessThanOrEqual(0.5);
+  });
+
+  it('ignores garbage acks except for the snap rule', () => {
+    const { socket, conn } = started();
+    for (let i = 0; i < 10; i++) conn.update(16);
+    const x0 = conn.getState().players.p1.x;
+    let tick = 1;
+    for (const ack of ['7', null, -1, 1.5, 1e300, Number.MAX_SAFE_INTEGER + 2, 999]) {
+      const msg = ownSnap(tick++, 0, (p) => (p.x = x0 + 4)) as Extract<ServerMessage, { t: 'snap' }>;
+      expect(() => socket.receive({ ...msg, ack: ack as number })).not.toThrow();
+      conn.update(16);
+      expect(conn.getState().players.p1.x).toBe(x0);
+    }
+  });
+
+  it('takes every other own field from the snapshot at once and leaves the buffer untouched', () => {
+    const { socket, conn } = started();
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    conn.update(16);
+    const seq = lastSeq(socket);
+    socket.receive(ownSnap(1, seq, (p) => (p.money = 1234)));
+    conn.update(16);
+    const me = conn.getState().players.p1;
+    expect(me.money).toBe(1234);
+    expect(me.x).toBeGreaterThan(spawn().x);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const buf = (conn as any).buffer as { snap: { players: Record<string, Player> } }[];
+    expect(buf[buf.length - 1].snap.players.p1.x).toBe(spawn().x);
+  });
+
+  it('shows the server position while unconscious', () => {
+    const { socket, conn } = started();
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    conn.update(16);
+    socket.receive(
+      ownSnap(1, lastSeq(socket), (p) => {
+        p.mode = 'unconscious';
+        p.unconsciousMs = 5000;
+      }),
+    );
+    for (let i = 0; i < 5; i++) conn.update(16);
+    expect(conn.getState().players.p1.x).toBe(spawn().x);
+  });
+
+  it('starts the prediction anew on start', () => {
+    const { socket, conn } = started();
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    for (let i = 0; i < 10; i++) conn.update(16);
+    expect(conn.getState().players.p1.x).toBeGreaterThan(spawn().x);
+    conn.setInput('p1', { ...NO_INPUT });
+    socket.receive(startMessage(0, 40));
+    conn.update(16);
+    expect(conn.getState().players.p1.x).toBe(spawn().x);
   });
 });
