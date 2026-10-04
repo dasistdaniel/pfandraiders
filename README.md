@@ -71,7 +71,7 @@ Dieselbe Liste zeigt das Spiel im Hauptmenü unter "Credits" (Daten in `packages
 
 ## Online spielen und Server
 
-Der Mehrspieler-Server (`packages/server`) ist ein WebSocket-Server mit Räumen. Die Spiellogik liegt im Paket `core`.
+Der Mehrspieler-Server (`packages/server`) ist ein WebSocket-Server mit Räumen. Die Spiellogik liegt im Paket `core`. Der Server rechnet 20 Schritte pro Sekunde; die eigene Figur bewegt der Client trotzdem sofort mit derselben Laufregel vorher (Vorhersage), Abweichungen zum Server werden sanft korrigiert, große (Respawn, Neustart) sofort übernommen. Fremde Figuren werden mit 100 ms Verzögerung zwischen zwei Server-Ständen gezeigt.
 
 Lokal starten (zwei Terminals):
 

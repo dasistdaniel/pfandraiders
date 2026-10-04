@@ -15,8 +15,8 @@ import type {
 import { NO_INPUT } from '@pfandraiders/core';
 import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
 import type { GameConnection } from './connection';
-import { interpolateSnapshot, smoothPosition } from './interpolate';
-import type { Pos } from './interpolate';
+import { interpolateSnapshot } from './interpolate';
+import { Predictor } from './prediction';
 import { isValidSnapshot } from './snapshotGuard';
 
 /** Fremde Figuren werden so viel später gezeigt, damit zwischen zwei Snapshots interpoliert werden kann. */
@@ -87,8 +87,8 @@ export class OnlineConnection implements GameConnection {
   private lastSent: Input | null = null;
   private sinceSent = 0;
   private rendered: GameState | null = null;
-  /** Geglättete Anzeigeposition der eigenen Figur (null = noch keine). */
-  private ownPos: Pos | null = null;
+  /** Vorhersage der eigenen Figur (Position sofort aus der eigenen Eingabe, Server korrigiert sanft). */
+  private readonly predictor = new Predictor();
   private warned = false;
   private lastName = '';
 
@@ -241,7 +241,7 @@ export class OnlineConnection implements GameConnection {
         this.roster = msg.players;
         this.buffer = [{ at: this.clock, snap: msg.snap }];
         this.rendered = stateFromSnapshot(msg.map, msg.snap);
-        this.ownPos = null;
+        this.predictor.reset(msg.snap.players[msg.you] ?? null);
         this.seq = 0;
         this.lastSent = null;
         this.onStart?.();
@@ -252,6 +252,10 @@ export class OnlineConnection implements GameConnection {
         if (this.buffer.length > 0 && msg.snap.tick <= this.buffer[this.buffer.length - 1].snap.tick) break;
         this.buffer.push({ at: this.clock, snap: msg.snap });
         if (this.buffer.length > MAX_BUFFER) this.buffer.splice(0, this.buffer.length - MAX_BUFFER);
+        {
+          const me = msg.snap.players[this.you];
+          if (me) this.predictor.onSnapshot({ x: me.x, y: me.y }, msg.ack, this.moving(), this.clock);
+        }
         break;
       case 'chat': {
         const chat = parseChatMessage(msg);
@@ -294,7 +298,6 @@ export class OnlineConnection implements GameConnection {
     this.sendInputIfNeeded();
     try {
       this.rendered = this.computeRendered();
-      this.smoothOwn(dt);
     } catch {
       // Beschädigter Snapshot im Puffer: neuesten verwerfen, letzten guten Zustand behalten.
       this.buffer.pop();
@@ -303,6 +306,32 @@ export class OnlineConnection implements GameConnection {
         console.warn('OnlineConnection: dropped a snapshot that could not be rendered');
       }
     }
+    this.predictOwn(dt);
+  }
+
+  private moving(): boolean {
+    return this.pendingInput.moveX !== 0 || this.pendingInput.moveY !== 0;
+  }
+
+  /**
+   * Eigene Figur: Position aus der Vorhersage (dieselbe Eingabe, die gesendet wird; bei offenem Menü also
+   * NO_INPUT), alle anderen Felder (Geld, Flaschen, Zustand, Gesundheit ...) aus dem neuesten Snapshot.
+   */
+  private predictOwn(dt: number): void {
+    const rendered = this.rendered;
+    if (!rendered || !this.map || this.buffer.length === 0) return;
+    // Container und Zustand aus dem Puffer, nicht aus `rendered` (das trägt schon die vorhergesagte Position)
+    const latest = this.buffer[this.buffer.length - 1].snap;
+    const server = latest.players[this.you];
+    // Ohne offene Verbindung geht keine Eingabe hinaus, nach Rundenende rechnet der Server nicht mehr:
+    // in beiden Fällen bleibt die Figur auf dem Server stehen, hier ebenso
+    const input = this.status === 'open' && latest.phase !== 'ended' ? this.pendingInput : NO_INPUT;
+    this.predictor.step(dt, input, server, this.map, this.clock);
+    const pos = this.predictor.position;
+    const shown = rendered.players[this.you];
+    if (!pos || !shown) return;
+    // Kopie: `rendered` teilt sich die Spielerobjekte mit dem Snapshot im Puffer
+    rendered.players = { ...rendered.players, [this.you]: { ...shown, x: pos.x, y: pos.y } };
   }
 
   private sendInputIfNeeded(): void {
@@ -311,18 +340,10 @@ export class OnlineConnection implements GameConnection {
     const changed = this.lastSent === null || !sameInput(this.lastSent, input);
     if (!changed && this.sinceSent < HEARTBEAT_MS) return;
     this.sendMsg({ t: 'input', seq: ++this.seq, input });
+    this.predictor.noteSent(this.seq, this.clock);
     this.lastSent = input;
     this.sinceSent = 0;
     this.pendingBuy = null;
-  }
-
-  /** Eigene Figur: aus dem neuesten Snapshot, aber über die Zeit geglättet statt in 20-Hz-Stufen. */
-  private smoothOwn(dtMs: number): void {
-    const me = this.rendered?.players[this.you];
-    if (!me) return;
-    this.ownPos = smoothPosition(this.ownPos, { x: me.x, y: me.y }, dtMs);
-    me.x = this.ownPos.x;
-    me.y = this.ownPos.y;
   }
 
   private computeRendered(): GameState | null {
