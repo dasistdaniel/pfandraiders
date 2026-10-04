@@ -14,7 +14,7 @@
 //             BASS_FILTER_* (Tiefpass-„Wub“ je Note: öffnet von FROM auf PEAK und schließt in CLOSE_SEC)
 // Schlagzeug: KICK_* (Sinus mit Tonhöhenfall plus Klick), SNARE_* (Rauschen durch Bandpass plus Körper), HAT_*
 // Pumpen:     DUCK_* (Akkorde, Melodien und Arpeggio ducken sich bei jedem Kick)
-// Klang:      LOWPASS_HZ (Akkorde, Melodien, Arpeggio), VIBRATO_*, COMPRESSOR_* (Schutz vor Übersteuern)
+// Klang:      LOWPASS_HZ (Akkorde, Melodien, Arpeggio), VIBRATO_*, COMPRESSOR_* (Begrenzer gegen Übersteuern)
 // Die Hüllkurven der Tonstimmen stehen in VOICES in player.ts.
 
 /** Tempo zu Rundenbeginn und kurz vor Schluss (Schläge pro Minute). */
@@ -85,12 +85,16 @@ export const LOWPASS_HZ = 2400;
 /** Vibrato der Melodiestimmen. */
 export const VIBRATO_HZ = 5;
 export const VIBRATO_CENTS = 7;
-/** Sanfter Kompressor hinter der Musik, damit Kick und Bass zusammen nie übersteuern. */
-export const COMPRESSOR_THRESHOLD_DB = -18;
-export const COMPRESSOR_KNEE_DB = 12;
-export const COMPRESSOR_RATIO = 3;
-export const COMPRESSOR_ATTACK_SEC = 0.005;
-export const COMPRESSOR_RELEASE_SEC = 0.2;
+/**
+ * Kompressor hinter der Musik als fast unhörbarer Begrenzer, damit Kick und Bass zusammen nie übersteuern.
+ * WebAudio hebt den Ausgang automatisch um (1 / Pegel bei 0 dBFS)^0,6 an; mit hoher Schwelle bleibt diese
+ * Anhebung bei etwa 1,6 dB. Eine niedrige Schwelle (z. B. -18 dB) machte die Musik deutlich lauter als MUSIC_MAX_GAIN.
+ */
+export const COMPRESSOR_THRESHOLD_DB = -3;
+export const COMPRESSOR_KNEE_DB = 3;
+export const COMPRESSOR_RATIO = 12;
+export const COMPRESSOR_ATTACK_SEC = 0.003;
+export const COMPRESSOR_RELEASE_SEC = 0.1;
 
 // ---- Grundlagen ----
 
