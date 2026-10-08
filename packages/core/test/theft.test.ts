@@ -281,13 +281,35 @@ describe('robbing a knocked-out player', () => {
     expect(s.players.p2.shieldMs).toBe(0);
   });
 
-  it('does not use the bolt cutters', () => {
+  it('takes all bottles with the bolt cutters and uses them up', () => {
     const s = knockedSetup();
     s.players.p1.containerLevel = 3;
     s.players.p1.inventory.bolt_cutters = true;
     runSteps(s, STEAL, 1);
-    expect(s.players.p1.bottles.plastic).toBe(2);
+    expect(s.players.p1.bottles.plastic).toBe(4);
+    expect(s.players.p2.bottles.plastic).toBe(0);
+    expect(s.players.p1.inventory.bolt_cutters).toBe(false);
+    expect(s.players.p2.robbed).toBe(true);
+  });
+
+  it('limits the bolt cutters loot to the free room of the robber', () => {
+    const s = knockedSetup();
+    s.players.p1.inventory.bolt_cutters = true; // Hände: 3 Plätze
+    runSteps(s, STEAL, 1);
+    expect(s.players.p1.bottles.plastic).toBe(3);
+    expect(s.players.p2.bottles.plastic).toBe(1);
+    expect(s.players.p1.inventory.bolt_cutters).toBe(false);
+    expect(s.players.p2.robbed).toBe(true);
+  });
+
+  it('keeps the bolt cutters when the container of the robber is full', () => {
+    const s = knockedSetup();
+    s.players.p1.inventory.bolt_cutters = true;
+    s.players.p1.bottles = { plastic: 3, glass: 0, crate: 0 };
+    runSteps(s, STEAL, 1);
     expect(s.players.p1.inventory.bolt_cutters).toBe(true);
+    expect(s.players.p2.bottles.plastic).toBe(4);
+    expect(s.players.p2.robbed).toBe(false);
   });
 
   it('is limited by the room of the robber and does nothing with a full container', () => {
