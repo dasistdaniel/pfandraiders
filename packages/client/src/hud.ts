@@ -17,6 +17,8 @@ const PANEL_PAD = 12;
 const TITLE_H = 54;
 const ROW_H = 22;
 const FOOTER_LINE_H = 18;
+/** Countdown-Zahl: so groß im Verhältnis zur kürzeren Viewport-Seite, begrenzt auf [min, max] px */
+const COUNTDOWN_FONT = { share: 0.3, min: 48, max: 96 };
 
 export type HudRole = 'local' | 'host' | 'guest';
 
@@ -108,6 +110,8 @@ export class PlayerHud {
   private readonly viewerId: string;
   private readonly barBg: Phaser.GameObjects.Rectangle;
   private readonly bar: Phaser.GameObjects.Rectangle;
+  /** Große Countdown-Anzeige mitten im eigenen Viewport (5..1, LOS!) */
+  private readonly countdown: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private labels: KeyLabels,
     private readonly nameOf: (id: string) => string,
@@ -133,11 +137,26 @@ export class PlayerHud {
       .text(view.w - 8, 8, name, { ...FONT, color: `#${color.toString(16).padStart(6, '0')}` })
       .setOrigin(1, 0);
 
-    this.objects = [this.status, this.hint, this.alert, this.barBg, this.bar, tag];
+    const size = Math.round(Math.min(COUNTDOWN_FONT.max, Math.max(COUNTDOWN_FONT.min, Math.min(view.w, view.h) * COUNTDOWN_FONT.share)));
+    this.countdown = scene.add
+      .text(view.w / 2, view.h / 2, '', {
+        ...FONT,
+        fontSize: `${size}px`,
+        fontStyle: 'bold',
+        color: '#ffee58',
+        stroke: '#000000',
+        strokeThickness: Math.round(size / 8),
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setVisible(false);
+
+    this.objects = [this.status, this.hint, this.alert, this.barBg, this.bar, tag, this.countdown];
     for (const o of this.objects) {
       (o as Phaser.GameObjects.Text).setScrollFactor(0).setDepth(10);
     }
     this.bar.setDepth(11);
+    this.countdown.setDepth(22);
     this.objects.push(...this.results.objects);
   }
 
@@ -146,8 +165,12 @@ export class PlayerHud {
     this.labels = labels;
   }
 
-  /** `notices`: kurze Hinweise (etwa die Beschlagnahme), oben in der Warnung. */
-  update(state: GameState, p: Player, notices: string[] = []): void {
+  /**
+   * `notices`: kurze Hinweise (etwa die Beschlagnahme), oben in der Warnung.
+   * `countdown`: Text der großen Countdown-Anzeige ('' = keine), siehe CountdownDisplay.
+   */
+  update(state: GameState, p: Player, notices: string[] = [], countdown = ''): void {
+    this.countdown.setText(countdown).setVisible(countdown !== '');
     this.status.setText(statusLines(state, p).join('\n'));
     this.hint.setText(hintLines(state, p, this.labels).join('\n'));
     this.alert.setText(alertText(state, p, notices));
