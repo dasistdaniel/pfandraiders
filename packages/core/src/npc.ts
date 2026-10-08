@@ -45,13 +45,37 @@ function senseRadius(npc: Npc): number {
 }
 
 /**
- * Kommt dieser Spieler als Ziel in Frage? Bewusst, nicht der Spieler aus der Ruhe-Erinnerung,
- * Hund: ohne Schutz (nach dem Aufstehen), Polizei: trägt Flaschen.
+ * Jagt schon ein anderer Hund diesen Spieler? Pro Spieler jagt höchstens ein Hund: Wer aktiv ist und
+ * targetId auf ihn hat, hält ihn fest, alle anderen Hunde lassen ihn in Ruhe. Erheben zwei Hunde
+ * zugleich Anspruch (etwa aus einem älteren Zustand), behält ihn der zuerst verarbeitete (kleinerer
+ * Index in state.npcs), damit es deterministisch bleibt. Der Anspruch endet, sobald der Hund sich
+ * setzt (nach dem Biss oder wenn er aufgibt) oder streunt, denn dann ist targetId null. Ein Hund, den
+ * ein Leckerli ablenkt, bleibt aktiv und behält targetId: Er hält den Spieler also auch während der
+ * Ablenkung fest und jagt ihn danach weiter, solange er ihn noch will.
  */
-function wants(npc: Npc, p: Player): boolean {
+function claimedByOtherDog(state: GameState, npc: Npc, p: Player): boolean {
+  const own = state.npcs.indexOf(npc);
+  return state.npcs.some(
+    (n, i) =>
+      n !== npc &&
+      n.kind === 'dog' &&
+      n.mood === 'active' &&
+      n.targetId === p.id &&
+      // hält dieser Hund ihn selbst schon, geht nur ein früher verarbeiteter Hund vor
+      (npc.targetId !== p.id || i < own),
+  );
+}
+
+/**
+ * Kommt dieser Spieler als Ziel in Frage? Bewusst, nicht der Spieler aus der Ruhe-Erinnerung,
+ * Hund: ohne Schutz (nach dem Aufstehen) und nicht schon von einem anderen Hund gejagt,
+ * Polizei: trägt Flaschen (beliebig viele Polizisten dürfen denselben Spieler kontrollieren).
+ */
+function wants(state: GameState, npc: Npc, p: Player): boolean {
   if (p.unconsciousMs > 0) return false;
   if (npc.restMs > 0 && p.id === npc.restId) return false;
-  return npc.kind === 'dog' ? p.shieldMs === 0 : totalBottles(p.bottles) > 0;
+  if (npc.kind === 'police') return totalBottles(p.bottles) > 0;
+  return p.shieldMs === 0 && !claimedByOtherDog(state, npc, p);
 }
 
 /** Nächster passender Spieler im Umkreis (bei Gleichstand der erste), ohne etwas zu verändern. */
@@ -60,7 +84,7 @@ function nearestTarget(state: GameState, npc: Npc): Player | null {
   let best: Player | null = null;
   let bestDist = Infinity;
   for (const p of Object.values(state.players)) {
-    if (!wants(npc, p)) continue;
+    if (!wants(state, npc, p)) continue;
     const d = distance(npc, p);
     if (d <= radius && d < bestDist) {
       best = p;
@@ -73,7 +97,7 @@ function nearestTarget(state: GameState, npc: Npc): Player | null {
 /** Behält das aktuelle Ziel, solange es gültig ist, sonst der nächste passende Spieler im Umkreis. */
 function pickTarget(state: GameState, npc: Npc): Player | null {
   const current = npc.targetId === null ? undefined : state.players[npc.targetId];
-  if (current && wants(npc, current) && distance(npc, current) <= senseRadius(npc)) return current;
+  if (current && wants(state, npc, current) && distance(npc, current) <= senseRadius(npc)) return current;
   const best = nearestTarget(state, npc);
   const id = best ? best.id : null;
   if (id !== npc.targetId) npc.pathMs = 0; // neues Ziel: alten Wegpunkt verwerfen

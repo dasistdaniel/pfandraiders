@@ -522,9 +522,11 @@ describe('npc spawning', () => {
   });
 
   it('a roaming npc that spots a player hunts even beyond the active cap', () => {
+    // Polizei statt Hunden: pro Spieler jagt nur ein Hund, Polizisten dürfen zu mehreren kommen
     const s = quiet(createGame(1, parseMap(SPAWN_ROWS), ['p1'], { countdownMs: 0 }));
-    for (let i = 0; i < CONFIG.npc.maxCount; i++) addNpc(s, 'dog', 72, 24).lifeMs = 1e9;
-    roaming(addNpc(s, 'dog', 72, 24));
+    s.players.p1.bottles.plastic = 4;
+    for (let i = 0; i < CONFIG.npc.maxCount; i++) addNpc(s, 'police', 72, 24).lifeMs = 1e9;
+    roaming(addNpc(s, 'police', 72, 24));
     runSteps(s, {}, 1, 20);
     expect(s.npcs.filter((n) => n.mood === 'active')).toHaveLength(CONFIG.npc.maxCount + 1);
   });
@@ -640,5 +642,96 @@ describe('pathfinding around walls', () => {
       return JSON.stringify(s.npcs);
     };
     expect(run()).toBe(run());
+  });
+});
+
+describe('one dog per player', () => {
+  /** Hunde, die gerade aktiv p jagen */
+  function chasers(s: GameState, id: string): Npc[] {
+    return s.npcs.filter((n) => n.kind === 'dog' && n.mood === 'active' && n.targetId === id);
+  }
+
+  it('three dogs near one player: only one chases and only one bites', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const first = addNpc(s, 'dog', 100, 24);
+    addNpc(s, 'dog', 130, 24);
+    addNpc(s, 'dog', 160, 24);
+    let bitten = false;
+    for (let i = 0; i < 200 && !bitten; i++) {
+      runSteps(s, {}, 1, 20);
+      expect(chasers(s, 'p1').length).toBeLessThanOrEqual(1);
+      bitten = s.players.p1.health < CONFIG.health.max - CONFIG.npc.dog.biteDamage / 2;
+      if (!bitten) expect(chasers(s, 'p1')).toEqual([first]);
+    }
+    expect(bitten).toBe(true);
+    expect(first.mood).toBe('idle'); // der erste Hund hat gebissen und sitzt
+    expect(s.players.p1.health).toBeCloseTo(CONFIG.health.max - CONFIG.npc.dog.biteDamage, 0);
+  });
+
+  it('the dog processed first keeps the player when two dogs claim him', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const a = addNpc(s, 'dog', 100, 24);
+    const b = addNpc(s, 'dog', 90, 24); // näher dran, wird aber später verarbeitet
+    a.targetId = 'p1';
+    b.targetId = 'p1';
+    runSteps(s, {}, 1, 20);
+    expect(chasers(s, 'p1')).toEqual([a]);
+    expect(b.targetId).toBeNull();
+  });
+
+  it('another dog takes over once the first one sits after its bite', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const first = addNpc(s, 'dog', 30, 24);
+    const second = addNpc(s, 'dog', 120, 24);
+    runSteps(s, {}, 3, 20); // erster Hund beißt sofort
+    expect(first.mood).toBe('idle');
+    runSteps(s, {}, 1, 20);
+    expect(chasers(s, 'p1')).toEqual([second]);
+  });
+
+  it('another dog takes over once the first one gives up', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    const first = addNpc(s, 'dog', 120, 24);
+    const second = addNpc(s, 'dog', 150, 24);
+    runSteps(s, {}, 1, 20);
+    expect(chasers(s, 'p1')).toEqual([first]);
+    first.lifeMs = 20; // Ausdauer verbraucht: gibt im nächsten Tick auf
+    runSteps(s, {}, 2, 20);
+    expect(first.mood).toBe('idle');
+    expect(chasers(s, 'p1')).toEqual([second]);
+  });
+
+  it('a dog distracted by a treat keeps its claim', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    s.players.p1.inventory.dog_treat = 1;
+    const first = addNpc(s, 'dog', 30, 24);
+    const second = addNpc(s, 'dog', 120, 24);
+    runSteps(s, {}, 3, 20);
+    expect(first.distractedMs).toBeGreaterThan(0);
+    runFor(s, {}, 1000);
+    expect(chasers(s, 'p1')).toEqual([first]);
+    expect(second.targetId).toBeNull();
+    expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 2); // kein Biss
+  });
+
+  it('two players can each have their own dog', () => {
+    const s = quiet(newGame(openRows(30, 5), ['p1', 'p2']));
+    teleport(s, 'p2', { x: 400, y: 24 });
+    const a = addNpc(s, 'dog', 100, 24);
+    const b = addNpc(s, 'dog', 330, 24);
+    const c = addNpc(s, 'dog', 120, 24);
+    runSteps(s, {}, 1, 20);
+    expect(chasers(s, 'p1')).toEqual([a]);
+    expect(chasers(s, 'p2')).toEqual([b]);
+    expect(c.targetId).toBeNull();
+  });
+
+  it('police is not limited: two officers can check the same player', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    s.players.p1.bottles.plastic = 4;
+    addNpc(s, 'police', 100, 24);
+    addNpc(s, 'police', 130, 24);
+    runSteps(s, {}, 1, 20);
+    expect(s.npcs.filter((n) => n.mood === 'active' && n.targetId === 'p1')).toHaveLength(2);
   });
 });
