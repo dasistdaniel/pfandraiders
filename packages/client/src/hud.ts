@@ -40,7 +40,7 @@ class ResultsPanel {
       .text(view.w / 2, 0, 'Runde vorbei!', { ...FONT, fontSize: '24px', color: '#ffee58', align: 'center' })
       .setOrigin(0.5, 0);
     this.header = scene.add
-      .text(0, 0, resultHeader(), { ...FONT, fontSize: '13px', color: '#aaaaaa' })
+      .text(0, 0, resultHeader(), { ...FONT, color: '#aaaaaa' }) // gleiche Schrift wie die Zeilen, damit die Spalten passen
       .setOrigin(0, 0);
     this.rows = Array.from({ length: MAX_RESULT_ROWS }, () =>
       scene.add.text(0, 0, '', { ...FONT, wordWrap: { width: inner } }).setOrigin(0, 0),

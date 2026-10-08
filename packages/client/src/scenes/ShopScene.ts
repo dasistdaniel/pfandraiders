@@ -175,7 +175,8 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private makePanel(id: string, name: string, color: number, view: Rect, source: InputSource, canEndSeries: boolean): Panel {
-    const small = view.h < 300;
+    // Splitscreen (halbe Breite oder Höhe): kleinere Schrift, damit Zeilen mit Preis nicht umbrechen
+    const small = view.h < 300 || view.w < 600;
     const size = small ? 13 : 16;
     const font = { fontFamily: 'monospace', fontSize: `${size}px`, color: COLOR.text };
     const x = view.x + 12;
