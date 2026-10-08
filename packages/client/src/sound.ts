@@ -1,4 +1,4 @@
-import { DEFAULT_VOLUME, loadVolume, saveVolume } from './settings';
+import { DEFAULT_VOLUME, loadAudioToggles, loadVolume, saveVolume } from './settings';
 import { plingStep } from './soundEvents';
 import type { SoundId } from './soundEvents';
 
@@ -6,7 +6,6 @@ export type { SoundId } from './soundEvents';
 
 const MASTER_GAIN = 0.15;
 const MIN_REPEAT_MS = 80;
-const STORAGE_KEY = 'pfandraiders.muted';
 /** Abstand der Plings eines Frames in s; mindestens MIN_REPEAT_MS, sonst schluckt die Sperre sie. */
 export const PLING_GAP_SEC = 0.09;
 /** Pling-Tonleiter: Halbtöne über dem Grundton je Stufe (Dur-Pentatonik) */
@@ -65,22 +64,6 @@ const RECIPES: Record<SoundId, Recipe> = {
   countdownGo: { wave: 'square', gain: 0.45, notes: [{ f: 1568, d: 0.06 }, { f: 2093, d: 0.3 }] },
 };
 
-export function loadMuted(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function saveMuted(muted: boolean): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, muted ? '1' : '0');
-  } catch {
-    // Speicher gesperrt: Stummschaltung gilt nur für diese Sitzung
-  }
-}
-
 function clampVolume(v: number): number {
   return Number.isFinite(v) ? Math.min(100, Math.max(0, Math.round(v))) : DEFAULT_VOLUME;
 }
@@ -105,15 +88,14 @@ export class SoundFx {
   private noiseBuffer: AudioBuffer | null = null;
   private plingLastMs: number | null = null;
   private plingPrevStep = 0;
+  /** Effekte aus (die Musik schaltet getrennt, siehe sfx.ts). */
   muted: boolean;
   volume: number;
-  /** Wird nach jedem Umschalten der Stummschaltung aufgerufen (z. B. für die Musik). */
-  onMuteChange: ((muted: boolean) => void) | null = null;
 
   constructor(
     private readonly createContext: () => AudioContext | null = defaultContext,
     private readonly now: () => number = () => performance.now(),
-    muted: boolean = loadMuted(),
+    muted: boolean = !loadAudioToggles().effects,
     volume: number = loadVolume(),
   ) {
     this.muted = muted;
@@ -152,15 +134,9 @@ export class SoundFx {
     return (MASTER_GAIN * this.volume) / 100;
   }
 
-  toggleMute(): boolean {
-    this.muted = !this.muted;
-    saveMuted(this.muted);
-    try {
-      this.onMuteChange?.(this.muted);
-    } catch {
-      // Zuhörer dürfen das Umschalten nie verhindern
-    }
-    return this.muted;
+  /** Effekte stumm schalten oder wieder an; gespeichert wird in sfx.ts (zusammen mit der Musik). */
+  setMuted(muted: boolean): void {
+    this.muted = muted;
   }
 
   /**

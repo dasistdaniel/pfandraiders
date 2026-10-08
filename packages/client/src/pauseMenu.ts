@@ -1,5 +1,7 @@
 import { MenuModel } from './menuModel';
 import type { MenuItem } from './menuModel';
+import { audioMenuLabel } from './settings';
+import type { AudioToggles } from './settings';
 
 /** Ansicht des Esc-Menüs im Spiel: zu, Hauptseite oder Rückfrage vor dem Verlassen. */
 export type PauseView = 'closed' | 'main' | 'confirm';
@@ -97,9 +99,9 @@ export class PauseMenu {
   }
 }
 
-/** Beschriftung eines Eintrags; der Ton-Eintrag zeigt den aktuellen Zustand. */
-export function pauseLabel(item: MenuItem, muted: boolean): string {
-  return item.id === 'toggleSound' ? `Ton: ${muted ? 'aus' : 'an'}` : item.label;
+/** Beschriftung eines Eintrags; der Ton-Eintrag zeigt, was von Musik und Effekten an ist. */
+export function pauseLabel(item: MenuItem, audio: AudioToggles): string {
+  return item.id === 'toggleSound' ? audioMenuLabel(audio) : item.label;
 }
 
 export function pauseTitle(view: PauseView, online: boolean): string {

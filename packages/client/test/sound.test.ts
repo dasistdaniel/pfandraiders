@@ -104,20 +104,20 @@ describe('SoundFx', () => {
     expect(() => fx.play('pickup')).not.toThrow();
   });
 
-  it('exposes the unlocked context and reports mute changes', () => {
+  it('exposes the unlocked context and switches the effects off and on', () => {
     const ctx = fakeContext();
     const fx = new SoundFx(() => ctx as unknown as AudioContext, () => 0, false);
     expect(fx.getContext()).toBeNull();
     fx.unlock();
     expect(fx.getContext()).toBe(ctx);
-    const seen: boolean[] = [];
-    fx.onMuteChange = (m) => seen.push(m);
-    fx.toggleMute();
-    fx.toggleMute();
-    expect(seen).toEqual([true, false]);
-    fx.onMuteChange = () => { throw new Error('listener'); };
-    expect(() => fx.toggleMute()).not.toThrow();
+    const before = ctx.createOscillator.mock.calls.length;
+    fx.setMuted(true);
     expect(fx.muted).toBe(true);
+    fx.play('pickup');
+    expect(ctx.createOscillator.mock.calls.length).toBe(before);
+    fx.setMuted(false);
+    fx.play('pickup');
+    expect(ctx.createOscillator.mock.calls.length).toBeGreaterThan(before);
   });
 
   it('setVolume before unlock applies after unlock', () => {

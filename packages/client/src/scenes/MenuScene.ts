@@ -7,7 +7,7 @@ import { addLogo } from '../logoTexture';
 import { arrowAt, controlLines, MenuModel } from '../menuModel';
 import type { MenuItem } from '../menuModel';
 import { showOnlineMenu } from '../onlineMenu';
-import { music, sfx } from '../sfx';
+import { audioToggles, music, setAudioToggles, sfx } from '../sfx';
 import { resolveServerUrl } from '../serverUrl';
 import { PAD_LABELS } from '../sources';
 import { deviceLabel, loadAutoSwitch, loadOnlineDevice, saveAutoSwitch, saveOnlineDevice, stepDevice, stepVolume } from '../settings';
@@ -38,9 +38,10 @@ const MAIN_ITEMS: MenuItem[] = [
 ];
 
 const SETTINGS_ITEMS: MenuItem[] = [
-  { id: 'volume', label: 'Lautstärke' },
-  { id: 'music', label: 'Musik' },
-  { id: 'mute', label: 'Ton' },
+  { id: 'effectsOn', label: 'Effekte' },
+  { id: 'volume', label: 'Effekt-Lautstärke' },
+  { id: 'musicOn', label: 'Musik' },
+  { id: 'music', label: 'Musik-Lautstärke' },
   { id: 'onlineDevice', label: 'Steuerung online' },
   { id: 'autoSwitch', label: 'Auto-Wechsel' },
   { id: 'controls', label: 'Steuerung anzeigen' },
@@ -74,7 +75,7 @@ const ITEMS_TOP_MAIN = 276;
 const ITEMS_TOP_SUB = 200;
 /** Zeilenabstand der Einträge: Hauptseite 44 px, Einstellungen enger, damit Steuerungsübersicht und Hilfezeile darunter passen. */
 const ROW_H_MAIN = 44;
-const ROW_H_SUB = 36;
+const ROW_H_SUB = 32;
 const CREDITS_LAST_Y = 470;
 const CREDITS_ROW_H = Math.min(56, Math.floor((CREDITS_LAST_Y - CREDITS_TOP) / Math.max(1, CREDIT_ITEMS.length - 1)));
 const CREDITS_WRAP = GAME_W - 64;
@@ -298,9 +299,10 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private labelFor(item: MenuItem): string {
-    if (item.id === 'volume') return `Lautstärke: ◄ ${sfx.volume} % ►`;
-    if (item.id === 'music') return `Musik: ◄ ${music.volume} % ►`;
-    if (item.id === 'mute') return `Ton: ${sfx.muted ? 'aus' : 'an'}`;
+    if (item.id === 'effectsOn') return `Effekte: ${audioToggles().effects ? 'an' : 'aus'}`;
+    if (item.id === 'volume') return `Effekt-Lautstärke: ◄ ${sfx.volume} % ►`;
+    if (item.id === 'musicOn') return `Musik: ${audioToggles().music ? 'an' : 'aus'}`;
+    if (item.id === 'music') return `Musik-Lautstärke: ◄ ${music.volume} % ►`;
     if (item.id === 'onlineDevice') return `Steuerung online: ◄ ${deviceLabel(this.onlineDevice)} ►`;
     if (item.id === 'autoSwitch') return `Auto-Wechsel: ${this.autoSwitch ? 'an' : 'aus'}`;
     return item.label;
@@ -330,9 +332,9 @@ export class MenuScene extends Phaser.Scene {
       case 'settings':
         this.showPage('settings');
         break;
-      case 'mute':
-        sfx.toggleMute();
-        this.render();
+      case 'effectsOn':
+      case 'musicOn':
+        this.toggleAudio(id);
         break;
       case 'autoSwitch':
         this.toggleAutoSwitch();
@@ -369,6 +371,15 @@ export class MenuScene extends Phaser.Scene {
     if (this.page !== 'main') this.showPage('main');
   }
 
+  /** Schaltet Musik oder Effekte einzeln an/aus (gespeichert); die Lautstärken bleiben, wie sie sind. */
+  private toggleAudio(id: 'effectsOn' | 'musicOn'): void {
+    const t = audioToggles();
+    if (id === 'effectsOn') t.effects = !t.effects;
+    else t.music = !t.music;
+    setAudioToggles(t);
+    this.render();
+  }
+
   private toggleAutoSwitch(): void {
     this.autoSwitch = !this.autoSwitch;
     saveAutoSwitch(this.autoSwitch);
@@ -387,6 +398,10 @@ export class MenuScene extends Phaser.Scene {
     }
     if (id === 'autoSwitch') {
       this.toggleAutoSwitch();
+      return;
+    }
+    if (id === 'effectsOn' || id === 'musicOn') {
+      this.toggleAudio(id);
       return;
     }
     if (id === 'volume') {
