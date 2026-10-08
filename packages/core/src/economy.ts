@@ -19,12 +19,15 @@ export function isNear(points: readonly Point[], p: Point): boolean {
   return points.some((pt) => distance(pt, p) <= CONFIG.interactRadius);
 }
 
-/** Gibt die wertvollste Flasche ab und schreibt ihren Wert gut. Der Aufrufer prüft die Nähe. */
+/** Gibt die wertvollste Flasche ab und schreibt ihren Wert gut (Geld, Rundenverdienst, Gesamtverdienst). Der Aufrufer prüft die Nähe. */
 export function depositOne(p: Player): void {
   const kind = VALUE_ORDER.find((k) => p.bottles[k] > 0);
   if (kind === undefined) return;
+  const value = CONFIG.bottleValue[kind];
   p.bottles[kind]--;
-  p.money += CONFIG.bottleValue[kind];
+  p.money += value;
+  p.earnedRound += value;
+  p.earnedTotal += value;
 }
 
 /**

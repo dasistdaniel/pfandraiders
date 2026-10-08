@@ -172,4 +172,16 @@ describe('timed deposit', () => {
     expect(s.players.p1.money).toBe(2 * CONFIG.bottleValue.plastic + CONFIG.bottleValue.glass);
     expect(totalBottles(s.players.p1.bottles)).toBe(0);
   });
+
+  it('adds every deposited bottle to money, round earnings and total earnings', () => {
+    const s = atDropoff();
+    s.players.p1.money = 40;
+    s.players.p1.earnedTotal = 1000;
+    s.players.p1.bottles = { plastic: 1, glass: 1, crate: 0 };
+    runFor(s, PRESS, CONFIG.depositEveryMs + 40);
+    const value = CONFIG.bottleValue.plastic + CONFIG.bottleValue.glass;
+    expect(s.players.p1.money).toBe(40 + value);
+    expect(s.players.p1.earnedRound).toBe(value);
+    expect(s.players.p1.earnedTotal).toBe(1000 + value);
+  });
 });
