@@ -8,9 +8,9 @@ import { alertText, hintLines, playerName, resultFooter, resultHeader, resultLin
 const KEYS: KeyLabels = { action: 'E', steal: 'Q', attack: 'F', eat: 'C' };
 const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.', eat: ',' };
 
-// p1 (24,24) steht 16 px vom Shop (40,24). p2 liegt weit weg am Ende des Ganges.
-function shopGame(): GameState {
-  return createGame(1, parseMap(['#########', '#@S....@#', '#########']), ['p1', 'p2']);
+// p1 (24,24) und p2 am Ende des Ganges, weit weg voneinander
+function twoGame(): GameState {
+  return createGame(1, parseMap(['#########', '#@.....@#', '#########']), ['p1', 'p2']);
 }
 
 describe('playerName', () => {
@@ -21,7 +21,7 @@ describe('playerName', () => {
 
 describe('statusLines', () => {
   it('shows time, money, container and bottles', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.players.p1.money = 150;
     s.players.p1.bottles = { plastic: 2, glass: 1, crate: 0 };
     const lines = statusLines(s, s.players.p1);
@@ -38,7 +38,7 @@ describe('statusLines', () => {
 
 describe('hintLines', () => {
   it('is empty away from everything', () => {
-    const s = shopGame();
+    const s = twoGame();
     expect(hintLines(s, s.players.p2, KEYS)).toEqual([]);
   });
 
@@ -83,7 +83,7 @@ describe('hintLines', () => {
   });
 
   it('is empty after the round has ended', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.phase = 'ended';
     expect(hintLines(s, s.players.p1, KEYS)).toEqual([]);
   });
@@ -118,7 +118,7 @@ describe('dropoff and search hints', () => {
 
 describe('alertText', () => {
   it('shows the shield after a theft and is empty otherwise', () => {
-    const s = shopGame();
+    const s = twoGame();
     expect(alertText(s, s.players.p1)).toBe('');
     s.players.p1.shieldMs = 2500;
     expect(alertText(s, s.players.p1)).toBe('Schutz 3 s');
@@ -127,7 +127,7 @@ describe('alertText', () => {
 
 describe('resultLines', () => {
   it('lists players by round earnings with places', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.players.p1.earnedRound = 500;
     s.players.p2.earnedRound = 1230;
     s.phase = 'ended';
@@ -151,13 +151,13 @@ describe('labels for other devices', () => {
   });
 
   it('names the action key in the last results line', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.phase = 'ended';
     expect(resultLines(s, KEYS2).at(-1)).toBe('Weiter zum Shop: R oder Enter');
   });
 
   it('uses the given name resolver for the ranking', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.phase = 'ended';
     s.players.p1.earnedRound = 500;
     expect(resultLines(s, KEYS2, (id) => (id === 'p1' ? 'Anna' : 'Bob'))[1]).toMatch(/^1\. Anna /);
@@ -167,7 +167,7 @@ describe('labels for other devices', () => {
 
 describe('health and shop', () => {
   it('shows health rounded up, also with fractions', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.players.p1.health = 87.2;
     expect(statusLines(s, s.players.p1)[2]).toBe('Leben 88/100');
   });
@@ -176,13 +176,13 @@ describe('health and shop', () => {
 
 describe('more alerts', () => {
   it('shows the remaining unconscious time', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.players.p1.unconsciousMs = 4200;
     expect(alertText(s, s.players.p1)).toContain('Bewusstlos! Noch 5 s');
   });
 
   it('warns during a police check', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, mood: 'active', moodMs: 0, targetId: 'p1', restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 300, pathX: 0, pathY: 0, pathMs: 0 });
     expect(alertText(s, s.players.p1)).toContain('KONTROLLE! Lauf weg!');
   });
@@ -231,7 +231,7 @@ describe('final review fixes', () => {
   });
 
   it('gives no hints to an unconscious player', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.players.p1.unconsciousMs = 3000;
     expect(hintLines(s, s.players.p1, KEYS)).toEqual([]);
   });
@@ -321,7 +321,7 @@ describe('seizure notice', () => {
   });
 
   it('shows notices first in the alert, before the other warnings', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.players.p1.shieldMs = 2500;
     s.players.p1.unconsciousMs = 0;
     expect(alertText(s, s.players.p1, ['3 Flaschen beschlagnahmt!'])).toBe('3 Flaschen beschlagnahmt!\nSchutz 3 s');
@@ -329,7 +329,7 @@ describe('seizure notice', () => {
   });
 
   it('hides notices after the round', () => {
-    const s = shopGame();
+    const s = twoGame();
     s.phase = 'ended';
     expect(alertText(s, s.players.p1, ['3 Flaschen beschlagnahmt!'])).toBe('');
   });

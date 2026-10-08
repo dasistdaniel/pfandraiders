@@ -38,7 +38,7 @@ describe('spot sprites', () => {
 
 describe('object sprites', () => {
   it('dropoff is 16x16', () => check(OBJECT_SPRITES.dropoff, 16, false));
-  it('shop is 16x16', () => check(OBJECT_SPRITES.shop, 16, false));
+  it('has no shop sprite any more', () => expect(Object.keys(OBJECT_SPRITES)).toEqual(['dropoff']));
 });
 
 describe('character sprites', () => {

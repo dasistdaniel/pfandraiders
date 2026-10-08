@@ -8,7 +8,7 @@ export type TilesetId = MapId;
 export const tileTexture = (set: TilesetId, key: TileKey): string => `${set}:tile:${key}`;
 export const spotTexture = (set: TilesetId, type: SpotType, full: boolean): string =>
   `${set}:spot:${type}:${full ? 'full' : 'empty'}`;
-export const objectTexture = (set: TilesetId, name: 'dropoff' | 'shop'): string => `${set}:object:${name}`;
+export const objectTexture = (set: TilesetId, name: 'dropoff'): string => `${set}:object:${name}`;
 /** Gebackenes Kartenbild einer Karte: ground-below (Boden + Details) oder above (Baumkronen). */
 export const mapTexture = (map: MapId, layer: 'ground-below' | 'above'): string => `map:${map}:${layer}`;
 export const playerTexture = (color: number, frame: PlayerFrame): string =>

@@ -29,9 +29,8 @@ export const KENNEY_TILES: Record<TileKey, Cell> = {
   wall_front: { col: 1, row: 7 },
 };
 
-export const KENNEY_OBJECTS: { dropoff: Cell; shop: Cell } = {
+export const KENNEY_OBJECTS: { dropoff: Cell } = {
   dropoff: { col: 24, row: 8 },
-  shop: { col: 24, row: 12 },
 };
 
 export const KENNEY_SPOTS: Record<SpotType, Cell> = {
