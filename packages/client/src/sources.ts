@@ -62,3 +62,12 @@ export function padBLeaves(online: boolean, device: DeviceRef | undefined, press
   if (!online) return pressed.size > 0;
   return device?.kind === 'pad' && pressed.has(device.index);
 }
+
+/**
+ * Kam ein Tastendruck aus der automatischen Wiederholung des Betriebssystems? Phaser legt Tasten je Szene
+ * neu an; eine aus der vorigen Szene gehaltene Taste meldet sich in der neuen Szene erst mit einer
+ * Wiederholung und sähe sonst wie ein neuer Druck aus (etwa Kaufen direkt nach der Rangliste).
+ */
+export function isHeldOver(event: { repeat?: unknown } | null | undefined): boolean {
+  return event?.repeat === true;
+}

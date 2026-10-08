@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { padBLeaves, padToHeld, PAD_LABELS, STICK_DEADZONE } from '../src/sources';
+import { isHeldOver, padBLeaves, padToHeld, PAD_LABELS, STICK_DEADZONE } from '../src/sources';
 import type { PadSnapshot } from '../src/sources';
 
 const IDLE: PadSnapshot = {
@@ -71,5 +71,14 @@ describe('padBLeaves', () => {
     expect(padBLeaves(true, { kind: 'pad', index: 1 }, pressed(0, 2))).toBe(false);
     expect(padBLeaves(true, { kind: 'keyboard', layout: 0 }, pressed(0))).toBe(false);
     expect(padBLeaves(true, undefined, pressed(0))).toBe(false);
+  });
+});
+
+describe('isHeldOver', () => {
+  it('counts only a repeated keydown as held over from the previous scene', () => {
+    expect(isHeldOver({ repeat: true })).toBe(true);
+    expect(isHeldOver({ repeat: false })).toBe(false);
+    expect(isHeldOver({})).toBe(false);
+    expect(isHeldOver(undefined)).toBe(false);
   });
 });

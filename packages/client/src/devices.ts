@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { KeyState } from './input';
-import { PAD_LABELS, padToHeld } from './sources';
+import { isHeldOver, PAD_LABELS, padToHeld } from './sources';
 import type { InputSource, KeyLabels } from './sources';
 
 export interface KeyboardLayout {
@@ -62,6 +62,8 @@ class KeyboardSource implements InputSource {
   readonly label: string;
   readonly labels: KeyLabels;
   private readonly keys: Record<string, Key>;
+  /** Aktionstaste wurde schon in der vorigen Szene gedrückt: zählt erst nach dem Loslassen. */
+  private actionHeldOver = false;
 
   constructor(
     keyboard: Phaser.Input.Keyboard.KeyboardPlugin,
@@ -71,6 +73,10 @@ class KeyboardSource implements InputSource {
     this.labels = layout.labels;
     const names = [layout.left, layout.right, layout.up, layout.down, layout.action, layout.steal, layout.attack, layout.eat];
     this.keys = keyboard.addKeys(names.join(',')) as Record<string, Key>;
+    // 'down' kommt nur beim Wechsel auf gedrückt, mit dem auslösenden Ereignis
+    this.keys[layout.action].on('down', (_key: Key, event: KeyboardEvent) => {
+      this.actionHeldOver = isHeldOver(event);
+    });
   }
 
   read(): KeyState {
@@ -81,7 +87,7 @@ class KeyboardSource implements InputSource {
       right: k[l.right].isDown,
       up: k[l.up].isDown,
       down: k[l.down].isDown,
-      action: k[l.action].isDown,
+      action: k[l.action].isDown && !this.actionHeldOver,
       steal: k[l.steal].isDown,
       attack: k[l.attack].isDown,
       eat: k[l.eat].isDown,
@@ -89,7 +95,7 @@ class KeyboardSource implements InputSource {
   }
 
   confirmPressed(): boolean {
-    return Phaser.Input.Keyboard.JustDown(this.keys[this.layout.action]);
+    return Phaser.Input.Keyboard.JustDown(this.keys[this.layout.action]) && !this.actionHeldOver;
   }
 }
 
