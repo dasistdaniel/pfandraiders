@@ -76,7 +76,6 @@ export interface MapData {
   soft?: boolean[];
   spots: SpotDef[];
   dropoffs: Point[];
-  shops: Point[];
   spawns: Point[];
   /** Eingänge, an denen Hunde und Polizisten erscheinen */
   npcSpawns: Point[];

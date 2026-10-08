@@ -12,7 +12,7 @@ import type { ZoneDef } from '../types';
  *   weich:     t Baum  l Laterne (Ebene `soft`, nicht in `walls`): blockieren nur einen kleinen Kern in der
  *              Kachelmitte (CONFIG.softHalf), man geht daneben vorbei; Krone und Mast zeichnet `above`
  *   begehbar:  = Fahrbahn  + Zebrastreifen  . Gehweg/Platz  , Gras
- *   Objekte:   @ Spawn  D Pfandautomat  S Shop  N NPC-Eingang (Hunde, Polizei; an Straßenenden am Rand
+ *   Objekte:   @ Spawn  D Pfandautomat  N NPC-Eingang (Hunde, Polizei; an Straßenenden am Rand
  *              und auf zwei Querstraßen nahe der Hauptstraße)
  *              Spots: b Bushaltestelle  n Bank  g Busch  m Mülltonne  p Park
  *   Objekte und Spots stehen auf begehbarem Boden.
@@ -31,7 +31,7 @@ export const CITY_PLAN: string[] = [
   'WRRRRR,,EEEE,.==.YYYYYY..EEEEE.==.XXXXXX..XXXXX.==.YYYYYYYYYYYYW', //  2
   'WRRRRR,tEEEE,.==.YYYYYY..EEEEE.==.XXXXXX..XXXXX.=c.YYYYYYYYYYYYW', //  3
   'WRRRRR,,EEEE,.==.YYYYYY.mEEEEE.==.XXXXXX..XXXXX.=c.YYYYYYYYYYYYW', //  4
-  'W,g,,,,,,,,n,.=c.YYYYYY..EEEEE.==.XXXXXX.mXXXXX.==......S......W', //  5
+  'W,g,,,,,,,,n,.=c.YYYYYY..EEEEE.==.XXXXXX.mXXXXX.==.............W', //  5
   'W.............=c...............==.XXXXXX..XXXXX.==..m........b.W', //  6
   'WEEEE,,RRRRR,.==...D...l.......==...............==.............W', //  7
   'WEEEE,tRRRRR,.==.t...n.......t.==.t..n..t.....t.==....n.....n..W', //  8
@@ -54,7 +54,7 @@ export const CITY_PLAN: string[] = [
   'W,p,,n,,,,g,..==...............==.....n.........==.t,,,,,,,,,,tW', // 25
   'W,,,,,,,,,,,..==...n.......n...==...t..oo...t...==.,,,,,,g,,,,,W', // 26
   'W,t,,ooo,,t,..==...............==......oo..D....=c.,,p,,,,,,,,,W', // 27
-  'W,,,,ooo,,,,..==..m....S....m..==.........n.....=c.,,,,,,m,,,,,W', // 28
+  'W,,,,ooo,,,,..==..m.........m..==.........n.....=c.,,,,,,m,,,,,W', // 28
   'W,,,,,,,,p,,..=c...............==...m...........==.,,,,,,,,,p,,W', // 29
   'W.............=c...............==...............==.,,,,p,,,,,,,W', // 30
   'W,,,t,,,,t,,..==...t.......t...==.YYYYY...EEEEE.==.,n,,,,,,,,,,W', // 31

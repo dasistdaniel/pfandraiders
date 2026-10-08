@@ -25,7 +25,7 @@ describe('retro map', () => {
     expect(RETRO_MAP.rows).toBe(20);
     expect(RETRO_MAP.spawns.length).toBe(4);
     expect(RETRO_MAP.dropoffs.length).toBe(1);
-    expect(RETRO_MAP.shops.length).toBe(1);
+    expect('shops' in RETRO_MAP).toBe(false);
     expect(RETRO_MAP.spots.length).toBe(17);
     expect(RETRO_MAP.npcSpawns.length).toBe(4);
     expect(RETRO_MAP.zones.map((z) => z.id)).toEqual(['stadium', 'concert']);
@@ -43,13 +43,12 @@ describe('retro map', () => {
     }
   });
 
-  it('lets a player walk from the first spawn to every spot, dropoff and shop', () => {
+  it('lets a player walk from the first spawn to every spot, dropoff, spawn and entrance', () => {
     const start = RETRO_MAP.spawns[0];
     const reach = reachableTiles(RETRO_MAP, start.x, start.y);
     const targets = [
       ...RETRO_MAP.spots,
       ...RETRO_MAP.dropoffs,
-      ...RETRO_MAP.shops,
       ...RETRO_MAP.spawns,
       ...RETRO_MAP.npcSpawns,
     ];

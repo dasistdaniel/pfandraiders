@@ -80,7 +80,6 @@ export function parseTiledMap(json: unknown): MapData {
 
   const spots: SpotDef[] = [];
   const dropoffs: Point[] = [];
-  const shops: Point[] = [];
   const spawns: Point[] = [];
   const npcSpawns: Point[] = [];
   const objects = layer(json.layers, 'objects', 'objectgroup').objects;
@@ -94,7 +93,6 @@ export function parseTiledMap(json: unknown): MapData {
     switch (o.type) {
       case 'spawn': spawns.push(at); break;
       case 'dropoff': dropoffs.push(at); break;
-      case 'shop': shops.push(at); break;
       case 'npc_spawn': npcSpawns.push(at); break;
       case 'spot': {
         const t = prop(o, 'spotType');
@@ -123,7 +121,7 @@ export function parseTiledMap(json: unknown): MapData {
     zones.push({ id, name: typeof z.name === 'string' ? z.name : id, area: { x0, y0, x1, y1 } });
   }
 
-  const map: MapData = { cols, rows, solid, spots, dropoffs, shops, spawns, npcSpawns, zones };
+  const map: MapData = { cols, rows, solid, spots, dropoffs, spawns, npcSpawns, zones };
   if (soft) map.soft = soft;
   return map;
 }

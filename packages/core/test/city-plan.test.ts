@@ -111,10 +111,10 @@ describe('city plan: shape', () => {
 });
 
 describe('city plan: content', () => {
-  it('has the expected number of spawns, dropoffs, shops, spots and NPC entrances', () => {
+  it('has the expected number of spawns, dropoffs, spots and NPC entrances and no shops', () => {
     expect(cellsOf('@').length).toBe(8);
     expect(cellsOf('D').length).toBe(2);
-    expect(cellsOf('S').length).toBe(2);
+    expect(cellsOf('S')).toEqual([]);
     const spots = cellsOf(SPOT_CHARS).length;
     expect(spots).toBeGreaterThanOrEqual(36);
     expect(spots).toBeLessThanOrEqual(48);
@@ -149,16 +149,13 @@ describe('city plan: content', () => {
     }
   });
 
-  it('keeps every dropoff and shop within 30 tiles of each spawn and the pairs 24 tiles apart', () => {
+  it('keeps every dropoff within 30 tiles of each spawn and the two dropoffs 24 tiles apart', () => {
     const spawns = cellsOf('@');
     const dropoffs = cellsOf('D');
-    const shops = cellsOf('S');
     for (const s of spawns) {
       expect(Math.min(...dropoffs.map((d) => dist(s, d))), `dropoff near ${s.r},${s.c}`).toBeLessThanOrEqual(30);
-      expect(Math.min(...shops.map((d) => dist(s, d))), `shop near ${s.r},${s.c}`).toBeLessThanOrEqual(30);
     }
     expect(dist(dropoffs[0], dropoffs[1])).toBeGreaterThanOrEqual(24);
-    expect(dist(shops[0], shops[1])).toBeGreaterThanOrEqual(24);
   });
 
   it('parks cars only as pairs', () => {
@@ -301,19 +298,19 @@ describe('city plan: streets', () => {
 });
 
 describe('city plan: reachability', () => {
-  const targets = cellsOf('@DSN' + SPOT_CHARS);
+  const targets = cellsOf('@DN' + SPOT_CHARS);
 
   it('puts every object of the generated map on a walkable tile', () => {
     const m = CITY_TILED_MAP;
-    for (const p of [...m.spots, ...m.dropoffs, ...m.shops, ...m.spawns, ...m.npcSpawns]) {
+    for (const p of [...m.spots, ...m.dropoffs, ...m.spawns, ...m.npcSpawns]) {
       expect(isSolidAt(m, p.x, p.y), `object at ${p.x},${p.y}`).toBe(false);
     }
-    expect(m.spots.length + m.dropoffs.length + m.shops.length + m.spawns.length + m.npcSpawns.length).toBe(
+    expect(m.spots.length + m.dropoffs.length + m.spawns.length + m.npcSpawns.length).toBe(
       targets.length,
     );
   });
 
-  it('reaches every spot, dropoff, shop, spawn and NPC entrance from every spawn', () => {
+  it('reaches every spot, dropoff, spawn and NPC entrance from every spawn', () => {
     for (const s of cellsOf('@')) {
       const reach = reachable(s);
       for (const t of targets) {

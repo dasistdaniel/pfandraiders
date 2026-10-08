@@ -5,7 +5,7 @@ import type { TiledMap, TiledObject } from '../src/tiled';
 import type { ZoneDef } from '../src/types';
 import { RETRO_ROWS, RETRO_ZONES } from '../src/maps/retro-ascii';
 
-const OBJECT_TYPES: Record<string, string> = { '@': 'spawn', D: 'dropoff', S: 'shop', N: 'npc_spawn' };
+const OBJECT_TYPES: Record<string, string> = { '@': 'spawn', D: 'dropoff', N: 'npc_spawn' };
 const SPOT_CHARS: Record<string, string> = {
   b: 'bus_stop',
   n: 'bench',

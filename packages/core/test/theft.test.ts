@@ -129,7 +129,7 @@ describe('stealing', () => {
   });
 
   it('shields the victim against a second thief', () => {
-    const s = newGame(['##########', '#@@@b.D.S#', '##########'], ['p1', 'p2', 'p3']);
+    const s = newGame(['##########', '#@@@b.D..#', '##########'], ['p1', 'p2', 'p3']);
     s.players.p2.containerLevel = 1;
     s.players.p2.bottles = { plastic: 4, glass: 0, crate: 0 };
     runSteps(s, STEAL, 1);

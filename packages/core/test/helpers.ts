@@ -14,17 +14,17 @@ export function openRows(cols: number, rows: number): string[] {
   );
 }
 
-/** Spawn (24,24), Spot bei x=40, Pfandautomat bei x=72, Shop bei x=104 */
-export const SEARCH_ROWS = ['########', '#@b.D.S#', '########'];
+/** Spawn (24,24), Spot bei x=40, Pfandautomat bei x=72 */
+export const SEARCH_ROWS = ['########', '#@b.D..#', '########'];
 
 /** Spot (x=40) und Pfandautomat (x=56) liegen dicht beieinander: bei x=48 sind beide in Reichweite */
-export const DEPOSIT_ROWS = ['########', '#@bD..S#', '########'];
+export const DEPOSIT_ROWS = ['########', '#@bD...#', '########'];
 
 /** Zwei Spieler (x=24 und x=56) mit einem Spot dazwischen (x=40) */
-export const TWO_PLAYER_ROWS = ['#########', '#@b@.D.S#', '#########'];
+export const TWO_PLAYER_ROWS = ['#########', '#@b@.D..#', '#########'];
 
 /** p1 (x=24) steht 16 px neben p2 (x=40). Der Spot (x=56) liegt nur bei p2 in Reichweite. */
-export const THIEF_ROWS = ['#########', '#@@b.D.S#', '#########'];
+export const THIEF_ROWS = ['#########', '#@@b.D..#', '#########'];
 
 export function newGame(rows: string[], ids: string[] = ['p1']): GameState {
   return createGame(1, parseMap(rows), ids);

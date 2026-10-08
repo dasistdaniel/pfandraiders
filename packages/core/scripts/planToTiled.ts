@@ -9,7 +9,7 @@ const SOLID_CHARS = new Set(['R', 'Y', 'E', 'X', 'W', 'o', 'c']);
 const SOFT_CHARS = new Set(['t', 'l']);
 /** Begehbare Kacheln ohne Objekt: Fahrbahn, Zebrastreifen, Gehweg/Platz, Gras. */
 const GROUND_CHARS = new Set(['=', '+', '.', ',']);
-const OBJECT_TYPES: Record<string, string> = { '@': 'spawn', D: 'dropoff', S: 'shop', N: 'npc_spawn' };
+const OBJECT_TYPES: Record<string, string> = { '@': 'spawn', D: 'dropoff', N: 'npc_spawn' };
 const SPOT_CHARS: Record<string, string> = {
   b: 'bus_stop',
   n: 'bench',

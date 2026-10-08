@@ -5,11 +5,15 @@ import { boxBlocked, isSolidAt, parseMap } from '../src/map';
 const ROWS = [
   '#######',
   '#@bnD.#',
-  '#.gmpS#',
+  '#.gmp.#',
   '#######',
 ];
 
 describe('parseMap', () => {
+  it('rejects the former shop character S', () => {
+    expect(() => parseMap(['#####', '#@S.#', '#####'])).toThrow(/unknown map char 'S'/);
+  });
+
   it('reads size, solids and special tiles at tile centers', () => {
     const map = parseMap(ROWS);
     expect(map.cols).toBe(7);
@@ -18,7 +22,7 @@ describe('parseMap', () => {
     expect(map.solid[1 * 7 + 1]).toBe(false);
     expect(map.spawns).toEqual([{ x: 24, y: 24 }]);
     expect(map.dropoffs).toEqual([{ x: 72, y: 24 }]);
-    expect(map.shops).toEqual([{ x: 88, y: 40 }]);
+    expect('shops' in map).toBe(false);
   });
 
   it('numbers spots in reading order with their type', () => {
