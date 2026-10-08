@@ -3,8 +3,6 @@ export type Bottles = Record<BottleKind, number>;
 export type SpotType = 'bus_stop' | 'bench' | 'bush' | 'bin' | 'park';
 export type Mode = 'walking' | 'searching' | 'unconscious';
 export type ItemId = 'bolt_cutters' | 'dog_treat';
-/** Kaufbefehl: Container-Upgrade, Essen oder ein Special Item */
-export type BuyCommand = 'upgrade' | 'food' | ItemId;
 
 export interface Point {
   x: number;
@@ -30,13 +28,15 @@ export interface Input {
   moveY: -1 | 0 | 1;
   /** Aktionstaste gehalten */
   action: boolean;
-  /** Klauen-Taste gehalten */
+  /** Klauen-Taste gehalten (wirkt beim Drücken: klauen oder ausrauben) */
   steal: boolean;
-  /** Einmaliger Kaufbefehl, null = nichts kaufen */
-  buy: BuyCommand | null;
+  /** Schlagen-Taste gehalten (wirkt beim Drücken) */
+  attack: boolean;
+  /** Essen-Taste gehalten (wirkt beim Drücken: eine Portion aus dem Inventar) */
+  eat: boolean;
 }
 
-export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, attack: false, eat: false };
 
 export interface SpotDef extends Point {
   id: number;

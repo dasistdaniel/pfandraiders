@@ -54,7 +54,7 @@ describe('knock out', () => {
 
   it('ignores all input while unconscious', () => {
     const s = knocked();
-    runSteps(s, { p1: input({ moveX: 1, action: true, steal: true, buy: 'upgrade' }) }, 50, 20);
+    runSteps(s, { p1: input({ moveX: 1, action: true, steal: true, attack: true, eat: true }) }, 50, 20);
     expect(s.players.p1.x).toBe(24);
     expect(s.players.p1.mode).toBe('unconscious');
     expect(s.players.p1.containerLevel).toBe(0);
@@ -89,50 +89,6 @@ describe('knock out', () => {
     runSteps(s, {}, 10, 20);
     expect(Number.isNaN(s.players.p1.health)).toBe(false);
     expect(s.players.p1.health).toBeGreaterThanOrEqual(0);
-  });
-});
-
-describe('food', () => {
-  const EAT = { p1: input({ buy: 'food' }) };
-
-  function atShop() {
-    const s = newGame(SEARCH_ROWS);
-    teleport(s, 'p1', s.map.shops[0]);
-    return s;
-  }
-
-  it('heals and costs money at the shop', () => {
-    const s = atShop();
-    s.players.p1.health = 50;
-    s.players.p1.money = CONFIG.health.food.price + 5;
-    runSteps(s, EAT, 1);
-    expect(s.players.p1.health).toBeCloseTo(50 + CONFIG.health.food.heal, 1);
-    expect(s.players.p1.money).toBe(5);
-  });
-
-  it('caps health at the maximum', () => {
-    const s = atShop();
-    s.players.p1.health = 95;
-    s.players.p1.money = 1000;
-    runSteps(s, EAT, 1);
-    expect(s.players.p1.health).toBe(CONFIG.health.max);
-  });
-
-  it('refuses when money is short by one cent', () => {
-    const s = atShop();
-    s.players.p1.health = 50;
-    s.players.p1.money = CONFIG.health.food.price - 1;
-    runSteps(s, EAT, 1);
-    expect(s.players.p1.health).toBeCloseTo(50 - 0.0025, 3);
-    expect(s.players.p1.money).toBe(CONFIG.health.food.price - 1);
-  });
-
-  it('refuses away from the shop', () => {
-    const s = newGame(SEARCH_ROWS);
-    s.players.p1.health = 50;
-    s.players.p1.money = 1000;
-    runSteps(s, EAT, 1);
-    expect(s.players.p1.money).toBe(1000);
   });
 });
 

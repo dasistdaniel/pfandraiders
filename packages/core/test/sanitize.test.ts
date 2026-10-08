@@ -4,15 +4,14 @@ import { NO_INPUT } from '../src/types';
 
 describe('sanitizeInput', () => {
   it('keeps a valid input', () => {
-    const i = { moveX: -1, moveY: 1, action: true, steal: true, buy: 'food' };
+    const i = { moveX: -1, moveY: 1, action: true, steal: true, attack: true, eat: true };
     expect(sanitizeInput(i)).toEqual(i);
   });
 
-  it('accepts every buy command and null', () => {
-    for (const buy of ['upgrade', 'food', 'bolt_cutters', 'dog_treat']) {
-      expect(sanitizeInput({ ...NO_INPUT, buy }).buy).toBe(buy);
-    }
-    expect(sanitizeInput({ ...NO_INPUT, buy: null }).buy).toBeNull();
+  it('has no buy field any more and drops one that is sent', () => {
+    const out = sanitizeInput({ ...NO_INPUT, buy: 'upgrade' });
+    expect('buy' in out).toBe(false);
+    expect(out).toEqual(NO_INPUT);
   });
 
   it('turns anything that is not an object into no input', () => {
@@ -27,12 +26,11 @@ describe('sanitizeInput', () => {
       moveY: '1',
       action: 'yes',
       steal: 1,
-      buy: 'nonsense',
+      attack: 'true',
+      eat: {},
     });
     expect(out).toEqual(NO_INPUT);
     expect(sanitizeInput({ moveX: NaN, moveY: Infinity })).toEqual(NO_INPUT);
-    expect(sanitizeInput({ buy: '__proto__' }).buy).toBeNull();
-    expect(sanitizeInput({ buy: 'constructor' }).buy).toBeNull();
   });
 
   it('returns a fresh object and ignores extra fields', () => {
@@ -40,5 +38,9 @@ describe('sanitizeInput', () => {
     const out = sanitizeInput(raw);
     expect(out).not.toBe(raw);
     expect('extra' in out).toBe(false);
+  });
+
+  it('has attack and eat off in NO_INPUT', () => {
+    expect(NO_INPUT).toEqual({ moveX: 0, moveY: 0, action: false, steal: false, attack: false, eat: false });
   });
 });

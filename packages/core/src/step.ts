@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import { tryBuy, updateDeposit } from './economy';
+import { updateDeposit } from './economy';
 import { updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
@@ -52,8 +52,6 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
     p.depositMs = 0;
     return;
   }
-
-  if (input.buy !== null) tryBuy(state, p, input.buy);
 
   // Abgabe hat Vorrang: wer mit Flaschen am Automaten drückt, beginnt im selben Tick keine Suche
   const depositing = updateDeposit(state, p, input, dt, pressed);

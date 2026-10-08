@@ -7,6 +7,7 @@ import { boxBlocked, parseMap } from '../src/map';
 import { CITY_MAP } from '../src/maps';
 import { isBeingChecked } from '../src/npc';
 import { step } from '../src/step';
+import { NO_INPUT } from '../src/types';
 import type { GameState, Input, Npc, NpcKind, Point } from '../src/types';
 import { input, newGame, openRows, runFor, runSteps, SEARCH_ROWS, teleport } from './helpers';
 
@@ -213,7 +214,7 @@ describe('roaming npcs', () => {
   it('never despawn over 10 simulated minutes and stay inside the map, never in solid tiles', () => {
     const s = createGame(3, CITY_MAP, ['a', 'b'], { roundMs: 700000 });
     s.nextNpcMs = 100;
-    const idle: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+    const idle: Input = { ...NO_INPUT };
     let count = 0;
     const seen = new Set<string>();
     const bad: string[] = [];
@@ -531,7 +532,7 @@ describe('npc determinism', () => {
   function run(seed: number): string {
     const s = createGame(seed, CITY_MAP, ['a', 'b'], { roundMs: 400000 });
     s.nextNpcMs = 100;
-    const idle: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+    const idle: Input = { ...NO_INPUT };
     for (let t = 0; t < 2000; t++) step(s, { a: idle, b: idle }, 100);
     return JSON.stringify(s.npcs);
   }
