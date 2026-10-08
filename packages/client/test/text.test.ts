@@ -42,44 +42,29 @@ describe('hintLines', () => {
     expect(hintLines(s, s.players.p2, KEYS)).toEqual([]);
   });
 
-  it('offers stealing next to a victim who carries bottles', () => {
+  it('offers no steal key next to an awake player who carries bottles', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Klauen');
     s.players.p1.inventory.bolt_cutters = true;
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Bolzenschneider einsetzen');
-  });
-
-  it('shows the steal cooldown instead of the steal key while it runs', () => {
-    const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
-    s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    s.players.p1.stealCooldownMs = 4200;
     const lines = hintLines(s, s.players.p1, KEYS);
-    expect(lines).toContain('Klauen in 5 s');
     expect(lines.some((l) => l.includes('[Q]'))).toBe(false);
-    s.players.p1.inventory.bolt_cutters = true;
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('Klauen in 5 s');
+    expect(lines.some((l) => l.includes('Klauen'))).toBe(false);
   });
 
-  it('shows no steal cooldown without a victim nearby', () => {
-    const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
-    s.players.p1.stealCooldownMs = 4200;
-    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Klauen'))).toBe(false);
-  });
-
-  it('offers stealing even while the player is searching', () => {
+  it('offers robbing a knocked-out player even while the player is searching', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p1.mode = 'searching';
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Klauen');
+    s.players.p2.unconsciousMs = 5000;
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Ausrauben');
   });
 
-  it('does not offer stealing with a full container', () => {
+  it('does not offer robbing with a full container', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
-    s.players.p2.mode = 'searching';
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
+    s.players.p2.unconsciousMs = 5000;
     s.players.p1.bottles = { plastic: 3, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Klauen'))).toBe(false);
+    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Ausrauben'))).toBe(false);
   });
 
   it('is empty after the round has ended', () => {
@@ -117,7 +102,7 @@ describe('dropoff and search hints', () => {
 });
 
 describe('alertText', () => {
-  it('shows the shield after a theft and is empty otherwise', () => {
+  it('shows the shield after standing up and is empty otherwise', () => {
     const s = twoGame();
     expect(alertText(s, s.players.p1)).toBe('');
     s.players.p1.shieldMs = 2500;
@@ -142,12 +127,11 @@ describe('resultLines', () => {
 });
 
 describe('labels for other devices', () => {
-  it('uses the steal key for stealing', () => {
+  it('uses the steal key for robbing', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Klauen');
-    s.players.p1.inventory.bolt_cutters = true;
-    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Bolzenschneider einsetzen');
+    s.players.p2.unconsciousMs = 5000;
+    expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Ausrauben');
   });
 
   it('names the action key in the last results line', () => {
