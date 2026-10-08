@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { createGame, DEFAULT_MAP_ID, isMapId, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
-import type { GameState, MapData, MapId, Npc, Progress, ZoneState } from '@pfandraiders/core';
+import { CONFIG, createGame, DEFAULT_MAP_ID, isMapId, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
+import type { GameState, MapData, MapId, Npc, Player, Progress, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
@@ -18,6 +18,7 @@ import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { CountdownDisplay, musicModeFor } from '../countdown';
 import { PlayerHud } from '../hud';
+import { HEALTH_COLORS, healthBar } from '../healthBar';
 import { audioToggles, cycleAudio, music, sfx, unlockAudio } from '../sfx';
 import { PLING_GAP_SEC } from '../sound';
 import { detectSeizures, detectSounds, snapshotForSound } from '../soundEvents';
@@ -40,6 +41,8 @@ const POLICE_SCALE = 0.6;
 
 /** Farbring unter den Füßen: Mitte 4 px unter der Position (Füße enden 5 px darunter), Tiefe zwischen NPCs (4) und Figur (5). */
 const RING = { w: 12, h: 6, dy: 4, depth: 4.5, fillAlpha: 0.25, strokeAlpha: 0.8 };
+/** Lebensbalken über dem Kopf (Kopf endet 12 px über der Position): 14 x 2 px mit 1 px schwarzem Rand, über der Figur. */
+const HP_BAR = { w: 14, h: 2, dy: 16, depth: 6 };
 
 const COLOR = {
   zoneAnnounced: 0xffee58,
@@ -92,6 +95,8 @@ export class GameScene extends Phaser.Scene {
   /** Texturschlüssel des Figurenbogens je Spieler, null = Bogen fehlt, gezeichnete Figur als Rückfall. */
   private charKeys = new Map<string, string | null>();
   private rings = new Map<string, Phaser.GameObjects.Ellipse>();
+  /** Lebensbalken je Spieler (Weltobjekte), nur sichtbar unter vollem Leben */
+  private hpBars = new Map<string, { bg: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle }>();
   private poses = new Map<string, PoseState>();
   private npcPoses = new Map<number, PoseState>();
   /** Unsichtbare, nicht wippende Kamera-Ziele, damit die Kamera beim Gehen nicht ruckelt. */
@@ -230,6 +235,7 @@ export class GameScene extends Phaser.Scene {
     this.bodies = new Map();
     this.charKeys = new Map();
     this.rings = new Map();
+    this.hpBars = new Map();
     this.poses = new Map();
     this.npcPoses = new Map();
     this.drawMap(state.map);
@@ -279,6 +285,10 @@ export class GameScene extends Phaser.Scene {
       }
       body.setDepth(5);
       this.bodies.set(p.id, body);
+      this.hpBars.set(p.id, {
+        bg: this.add.rectangle(0, 0, HP_BAR.w + 2, HP_BAR.h + 2, 0x000000, 0.8).setOrigin(0, 0).setDepth(HP_BAR.depth).setVisible(false),
+        fill: this.add.rectangle(0, 0, HP_BAR.w, HP_BAR.h, HEALTH_COLORS.good).setOrigin(0, 0).setDepth(HP_BAR.depth + 0.1).setVisible(false),
+      });
       this.followTargets.set(p.id, this.add.zone(p.x, p.y, 1, 1));
       this.poses.set(p.id, initialPose(p.x, p.y));
     }
@@ -481,6 +491,7 @@ export class GameScene extends Phaser.Scene {
       body.setAlpha(unconscious ? 0.6 : 1);
       body.setScale(isSwinging(p) ? 1.15 : 1);
       this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
+      this.renderHpBar(p);
     }
     const countdownText = this.countdown.update(state.countdownMs, viewDelta, state.phase);
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id], this.notices.lines(slot.id), countdownText));
@@ -602,6 +613,20 @@ export class GameScene extends Phaser.Scene {
     }
     this.renderPause();
     return false;
+  }
+
+  /** Balken über der Figur: nur unter vollem Leben; Ausgeknockte (0 Leben) zeigen einen leeren Balken. */
+  private renderHpBar(p: Player): void {
+    const bar = this.hpBars.get(p.id);
+    if (!bar) return;
+    const view = healthBar(p.health, CONFIG.health.max);
+    bar.bg.setVisible(view.visible);
+    bar.fill.setVisible(view.visible && view.fraction > 0);
+    if (!view.visible) return;
+    const left = Math.round(p.x - HP_BAR.w / 2);
+    const top = Math.round(p.y - HP_BAR.dy);
+    bar.bg.setPosition(left - 1, top - 1);
+    bar.fill.setPosition(left, top).setSize(Math.max(1, Math.round(HP_BAR.w * view.fraction)), HP_BAR.h).setFillStyle(view.color);
   }
 
   /** Taste M bzw. "Ton" im Esc-Menü: Musik/Effekte weiterschalten und kurz in jedem Bild anzeigen. */

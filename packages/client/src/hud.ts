@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
-import { searchMsOf } from '@pfandraiders/core';
+import { CONFIG, searchMsOf } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
 import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
 import { alertText, hintLines, resultFooter, resultHeader, resultRows, statusLines } from './text';
 import { formatMoney } from './format';
 import { knockoutFontSizes, knockoutText } from './knockoutView';
+import { HEALTH_COLORS, healthBar, healthLabel } from './healthBar';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 const BAR_WIDTH = 80;
@@ -20,6 +21,8 @@ const ROW_H = 22;
 const FOOTER_LINE_H = 18;
 /** Countdown-Zahl: so groß im Verhältnis zur kürzeren Viewport-Seite, begrenzt auf [min, max] px */
 const COUNTDOWN_FONT = { share: 0.3, min: 48, max: 96 };
+/** Fester Lebensbalken oben rechts unter dem Namen, immer sichtbar, mit Zahl ("73/100") */
+const HP_HUD = { w: 100, h: 12, y: 30, right: 8 };
 
 export type HudRole = 'local' | 'host' | 'guest';
 
@@ -113,6 +116,8 @@ export class PlayerHud {
   private readonly bar: Phaser.GameObjects.Rectangle;
   /** Große Countdown-Anzeige mitten im eigenen Viewport (5..1, LOS!) */
   private readonly countdown: Phaser.GameObjects.Text;
+  /** Eigener Lebensbalken im HUD: Rahmen, Füllung, Zahl */
+  private readonly hp: { bg: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text };
   /** Große Ausgeknockt-Anzeige mitten im eigenen Viewport: Titel, Restsekunden, "Ausgeraubt!" */
   private readonly knockout: { title: Phaser.GameObjects.Text; seconds: Phaser.GameObjects.Text; robbed: Phaser.GameObjects.Text };
 
@@ -154,6 +159,15 @@ export class PlayerHud {
       .setOrigin(0.5)
       .setVisible(false);
 
+    const hpLeft = view.w - HP_HUD.right - HP_HUD.w;
+    this.hp = {
+      bg: scene.add.rectangle(hpLeft - 1, HP_HUD.y - 1, HP_HUD.w + 2, HP_HUD.h + 2, 0x000000, 0.7).setOrigin(0, 0).setStrokeStyle(1, 0xffffff, 0.6),
+      fill: scene.add.rectangle(hpLeft, HP_HUD.y, HP_HUD.w, HP_HUD.h, HEALTH_COLORS.good).setOrigin(0, 0),
+      label: scene.add
+        .text(hpLeft + HP_HUD.w / 2, HP_HUD.y + HP_HUD.h / 2, '', { ...FONT, fontSize: '12px', stroke: '#000000', strokeThickness: 3 })
+        .setOrigin(0.5),
+    };
+
     const ko = knockoutFontSizes(view);
     const big = (fontSize: number, color: string, y: number, originY: number): Phaser.GameObjects.Text =>
       scene.add
@@ -178,6 +192,7 @@ export class PlayerHud {
     this.objects = [
       this.status, this.hint, this.alert, this.barBg, this.bar, tag, this.countdown,
       this.knockout.title, this.knockout.seconds, this.knockout.robbed,
+      this.hp.bg, this.hp.fill, this.hp.label,
     ];
     for (const o of this.objects) {
       (o as Phaser.GameObjects.Text).setScrollFactor(0).setDepth(10);
@@ -185,7 +200,19 @@ export class PlayerHud {
     this.bar.setDepth(11);
     this.countdown.setDepth(22);
     for (const t of Object.values(this.knockout)) t.setDepth(22);
+    this.hp.fill.setDepth(11);
+    this.hp.label.setDepth(12);
     this.objects.push(...this.results.objects);
+  }
+
+  /** Immer sichtbar (auch bei vollem Leben); ausgeknockt bleibt nur der leere Rahmen mit "0/100". */
+  private updateHealth(p: Player): void {
+    const view = healthBar(p.health, CONFIG.health.max);
+    this.hp.fill
+      .setVisible(view.fraction > 0)
+      .setSize(Math.max(1, Math.round(HP_HUD.w * view.fraction)), HP_HUD.h)
+      .setFillStyle(view.color);
+    this.hp.label.setText(healthLabel(p.health, CONFIG.health.max));
   }
 
   private updateKnockout(ko: ReturnType<typeof knockoutText>): void {
@@ -207,6 +234,7 @@ export class PlayerHud {
   update(state: GameState, p: Player, notices: string[] = [], countdown = ''): void {
     this.countdown.setText(countdown).setVisible(countdown !== '');
     this.updateKnockout(countdown === '' ? knockoutText(p, state.phase) : null);
+    this.updateHealth(p);
     this.status.setText(statusLines(state, p).join('\n'));
     this.hint.setText(hintLines(state, p, this.labels).join('\n'));
     this.alert.setText(alertText(state, p, notices));
