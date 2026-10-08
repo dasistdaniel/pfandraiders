@@ -12,11 +12,14 @@ export type SoundId =
   | 'policeSeize'
   | 'zoneAnnounced'
   | 'roundEnd'
-  | 'tick';
+  | 'tick'
+  | 'punch'
+  | 'hit';
 
 /** Hunger kostet pro Frame nur Bruchteile eines Lebens; ein Biss mindestens dies (minus Toleranz). */
 const BITE_MIN_DROP = CONFIG.npc.dog.biteDamage - 1;
 const BITE_NEAR = CONFIG.npc.dog.biteRadius + 6;
+const PUNCH_NEAR = CONFIG.fight.radius + 6;
 
 /** Höchstens so viele Plings pro Frame (online kann ein Snapshot mehrere Abgaben enthalten). */
 export const PLING_MAX_PER_FRAME = 4;
@@ -80,6 +83,20 @@ export function detectSounds(
     if (audible(v.id) || (thiefId !== null && audible(thiefId))) out.add('stealSuccess');
   }
 
+  // Ausrauben: ein Ausgeknockter wird "robbed" und verliert Flaschen; Räuber ist, wer dabei Flaschen gewann
+  for (const v of Object.values(next.players)) {
+    const pv = prev.players[v.id];
+    if (!pv || pv.robbed || !v.robbed || v.unconsciousMs === 0) continue;
+    if (totalBottles(v.bottles) >= totalBottles(pv.bottles)) continue;
+    for (const t of Object.values(next.players)) {
+      const pt = prev.players[t.id];
+      if (!pt || t.id === v.id || totalBottles(t.bottles) <= totalBottles(pt.bottles)) continue;
+      thieves.add(t.id);
+      if (audible(t.id)) out.add('stealSuccess');
+      break;
+    }
+  }
+
   for (const p of Object.values(next.players)) {
     const q = prev.players[p.id];
     if (!q) continue;
@@ -101,10 +118,13 @@ export function detectSounds(
 
     const knockedOut = q.unconsciousMs === 0 && p.unconsciousMs > 0;
     if (knockedOut) out.add('knockout');
+    if (p.attackCooldownMs > q.attackCooldownMs) out.add('punch');
     if (q.unconsciousMs === 0) {
       const drop = q.health - p.health;
+      const punched = punchedNear(prev, next, q);
+      if (punched && drop >= CONFIG.fight.minDamage - 1) out.add('hit');
       // Ein Biss, der zum Umfallen führt, setzt Leben auf 0 und hat einen Hund in Reichweite.
-      if (drop >= BITE_MIN_DROP || (knockedOut && dogNear(prev, q))) out.add('bite');
+      else if (drop >= BITE_MIN_DROP || (knockedOut && dogNear(prev, q))) out.add('bite');
     }
 
     if (!isBeingChecked(prev, p.id) && isBeingChecked(next, p.id)) out.add('policeCheck');
@@ -161,6 +181,19 @@ export function detectSeizures(prev: GameState | null, next: GameState, ownIds: 
     if (byPolice) out.push({ id: p.id, count });
   }
   return out;
+}
+
+/** Hat ein anderer Spieler in Schlagweite von `p` in diesem Schritt geschlagen (Abklingzeit sprang hoch)? */
+function punchedNear(prev: GameState, next: GameState, p: Player): boolean {
+  return Object.values(next.players).some((o) => {
+    const before = prev.players[o.id];
+    return (
+      o.id !== p.id &&
+      before !== undefined &&
+      o.attackCooldownMs > before.attackCooldownMs &&
+      Math.hypot(o.x - p.x, o.y - p.y) <= PUNCH_NEAR
+    );
+  });
 }
 
 function dogNear(state: GameState, p: Player): boolean {

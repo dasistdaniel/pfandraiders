@@ -324,3 +324,38 @@ describe('detectSeizures', () => {
     expect(online).toEqual([{ id: 'a', count: 2 }]);
   });
 });
+
+describe('fight sounds', () => {
+  it('plays punch for the own swing only', () => {
+    const p = fresh();
+    const n = next(p, (s) => { s.players.a.attackCooldownMs = CONFIG.fight.cooldownMs; });
+    expect(detectSounds(p, n, ['a'])).toEqual(['punch']);
+    expect(detectSounds(p, n, ['b'])).toEqual([]);
+  });
+
+  it('plays hit instead of bite when an opponent in reach swung', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.x = s.players.a.x + 10;
+      s.players.b.y = s.players.a.y;
+    });
+    const n = next(p, (s) => {
+      s.players.b.attackCooldownMs = CONFIG.fight.cooldownMs;
+      s.players.a.health -= CONFIG.fight.damage;
+    });
+    expect(detectSounds(p, n, ['a'])).toEqual(['hit']);
+  });
+
+  it('plays stealSuccess and no pickup for the robber of a knocked-out player', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.bottles.plastic = 4;
+      s.players.b.unconsciousMs = 10000;
+      s.players.b.health = 0;
+    });
+    const n = next(p, (s) => {
+      s.players.b.bottles.plastic = 2;
+      s.players.b.robbed = true;
+      s.players.a.bottles.plastic = 2;
+    });
+    expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
+  });
+});
