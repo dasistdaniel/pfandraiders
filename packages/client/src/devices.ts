@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { KeyState } from './input';
-import { EdgeTracker, PAD_LABELS, padToHeld } from './sources';
+import { PAD_LABELS, padToHeld } from './sources';
 import type { InputSource, KeyLabels } from './sources';
 
 export interface KeyboardLayout {
@@ -11,10 +11,8 @@ export interface KeyboardLayout {
   down: string;
   action: string;
   steal: string;
-  buyUpgrade: string;
-  buyItem: string;
-  buyTreat: string;
-  buyFood: string;
+  attack: string;
+  eat: string;
   labels: KeyLabels;
 }
 
@@ -28,11 +26,9 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     down: 'S',
     action: 'E',
     steal: 'Q',
-    buyUpgrade: 'ONE',
-    buyItem: 'TWO',
-    buyTreat: 'THREE',
-    buyFood: 'FOUR',
-    labels: { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' },
+    attack: 'F',
+    eat: 'C',
+    labels: { action: 'E', steal: 'Q', attack: 'F', eat: 'C' },
   },
   {
     name: 'Tastatur 2 (Pfeile, Enter)',
@@ -42,11 +38,9 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     down: 'DOWN',
     action: 'ENTER',
     steal: 'FORWARD_SLASH',
-    buyUpgrade: 'COMMA',
-    buyItem: 'PERIOD',
-    buyTreat: 'SEMICOLON',
-    buyFood: 'QUOTES',
-    labels: { action: 'Enter', upgrade: ',', item: '.', steal: '/', treat: ';', food: "'" },
+    attack: 'PERIOD',
+    eat: 'COMMA',
+    labels: { action: 'Enter', steal: '/', attack: '.', eat: ',' },
   },
 ];
 
@@ -75,18 +69,7 @@ class KeyboardSource implements InputSource {
   ) {
     this.label = layout.name;
     this.labels = layout.labels;
-    const names = [
-      layout.left,
-      layout.right,
-      layout.up,
-      layout.down,
-      layout.action,
-      layout.steal,
-      layout.buyUpgrade,
-      layout.buyItem,
-      layout.buyTreat,
-      layout.buyFood,
-    ];
+    const names = [layout.left, layout.right, layout.up, layout.down, layout.action, layout.steal, layout.attack, layout.eat];
     this.keys = keyboard.addKeys(names.join(',')) as Record<string, Key>;
   }
 
@@ -100,10 +83,8 @@ class KeyboardSource implements InputSource {
       down: k[l.down].isDown,
       action: k[l.action].isDown,
       steal: k[l.steal].isDown,
-      buyUpgrade: Phaser.Input.Keyboard.JustDown(k[l.buyUpgrade]),
-      buyItem: Phaser.Input.Keyboard.JustDown(k[l.buyItem]),
-      buyTreat: Phaser.Input.Keyboard.JustDown(k[l.buyTreat]),
-      buyFood: Phaser.Input.Keyboard.JustDown(k[l.buyFood]),
+      attack: k[l.attack].isDown,
+      eat: k[l.eat].isDown,
     };
   }
 
@@ -117,7 +98,6 @@ type Pad = Phaser.Input.Gamepad.Gamepad;
 class GamepadSource implements InputSource {
   readonly label: string;
   readonly labels: KeyLabels = PAD_LABELS;
-  private readonly edges = new EdgeTracker();
   private prevA = false;
 
   constructor(
@@ -131,23 +111,21 @@ class GamepadSource implements InputSource {
     const pad = this.getPad();
     // Abgezogenes Gamepad: Phaser behält das alte Objekt mit eingefrorenen Werten in gamepads[index],
     // daher zählt es nur mit connected. Spieler steht still, das Spiel läuft weiter.
-    if (!pad || !pad.connected) return this.edges.apply(padToHeld(IDLE_PAD));
-    return this.edges.apply(
-      padToHeld({
-        stickX: pad.leftStick.x,
-        stickY: pad.leftStick.y,
-        a: pad.A,
-        x: pad.X,
-        y: pad.Y,
-        b: pad.B,
-        left: pad.left,
-        right: pad.right,
-        up: pad.up,
-        down: pad.down,
-        l1: pad.L1 > 0.5,
-        r1: pad.R1 > 0.5,
-      }),
-    );
+    if (!pad || !pad.connected) return padToHeld(IDLE_PAD);
+    return padToHeld({
+      stickX: pad.leftStick.x,
+      stickY: pad.leftStick.y,
+      a: pad.A,
+      x: pad.X,
+      y: pad.Y,
+      b: pad.B,
+      left: pad.left,
+      right: pad.right,
+      up: pad.up,
+      down: pad.down,
+      l1: pad.L1 > 0.5,
+      r1: pad.R1 > 0.5,
+    });
   }
 
   confirmPressed(): boolean {

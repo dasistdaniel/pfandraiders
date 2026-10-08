@@ -36,8 +36,7 @@ export interface ControlSource {
 
 /** Eine Zeile je Gerät, zusammengesetzt aus denselben Beschriftungen wie die Hinweise im Spiel. */
 export function controlLines(keyboards: ControlSource[], pad: KeyLabels): string[] {
-  const fmt = (l: KeyLabels): string =>
-    `Aktion ${l.action}, Klauen ${l.steal}, Container ${l.upgrade}, Item ${l.item}, Leckerli ${l.treat}, Futter ${l.food}`;
+  const fmt = (l: KeyLabels): string => `Aktion ${l.action}, Klauen ${l.steal}, Schlagen ${l.attack}, Essen ${l.eat}`;
   return [
     ...keyboards.map((k) => `${k.name}: ${fmt(k.labels)}`),
     `Gamepad (Stick/Steuerkreuz): ${fmt(pad)}`,

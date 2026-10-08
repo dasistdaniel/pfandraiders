@@ -5,8 +5,8 @@ import type { KeyLabels } from '../src/sources';
 import { formatMoney } from '../src/format';
 import { alertText, hintLines, playerName, resultFooter, resultLines, resultRows, seizeText, statusLines } from '../src/text';
 
-const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' };
-const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/', treat: ';', food: "'" };
+const KEYS: KeyLabels = { action: 'E', steal: 'Q', attack: 'F', eat: 'C' };
+const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.', eat: ',' };
 
 // p1 (24,24) steht 16 px vom Shop (40,24). p2 liegt weit weg am Ende des Ganges.
 function shopGame(): GameState {

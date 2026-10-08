@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EdgeTracker, padBLeaves, padToHeld, STICK_DEADZONE } from '../src/sources';
-import type { HeldKeys, PadSnapshot } from '../src/sources';
+import { padBLeaves, padToHeld, PAD_LABELS, STICK_DEADZONE } from '../src/sources';
+import type { PadSnapshot } from '../src/sources';
 
 const IDLE: PadSnapshot = {
   stickX: 0,
@@ -23,15 +23,15 @@ describe('padToHeld', () => {
     expect(padToHeld(IDLE)).toMatchObject({ steal: false });
   });
 
-  it('maps buttons: A action, X upgrade, Y item', () => {
-    expect(padToHeld({ ...IDLE, a: true })).toMatchObject({ action: true, buyUpgrade: false, buyItem: false });
-    expect(padToHeld({ ...IDLE, x: true })).toMatchObject({ buyUpgrade: true });
-    expect(padToHeld({ ...IDLE, y: true })).toMatchObject({ buyItem: true });
+  it('maps buttons: A action, B steal, X attack, Y eat, shoulders do nothing', () => {
+    expect(padToHeld({ ...IDLE, a: true })).toMatchObject({ action: true, attack: false, eat: false });
+    expect(padToHeld({ ...IDLE, x: true })).toMatchObject({ attack: true, eat: false });
+    expect(padToHeld({ ...IDLE, y: true })).toMatchObject({ eat: true, attack: false });
+    expect(padToHeld({ ...IDLE, l1: true, r1: true })).toEqual(padToHeld(IDLE));
   });
 
-  it('maps the shoulder buttons: RB treat, LB food', () => {
-    expect(padToHeld({ ...IDLE, r1: true })).toMatchObject({ buyTreat: true, buyFood: false });
-    expect(padToHeld({ ...IDLE, l1: true })).toMatchObject({ buyFood: true, buyTreat: false });
+  it('labels the pad buttons like padToHeld maps them', () => {
+    expect(PAD_LABELS).toEqual({ action: 'A', steal: 'B', attack: 'X', eat: 'Y' });
   });
 
   it('maps the d-pad', () => {
@@ -54,58 +54,6 @@ describe('padToHeld', () => {
 
   it('combines stick and d-pad', () => {
     expect(padToHeld({ ...IDLE, left: true, stickX: 1 })).toMatchObject({ left: true, right: true });
-  });
-});
-
-describe('EdgeTracker', () => {
-  it('passes the steal key through as held, not as an edge', () => {
-    const t = new EdgeTracker();
-    expect(t.apply(held({ steal: true })).steal).toBe(true);
-    expect(t.apply(held({ steal: true })).steal).toBe(true);
-  });
-
-  const held = (over: Partial<HeldKeys>): HeldKeys => ({
-    left: false,
-    right: false,
-    up: false,
-    down: false,
-    action: false,
-    steal: false,
-    buyUpgrade: false,
-    buyItem: false,
-    buyTreat: false,
-    buyFood: false,
-    ...over,
-  });
-
-  it('reports a buy key only on the frame it goes down', () => {
-    const t = new EdgeTracker();
-    expect(t.apply(held({ buyUpgrade: true })).buyUpgrade).toBe(true);
-    expect(t.apply(held({ buyUpgrade: true })).buyUpgrade).toBe(false);
-    expect(t.apply(held({})).buyUpgrade).toBe(false);
-    expect(t.apply(held({ buyUpgrade: true })).buyUpgrade).toBe(true);
-  });
-
-  it('tracks the two buy keys independently', () => {
-    const t = new EdgeTracker();
-    expect(t.apply(held({ buyUpgrade: true })).buyItem).toBe(false);
-    expect(t.apply(held({ buyUpgrade: true, buyItem: true }))).toMatchObject({
-      buyUpgrade: false,
-      buyItem: true,
-    });
-  });
-
-  it('reports treat and food only on the frame they go down', () => {
-    const t = new EdgeTracker();
-    expect(t.apply(held({ buyTreat: true })).buyTreat).toBe(true);
-    expect(t.apply(held({ buyTreat: true })).buyTreat).toBe(false);
-    expect(t.apply(held({ buyFood: true })).buyFood).toBe(true);
-    expect(t.apply(held({ buyFood: true })).buyFood).toBe(false);
-  });
-
-  it('passes movement and action through unchanged', () => {
-    const t = new EdgeTracker();
-    expect(t.apply(held({ left: true, action: true }))).toMatchObject({ left: true, action: true });
   });
 });
 
