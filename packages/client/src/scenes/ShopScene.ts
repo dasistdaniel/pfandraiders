@@ -109,6 +109,8 @@ export class ShopScene extends Phaser.Scene {
       online.onJoined = null;
       this.panels[0].model.setReady(online.shopReady);
       if (online.status === 'closed') this.leaveOnline('Verbindung zum Server verloren.');
+      // Serie wurde beendet, während dieser Spieler noch auf der Rangliste stand
+      else if (online.roomPhase === 'lobby') this.leaveOnline('Der Host hat die Serie beendet.');
     } else {
       const views = viewportsFor(this.slots.length);
       this.slots.forEach((s, i) => {

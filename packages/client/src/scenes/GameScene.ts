@@ -188,6 +188,10 @@ export class GameScene extends Phaser.Scene {
       // Neue Runde (Server schickt erneut `start`) und Verbindungsverlust
       online.onStart = () => this.scene.restart({ online });
       online.onClosed = () => this.beginReconnect();
+      // Host beendet die Serie, während hier noch die Rangliste steht
+      online.onPhase = () => {
+        if (online.roomPhase === 'lobby') this.leaveToMenu('Der Host hat die Serie beendet.');
+      };
       online.onError = (code) => {
         // Nur während des Wiederverbindens: endgültige Fehler beenden den Versuch
         if (this.plan?.fatal(code)) this.leaveToMenu('Platz im Raum nicht mehr verfügbar.');
@@ -651,6 +655,7 @@ export class GameScene extends Phaser.Scene {
       this.online.onStart = null;
       this.online.onError = null;
       this.online.onJoined = null;
+      this.online.onPhase = null;
       this.online.close();
     }
     this.scene.start('menu', notice ? { notice } : undefined);
