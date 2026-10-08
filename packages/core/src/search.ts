@@ -2,6 +2,7 @@ import { totalBottles, transferBottles } from './bottles';
 import { CONFIG } from './config';
 import { capacityOf, distance } from './economy';
 import { rollContents } from './loot';
+import { upgradeValue } from './shop';
 import { spotMultiplier, spotRefillMs } from './zones';
 import type { GameState, Player, Spot } from './types';
 
@@ -23,6 +24,11 @@ export function findSearchableSpot(state: GameState, p: Player): Spot | null {
 export function cancelSearch(p: Player): void {
   p.searchSpotId = null;
   p.searchProgressMs = 0;
+}
+
+/** Suchdauer nach der Stufe "Schneller suchen" (ganze ms). */
+export function searchMsOf(p: Pick<Player, 'upgrades'>): number {
+  return Math.round(CONFIG.searchMs * upgradeValue(p, 'search'));
 }
 
 /**
@@ -48,7 +54,7 @@ export function updateSearch(state: GameState, p: Player, dtMs: number, canStart
   }
   p.searchProgressMs += dtMs;
 
-  if (p.searchProgressMs >= CONFIG.searchMs) {
+  if (p.searchProgressMs >= searchMsOf(p)) {
     transferBottles(spot.contents, p.bottles, capacityOf(p));
     if (totalBottles(spot.contents) === 0) spot.refillInMs = spotRefillMs(state, spot);
     cancelSearch(p);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
 import { CONFIG } from '../src/config';
+import { searchMsOf } from '../src/search';
 import {
   input,
   newGame,
@@ -212,5 +213,26 @@ describe('search needs a fresh key press', () => {
     runFor(s, HOLD, CONFIG.searchMs + 100);
     expect(s.players.p1.searchSpotId).toBeNull();
     expect(totalBottles(s.players.p1.bottles)).toBe(0);
+  });
+});
+
+describe('search upgrade', () => {
+  it('shortens the search time by the factor of the level', () => {
+    expect(searchMsOf({ upgrades: { knockout: 0, speed: 0, search: 0, punch: 0, armor: 0 } })).toBe(CONFIG.searchMs);
+    expect(searchMsOf({ upgrades: { knockout: 0, speed: 0, search: 3, punch: 0, armor: 0 } })).toBe(
+      Math.round(CONFIG.searchMs * 0.55),
+    );
+  });
+
+  it('finishes a search earlier with the upgrade', () => {
+    const s = newGame(SEARCH_ROWS);
+    setSpot(s, 0, { plastic: 2 });
+    teleport(s, 'p1', s.spots[0]);
+    s.players.p1.upgrades.search = 3;
+    const ms = searchMsOf(s.players.p1);
+    runFor(s, { p1: input({ action: true }) }, ms - 40);
+    expect(s.players.p1.bottles.plastic).toBe(0);
+    runFor(s, { p1: input({ action: true }) }, 60);
+    expect(s.players.p1.bottles.plastic).toBe(2);
   });
 });

@@ -186,3 +186,16 @@ describe('corner sliding', () => {
     expect(s.players.p1.x).toBeGreaterThan(160);
   });
 });
+
+describe('speed upgrade', () => {
+  it('walks faster by the factor of each level', () => {
+    for (const level of [0, 1, 2, 3]) {
+      const s = newGame(openRows(60, 5));
+      s.players.p1.upgrades.speed = level;
+      const x0 = s.players.p1.x;
+      runSteps(s, { p1: input({ moveX: 1 }) }, 10, 20);
+      const expected = (CONFIG.playerSpeed * CONFIG.shop.items.speed.values[level] * 200) / 1000;
+      expect(s.players.p1.x - x0).toBeCloseTo(expected, 6);
+    }
+  });
+});
