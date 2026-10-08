@@ -5,7 +5,7 @@ import { eatFood, updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
 import { cancelSearch, refillSpot, updateSearch } from './search';
-import { tryInstantSteal, tryLoot } from './theft';
+import { tryLoot } from './theft';
 import { NO_INPUT } from './types';
 import type { GameState, Input, Player } from './types';
 import { updateZones } from './zones';
@@ -49,7 +49,6 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   const attackPressed = input.attack && !p.attackHeld;
   p.attackHeld = input.attack;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
-  p.stealCooldownMs = Math.max(0, p.stealCooldownMs - dt);
   p.attackCooldownMs = Math.max(0, p.attackCooldownMs - dt);
 
   if (updateHealth(p, dt)) {
@@ -69,7 +68,7 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   if (input.moveX !== 0 || input.moveY !== 0) {
     cancelSearch(p);
     walk(state.map, p, input, dt);
-  } else if (stealPressed && (tryLoot(state, p) || tryInstantSteal(state, p))) {
+  } else if (stealPressed && tryLoot(state, p)) {
     cancelSearch(p);
   } else if (input.action && !depositing && updateSearch(state, p, dt, pressed)) {
     // sucht: eine neue Suche beginnt nur beim Drücken, eine laufende geht beim Halten weiter

@@ -65,7 +65,6 @@ describe('createGame', () => {
       weapon: 'fist',
       earnedRound: 0,
       earnedTotal: 0,
-      stealCooldownMs: 0,
       shieldMs: 0,
     });
   });

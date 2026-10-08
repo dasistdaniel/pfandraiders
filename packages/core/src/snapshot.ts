@@ -42,7 +42,6 @@ export function projectSnapshot(state: GameState, viewerId: string): Snapshot {
       inventory: { dog_treat: 0, food: 0, bolt_cutters: false },
       upgrades: noUpgrades(),
       weapon: p.weapon,
-      stealCooldownMs: 0,
       attackCooldownMs: p.attackCooldownMs,
       shieldMs: p.shieldMs,
       health: p.health,

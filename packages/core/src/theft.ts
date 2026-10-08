@@ -3,17 +3,6 @@ import { CONFIG } from './config';
 import { capacityOf, distance } from './economy';
 import type { GameState, Player } from './types';
 
-/** Kann der wache `victim` jetzt von `thief` bestohlen werden? */
-export function canBeRobbed(thief: Player, victim: Player): boolean {
-  return (
-    victim.id !== thief.id &&
-    victim.unconsciousMs === 0 &&
-    victim.shieldMs === 0 &&
-    totalBottles(victim.bottles) > 0 &&
-    distance(thief, victim) <= CONFIG.steal.radius
-  );
-}
-
 /** Kann der ausgeknockte `victim` jetzt von `thief` ausgeraubt werden? Einmal pro Knockout, Schutz zählt nicht. */
 export function canBeLooted(thief: Player, victim: Player): boolean {
   return (
@@ -42,11 +31,6 @@ function nearest(state: GameState, thief: Player, ok: (thief: Player, victim: Pl
   return best;
 }
 
-/** Nächstes gültiges (waches) Opfer in Reichweite. */
-export function findStealTarget(state: GameState, thief: Player): Player | null {
-  return nearest(state, thief, canBeRobbed);
-}
-
 /** Nächster ausraubbarer Ausgeknockter in Reichweite. */
 export function findLootTarget(state: GameState, thief: Player): Player | null {
   return nearest(state, thief, canBeLooted);
@@ -61,31 +45,7 @@ function moveLoot(thief: Player, victim: Player, fraction: number): void {
 }
 
 /**
- * Sofort-Diebstahl im Schritt, in dem die Klauen-Taste neu gedrückt wurde.
- * Nimmt dem nächsten gültigen Opfer CONFIG.steal.fraction seines Containers ab (aufgerundet,
- * begrenzt durch den freien Platz); mit Bolzenschneider alles, der Bolzenschneider wird verbraucht.
- * Das Opfer bekommt Schutz, der Dieb eine Abklingzeit. Gibt true zurück, wenn geklaut wurde.
- * Während der Abklingzeit, mit vollem Container oder ohne Opfer passiert nichts.
- */
-export function tryInstantSteal(state: GameState, thief: Player): boolean {
-  if (thief.stealCooldownMs > 0) return false;
-  if (totalBottles(thief.bottles) >= capacityOf(thief)) return false;
-  const target = findStealTarget(state, thief);
-  if (target === null) return false;
-
-  if (thief.inventory.bolt_cutters) {
-    moveLoot(thief, target, 1);
-    thief.inventory.bolt_cutters = false;
-  } else {
-    moveLoot(thief, target, CONFIG.steal.fraction);
-  }
-  target.shieldMs = CONFIG.steal.shieldMs;
-  thief.stealCooldownMs = CONFIG.steal.cooldownMs;
-  return true;
-}
-
-/**
- * Ausrauben im Schritt, in dem die Klauen-Taste neu gedrückt wurde (Spec §4.4): nimmt dem nächsten
+ * Ausrauben im Schritt, in dem die Ausrauben-Taste (Eingabe `steal`) neu gedrückt wurde (Spec §4.4): nimmt dem nächsten
  * Ausgeknockten CONFIG.steal.fraction seiner Flaschen (aufgerundet, begrenzt durch den freien Platz)
  * und setzt `robbed`. Mit Bolzenschneider alle Flaschen (so viele passen), der Bolzenschneider wird
  * verbraucht. Ohne Abklingzeit, ohne Schutz. Mit vollem Container passiert nichts (der Ausgeknockte

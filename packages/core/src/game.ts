@@ -68,7 +68,6 @@ function newPlayer(id: string, at: Point, prog: Progress): Player {
     inventory: own.inventory,
     upgrades: own.upgrades,
     weapon: 'fist',
-    stealCooldownMs: 0,
     attackCooldownMs: 0,
     shieldMs: 0,
     health: CONFIG.health.max,
