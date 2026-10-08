@@ -199,3 +199,91 @@ describe('series phases', () => {
     expect(members[0].input).toEqual({ ...NO_INPUT, attack: true });
   });
 });
+
+describe('buying in the shop phase', () => {
+  function inShop() {
+    const s = series();
+    s.room.start('p1');
+    s.room.state!.players.p1.money = 1000;
+    s.endRound();
+    return s;
+  }
+
+  it('buys with enough money and answers with the new own state only to the buyer', () => {
+    const { room, members, conns } = inShop();
+    const before = conns[1].of('shopState').length;
+    expect(room.shopBuy(members[0], 'defense', 'food', 3).ok).toBe(true);
+    expect(room.progress.get('p1')).toMatchObject({ money: 700, inventory: { food: 3 } });
+    expect(conns[0].last('shopState').you).toMatchObject({ money: 700, inventory: { food: 3 } });
+    expect(conns[1].of('shopState')).toHaveLength(before);
+  });
+
+  it('refuses without money and without partial purchase', () => {
+    const { room, members } = inShop();
+    const r = room.shopBuy(members[0], 'defense', 'food', 11);
+    expect(r).toMatchObject({ ok: false, code: 'cannot_buy', message: 'Nicht genug Geld.' });
+    expect(room.progress.get('p1')).toMatchObject({ money: 1000, inventory: { food: 0 } });
+  });
+
+  it('never lets two purchases together spend more than the money', () => {
+    const { room, members } = inShop();
+    expect(room.shopBuy(members[0], 'defense', 'food', 6).ok).toBe(true);
+    expect(room.shopBuy(members[0], 'defense', 'food', 6)).toMatchObject({ ok: false, code: 'cannot_buy' });
+    expect(room.progress.get('p1')!.money).toBe(400);
+  });
+
+  it('refuses buying outside the shop phase', () => {
+    const { room, members } = series();
+    expect(room.shopBuy(members[0], 'defense', 'food', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
+    room.start('p1');
+    expect(room.shopBuy(members[0], 'defense', 'food', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
+  });
+
+  it('carries bought items into the next round', () => {
+    const { room, members } = inShop();
+    room.shopBuy(members[0], 'attack', 'bolt_cutters', 1);
+    room.shopBuy(members[0], 'bags', 'bag', 1);
+    for (const m of members) room.setReady(m, true);
+    expect(room.state!.players.p1).toMatchObject({ money: 250, containerLevel: 1, inventory: { bolt_cutters: true } });
+  });
+});
+
+describe('round time and ending the series', () => {
+  it('lets only the host set the round time, in lobby and shop', () => {
+    const { room, conns, endRound } = series({});
+    expect(room.setRoundMs('p2', 600_000)).toMatchObject({ ok: false, code: 'not_host' });
+    expect(room.setRoundMs('p1', 600_000).ok).toBe(true);
+    expect(conns[2].last('lobby').roundMs).toBe(600_000);
+    room.start('p1');
+    expect(room.state!.timeLeftMs).toBe(600_000);
+    expect(room.setRoundMs('p1', 180_000)).toMatchObject({ ok: false, code: 'wrong_phase' });
+    room.state!.timeLeftMs = 1;
+    endRound();
+    expect(room.setRoundMs('p1', 180_000).ok).toBe(true);
+    expect(room.roundMs()).toBe(180_000);
+  });
+
+  it('keeps ROUND_MS from the environment over the host choice', () => {
+    const { room, conns } = series({ roundMs: 1000 });
+    room.setRoundMs('p1', 600_000);
+    expect(room.roundMs()).toBe(1000);
+    expect(conns[0].last('lobby').roundMs).toBe(1000);
+  });
+
+  it('lets only the host end the series in the shop phase, back to the lobby without progress', () => {
+    const { room, conns, members, endRound } = series();
+    expect(room.endSeries('p1')).toMatchObject({ ok: false, code: 'wrong_phase' });
+    room.start('p1');
+    endRound();
+    room.leave(members[2].conn!);
+    expect(room.endSeries('p2')).toMatchObject({ ok: false, code: 'not_host' });
+    expect(room.endSeries('p1').ok).toBe(true);
+    expect(room.phase).toBe('lobby');
+    expect(room.state).toBeNull();
+    expect(room.progress.size).toBe(0);
+    expect(room.members.map((m) => m.id)).toEqual(['p1', 'p2']);
+    expect(conns[1].last('phase').phase).toBe('lobby');
+    expect(room.start('p1').ok).toBe(true);
+    expect(room.state!.players.p1.money).toBe(0);
+  });
+});

@@ -14,7 +14,7 @@ function fakeConn() {
 function fakeSock() {
   return { close: vi.fn(), terminate: vi.fn() };
 }
-const INPUT = { t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, buy: null } };
+const INPUT = { t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false, eat: false } };
 
 function setup() {
   let t = 1000;
@@ -215,5 +215,45 @@ describe('leave message', () => {
     expect(sock.close).toHaveBeenCalledWith(4000, 'replaced');
     expect(member.conn).toBe(fresh.conn);
     expect(member.expired).toBe(false);
+  });
+});
+
+describe('series messages', () => {
+  it('routes start with round time, ready, shopBuy, setRoundMs and endSeries to the room', () => {
+    const { env, manager } = setup();
+    const a = fakeConn();
+    const b = fakeConn();
+    const created = manager.create('Anna', a.conn);
+    if (!created.ok) throw new Error('create failed');
+    const { room, member } = created.value;
+    const bob = room.join('Bob', b.conn);
+    if (!bob.ok) throw new Error('join failed');
+    const sa: Session = { ...newSession(1000), room, member };
+    const sb: Session = { ...newSession(1000), room, member: bob.value };
+    const send = (s: Session, c: ReturnType<typeof fakeConn>, msg: unknown) =>
+      handleMessage(env, s, c.conn, fakeSock(), JSON.stringify(msg));
+
+    send(sa, a, { t: 'setRoundMs', roundMs: 180_000 });
+    expect(room.roundMs()).toBe(180_000);
+    send(sb, b, { t: 'setRoundMs', roundMs: 600_000 });
+    expect(b.sent.at(-1)).toMatchObject({ t: 'error', code: 'not_host' });
+    send(sa, a, { t: 'start', roundMs: 420_000 });
+    expect(room.phase).toBe('playing');
+    expect(room.state!.timeLeftMs).toBe(420_000);
+    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'food', qty: 1 });
+    expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'wrong_phase' });
+
+    room.state!.players.p1.money = 500;
+    room.state!.timeLeftMs = 1;
+    room.tick();
+    expect(room.phase).toBe('shop');
+    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'food', qty: 2 });
+    expect(room.progress.get('p1')!.inventory.food).toBe(2);
+    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'food', qty: 100 });
+    expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'bad_message' });
+    send(sa, a, { t: 'ready', ready: true });
+    expect(room.members[0].ready).toBe(true);
+    send(sa, a, { t: 'endSeries' });
+    expect(room.phase).toBe('lobby');
   });
 });

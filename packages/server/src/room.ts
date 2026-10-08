@@ -1,4 +1,5 @@
 import {
+  BUY_REFUSAL_TEXT,
   CHAT_HISTORY_SIZE,
   createGame,
   DEFAULT_MAP_ID,
@@ -13,6 +14,7 @@ import {
   projectSnapshot,
   ranking,
   ROOM_COLORS,
+  shopBuy,
   step,
 } from '@pfandraiders/core';
 import type {
@@ -28,6 +30,8 @@ import type {
   RosterEntry,
   ServerBuild,
   ServerMessage,
+  ShopCategory,
+  ShopItemId,
 } from '@pfandraiders/core';
 import { randomUUID } from 'node:crypto';
 import { currentBuild } from './buildInfo';
@@ -398,6 +402,49 @@ export class Room {
     this.sendShopState(m);
     this.broadcastLobby();
     this.checkAllReady();
+    return OK;
+  }
+
+  /** Kauf in der Shop-Phase; abgelehnt ohne Teilkauf. Der neue eigene Stand geht nur an den Käufer. */
+  shopBuy(m: Member, category: ShopCategory, item: ShopItemId, qty: number): Result<void> {
+    if (this.phase !== 'shop') return fail('wrong_phase', 'Kaufen geht nur im Shop.');
+    if (m.conn === null) return OK;
+    this.lastActive = this.now();
+    let own = this.progress.get(m.id);
+    if (!own) {
+      own = freshProgress();
+      this.progress.set(m.id, own);
+    }
+    const r = shopBuy(own, category, item, qty);
+    if (!r.ok) return fail('cannot_buy', BUY_REFUSAL_TEXT[r.reason]);
+    this.sendShopState(m);
+    return OK;
+  }
+
+  /** Rundenzeit wählen (nur Host, nur Lobby oder Shop; der Wert ist schon gegen ROUND_MS_CHOICES geprüft). */
+  setRoundMs(byId: string, roundMs: number): Result<void> {
+    if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Rundenzeit ändern.');
+    if (this.phase === 'playing') return fail('wrong_phase', 'Die Rundenzeit ändert sich erst zwischen den Runden.');
+    if (!isRoundMs(roundMs)) return fail('bad_message', 'Ungültige Rundenzeit.');
+    this.lastActive = this.now();
+    this.chosenRoundMs = roundMs;
+    this.broadcastLobby();
+    return OK;
+  }
+
+  /** Serie beenden (nur Host, nur Shop): zurück in die Lobby, Fortschritt verfällt, Getrennte fallen heraus. */
+  endSeries(byId: string): Result<void> {
+    if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Serie beenden.');
+    if (this.phase !== 'shop') return fail('wrong_phase', 'Die Serie lässt sich nur im Shop beenden.');
+    this.lastActive = this.now();
+    this.phase = 'lobby';
+    this.state = null;
+    this.progress.clear();
+    this.lastRanking = [];
+    this.members = this.connected();
+    for (const m of this.members) m.ready = false;
+    this.broadcast({ t: 'phase', phase: 'lobby' });
+    this.broadcastLobby();
     return OK;
   }
 
