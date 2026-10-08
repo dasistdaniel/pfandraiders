@@ -1,10 +1,11 @@
 import type { ChatMessage, ErrorCode, RosterEntry } from '@pfandraiders/core';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
-import { MAX_CHAT_LENGTH, ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import { MAX_CHAT_LENGTH, ROOM_CODE_LENGTH, ROUND_MS_CHOICES } from '@pfandraiders/core';
 import { chatColorHex, rosterDiff } from './chatLogic';
 import { nextTab, parseTab, sanitizeRoomCode } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
+import { roundMsLabel } from './roundTime';
 import type { SocketFactory } from './online';
 
 const TOKEN_KEY = (room: string) => `pfandraiders.token.${room}`;
@@ -108,6 +109,8 @@ export function showOnlineMenu(
       conn.onLobby = null;
       conn.onJoined = null;
       conn.onChat = null;
+      conn.onShopState = null;
+      conn.onPhase = null;
       root.remove();
       if (result === null) conn.close();
       resolve(result);
@@ -122,6 +125,10 @@ export function showOnlineMenu(
       showError('Verbindung zum Server verloren.');
     };
     conn.onStart = () => finish(conn);
+    // Rückkehr oder Beitritt zwischen zwei Runden: direkt in den Shop
+    conn.onShopState = () => {
+      if (conn.roomPhase === 'shop') finish(conn);
+    };
 
     // Name und Code bleiben beim Tabwechsel erhalten
     const form = { name: safeGet(NAME_KEY) ?? '', code: '', tab: parseTab(localGet(TAB_KEY)) };
@@ -309,6 +316,13 @@ export function showOnlineMenu(
       };
       conn.onChat = showChat;
 
+      const roundRow = el('div', {}, 'margin-bottom:10px');
+      const roundText = el('span', { textContent: '' });
+      const roundSelect = el('select', {}, 'font:inherit;margin-left:6px');
+      for (const ms of ROUND_MS_CHOICES) roundSelect.appendChild(el('option', { value: String(ms), textContent: roundMsLabel(ms) }));
+      roundSelect.onchange = () => conn.setRoundMs(Number(roundSelect.value));
+      roundRow.append(el('span', { textContent: 'Rundenzeit:' }), roundSelect, roundText);
+
       const start = el('button', { textContent: 'Spiel starten' }, 'font:inherit;margin-right:8px');
       const hint = el('div', { textContent: 'Warte auf den Host…' }, 'color:#aaa');
       const leave = el('button', { textContent: 'Verlassen' }, 'font:inherit');
@@ -317,6 +331,9 @@ export function showOnlineMenu(
         start.style.display = conn.isHost() ? 'inline-block' : 'none';
         hint.style.display = conn.isHost() ? 'none' : 'block';
         start.disabled = conn.roster.filter((p) => p.connected).length < 2;
+        roundSelect.style.display = conn.isHost() ? 'inline-block' : 'none';
+        roundSelect.value = String(conn.roundMs);
+        roundText.textContent = conn.isHost() ? '' : ` ${roundMsLabel(conn.roundMs)}`;
       };
       // Die erste Spielerliste nach dem Beitritt wird nicht gemeldet
       let prevRoster: RosterEntry[] | null = null;
@@ -330,7 +347,7 @@ export function showOnlineMenu(
         safeRemove(TOKEN_KEY(conn.room));
         finish(null);
       };
-      box.append(list, chatLog, chatInput, start, hint, leave, message);
+      box.append(list, chatLog, chatInput, roundRow, start, hint, leave, message);
       conn.onLobby = onLobby;
       refresh();
     };

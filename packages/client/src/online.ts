@@ -1,4 +1,4 @@
-import { DEFAULT_MAP_ID, isMapId, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, DEFAULT_ROUND_MS, isMapId, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
 import type {
   ChatMessage,
   ClientMessage,
@@ -7,10 +7,14 @@ import type {
   Input,
   MapData,
   MapId,
+  Progress,
+  RankEntry,
   RoomPhase,
   RosterEntry,
   ServerBuild,
   ServerMessage,
+  ShopCategory,
+  ShopItemId,
   Snapshot,
 } from '@pfandraiders/core';
 import { NO_INPUT } from '@pfandraiders/core';
@@ -18,6 +22,7 @@ import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
 import type { GameConnection } from './connection';
 import { interpolateSnapshot } from './interpolate';
 import { Predictor } from './prediction';
+import { parseProgress, parseRanking } from './shopGuard';
 import { isValidSnapshot } from './snapshotGuard';
 
 /** Fremde Figuren werden so viel später gezeigt, damit zwischen zwei Snapshots interpoliert werden kann. */
@@ -72,6 +77,18 @@ export class OnlineConnection implements GameConnection {
   chat: ChatMessage[] = [];
   /** Phase des Raums laut Server (lobby, playing, shop). */
   roomPhase: RoomPhase = 'lobby';
+  /** Rundenzeit laut Server (Lobby-Nachricht oder start) */
+  roundMs: number = DEFAULT_ROUND_MS;
+  /** Eigener Stand in der Shop-Phase; null = noch keiner */
+  shop: Progress | null = null;
+  /** Eigenes "bereit" laut Server */
+  shopReady = false;
+  /** Rangliste der letzten Runde */
+  ranking: RankEntry[] = [];
+  /** Phase des Raums hat gewechselt (phase-Nachricht). */
+  onPhase: (() => void) | null = null;
+  /** Neuer eigener Shop-Stand. */
+  onShopState: (() => void) | null = null;
 
   onJoined: (() => void) | null = null;
   onLobby: (() => void) | null = null;
@@ -197,6 +214,24 @@ export class OnlineConnection implements GameConnection {
     this.sendMsg({ t: 'ready', ready });
   }
 
+  /** Shop-Phase: kaufen (der Server prüft Geld, Bestand und Phase). */
+  shopBuy(category: ShopCategory, item: ShopItemId, qty: number): void {
+    if (this.status !== 'open') return;
+    this.sendMsg({ t: 'shopBuy', category, item, qty });
+  }
+
+  /** Rundenzeit setzen (nur Host; der Server prüft zusätzlich). */
+  setRoundMs(ms: number): void {
+    if (this.status !== 'open' || !this.isHost()) return;
+    this.sendMsg({ t: 'setRoundMs', roundMs: ms });
+  }
+
+  /** Serie beenden (nur Host, nur Shop; der Server prüft zusätzlich). */
+  endSeries(): void {
+    if (this.status !== 'open' || !this.isHost()) return;
+    this.sendMsg({ t: 'endSeries' });
+  }
+
   /** Raum absichtlich verlassen: der Server gibt den Platz sofort frei. Schließt die Verbindung nicht selbst. */
   leave(): void {
     if (this.status !== 'open') return;
@@ -238,6 +273,7 @@ export class OnlineConnection implements GameConnection {
         this.host = msg.host;
         this.roster = msg.players;
         this.roomPhase = msg.phase;
+        if (typeof msg.roundMs === 'number' && Number.isFinite(msg.roundMs) && msg.roundMs > 0) this.roundMs = msg.roundMs;
         this.onLobby?.();
         break;
       case 'start':
@@ -253,6 +289,8 @@ export class OnlineConnection implements GameConnection {
         this.predictor.reset(msg.snap.players[msg.you] ?? null);
         this.seq = 0;
         this.lastSent = null;
+        if (typeof msg.roundMs === 'number' && Number.isFinite(msg.roundMs) && msg.roundMs > 0) this.roundMs = msg.roundMs;
+        this.roomPhase = 'playing';
         this.onStart?.();
         break;
       case 'snap':
@@ -286,8 +324,23 @@ export class OnlineConnection implements GameConnection {
         break;
       }
       case 'phase':
+        if (msg.phase !== 'lobby' && msg.phase !== 'playing' && msg.phase !== 'shop') break;
         this.roomPhase = msg.phase;
+        this.onPhase?.();
         break;
+      case 'shopState': {
+        const you = parseProgress(msg.you);
+        if (!you || typeof msg.ready !== 'boolean') break;
+        this.shop = you;
+        this.shopReady = msg.ready;
+        this.onShopState?.();
+        break;
+      }
+      case 'ranking': {
+        const entries = parseRanking(msg.entries);
+        if (entries) this.ranking = entries;
+        break;
+      }
       case 'error':
         this.onError?.(msg.code, msg.message);
         break;
