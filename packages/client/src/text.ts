@@ -6,7 +6,6 @@ import {
   findAttackTarget,
   findLootTarget,
   findSearchableSpot,
-  findStealTarget,
   isBeingChecked,
   isNear,
   ranking,
@@ -56,10 +55,6 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
     lines.push(full ? 'Container voll' : `[${labels.action} drücken, halten] Suchen`);
   }
   if (!full && findLootTarget(state, p)) lines.push(`[${labels.steal}] Ausrauben`);
-  if (!full && findStealTarget(state, p)) {
-    if (p.stealCooldownMs > 0) lines.push(`Klauen in ${Math.ceil(p.stealCooldownMs / 1000)} s`);
-    else lines.push(p.inventory.bolt_cutters ? `[${labels.steal}] Bolzenschneider einsetzen` : `[${labels.steal}] Klauen`);
-  }
   if (p.attackCooldownMs === 0 && findAttackTarget(state, p)) lines.push(`[${labels.attack}] Schlagen`);
   const food = p.inventory.food;
   if (food > 0 && p.health <= CONFIG.health.max - CONFIG.health.food.heal) {

@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG, TILE } from '../src/config';
 
-describe('steal and shop config', () => {
-  it('has sane theft values', () => {
+describe('robbing and shop config', () => {
+  it('has sane robbing values', () => {
     expect(CONFIG.steal.radius).toBeGreaterThan(0);
-    expect(CONFIG.steal.radius).toBeLessThanOrEqual(2 * CONFIG.interactRadius); // Dieb und Opfer müssen sich sehen können
-    expect(CONFIG.steal.cooldownMs).toBeGreaterThan(0);
-    // die Abklingzeit des Diebs ist länger als der Schutz des Opfers: kein Dauerklauen am selben Opfer
-    expect(CONFIG.steal.cooldownMs).toBeGreaterThan(CONFIG.steal.shieldMs);
+    expect(CONFIG.steal.radius).toBeLessThanOrEqual(2 * CONFIG.interactRadius); // Räuber und Opfer müssen sich sehen können
     expect(CONFIG.steal.fraction).toBeGreaterThan(0);
     expect(CONFIG.steal.fraction).toBeLessThanOrEqual(1);
-    expect(CONFIG.steal.shieldMs).toBeGreaterThan(0);
+  });
+
+  it('has no theft cooldown or theft shield any more', () => {
+    expect(Object.keys(CONFIG.steal).sort()).toEqual(['fraction', 'radius']);
   });
 
   it('has priced bolt cutters in the attack category', () => {

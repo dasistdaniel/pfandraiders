@@ -72,58 +72,25 @@ describe('detectSounds', () => {
     expect(r).not.toContain('buy');
   });
 
-  it('plays stealSuccess and no pickup for the thief of an instant theft', () => {
+  it('plays no stealSuccess when an awake player loses bottles and gets a shield', () => {
     const p = next(fresh(), (s) => {
       s.players.b.bottles.plastic = 4;
     });
     const n = next(p, (s) => {
       s.players.b.bottles.plastic = 2;
-      s.players.b.shieldMs = CONFIG.steal.shieldMs;
+      s.players.b.shieldMs = CONFIG.health.spawnShieldMs;
       s.players.a.bottles.plastic = 2;
-      s.players.a.stealCooldownMs = CONFIG.steal.cooldownMs;
     });
-    expect(detectSounds(p, n, 'all')).toEqual(['stealSuccess']);
-    expect(detectSounds(p, n, ['b'])).toEqual(['stealSuccess']);
-    expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
-    expect(detectSounds(p, n, ['c'])).toEqual([]);
-  });
-
-  it('still plays pickup when the bottle gain is not a theft', () => {
-    const p = next(fresh(), (s) => {
-      s.players.a.stealCooldownMs = 2000;
-    });
-    const n = next(p, (s) => {
-      s.players.a.bottles.plastic = 2;
-      s.players.a.stealCooldownMs = 1980; // Abklingzeit läuft nur herunter
-    });
+    expect(detectSounds(p, n, ['b'])).toEqual([]);
     expect(detectSounds(p, n, ['a'])).toEqual(['pickup']);
   });
 
-  it('plays stealSuccess for the victim online, where the cooldown of the thief is hidden', () => {
-    const p = next(fresh(), (s) => {
-      s.players.b.bottles.plastic = 4;
-    });
+  it('still plays pickup when the bottle gain is not a robbery', () => {
+    const p = fresh();
     const n = next(p, (s) => {
-      s.players.b.bottles.plastic = 2;
-      s.players.b.shieldMs = CONFIG.steal.shieldMs;
-      s.players.a.bottles.plastic = 1; // fremder Container nur als "hat Flaschen"
+      s.players.a.bottles.plastic = 2;
     });
-    expect(detectSounds(p, n, ['b'])).toEqual(['stealSuccess']);
-  });
-
-  it('recognises a bolt-cutter theft and keeps it silent for bystanders', () => {
-    const p = next(fresh(), (s) => {
-      s.players.b.bottles.glass = 3;
-      s.players.a.inventory.bolt_cutters = true;
-    });
-    const n = next(p, (s) => {
-      s.players.b.bottles.glass = 0;
-      s.players.b.shieldMs = 3000;
-      s.players.a.bottles.glass = 3;
-      s.players.a.inventory.bolt_cutters = false;
-    });
-    expect(detectSounds(p, n, 'all')).toEqual(['stealSuccess']);
-    expect(detectSounds(p, n, ['x'])).toEqual([]);
+    expect(detectSounds(p, n, ['a'])).toEqual(['pickup']);
   });
 
   it('copies the inventory deeply so a used bolt cutter is seen in the local game', () => {
@@ -285,7 +252,7 @@ describe('detectSeizures', () => {
     expect(detectSounds(p, n, ['b'])).toEqual([]);
   });
 
-  it('ignores bottle losses without a police npc (theft, deposit) and a dog resting on the player', () => {
+  it('ignores bottle losses without a police npc (robbery, deposit) and a dog resting on the player', () => {
     const p = next(fresh(), (s) => {
       s.players.a.bottles = { plastic: 3, glass: 0, crate: 0 };
       s.npcs = [npc({ kind: 'dog', targetId: 'a' })];
@@ -357,5 +324,22 @@ describe('fight sounds', () => {
       s.players.a.bottles.plastic = 2;
     });
     expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
+  });
+
+  it('plays stealSuccess for a robbery with bolt cutters that takes everything', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.bottles.glass = 3;
+      s.players.b.unconsciousMs = 10000;
+      s.players.b.health = 0;
+      s.players.a.inventory.bolt_cutters = true;
+    });
+    const n = next(p, (s) => {
+      s.players.b.bottles.glass = 0;
+      s.players.b.robbed = true;
+      s.players.a.bottles.glass = 3;
+      s.players.a.inventory.bolt_cutters = false;
+    });
+    expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
+    expect(detectSounds(p, n, ['x'])).toEqual([]);
   });
 });

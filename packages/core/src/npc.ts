@@ -46,7 +46,7 @@ function senseRadius(npc: Npc): number {
 
 /**
  * Kommt dieser Spieler als Ziel in Frage? Bewusst, nicht der Spieler aus der Ruhe-Erinnerung,
- * Hund: ohne Schutz (nach Respawn oder Diebstahl), Polizei: trägt Flaschen.
+ * Hund: ohne Schutz (nach dem Aufstehen), Polizei: trägt Flaschen.
  */
 function wants(npc: Npc, p: Player): boolean {
   if (p.unconsciousMs > 0) return false;

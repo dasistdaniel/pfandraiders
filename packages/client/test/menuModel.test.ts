@@ -69,9 +69,9 @@ describe('controlLines', () => {
   });
 
   it('names steal, attack and eat and no buy keys', () => {
-    expect(lines[0]).toBe('Tastatur 1 (WASD, E): Aktion E, Klauen Q, Schlagen F, Essen C');
-    expect(lines[1]).toBe('Tastatur 2 (Pfeile, Enter): Aktion Enter, Klauen /, Schlagen ., Essen ,');
-    expect(lines[2]).toBe('Gamepad (Stick/Steuerkreuz): Aktion A, Klauen B, Schlagen X, Essen Y');
+    expect(lines[0]).toBe('Tastatur 1 (WASD, E): Aktion E, Ausrauben Q, Schlagen F, Essen C');
+    expect(lines[1]).toBe('Tastatur 2 (Pfeile, Enter): Aktion Enter, Ausrauben /, Schlagen ., Essen ,');
+    expect(lines[2]).toBe('Gamepad (Stick/Steuerkreuz): Aktion A, Ausrauben B, Schlagen X, Essen Y');
   });
 });
 

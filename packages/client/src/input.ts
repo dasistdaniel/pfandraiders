@@ -1,13 +1,13 @@
 import type { Input } from '@pfandraiders/core';
 
-/** Tastenzustand eines Geräts in einem Frame. Alles gehalten; Flanken (Klauen, Schlagen, Essen) erkennt der Kern. */
+/** Tastenzustand eines Geräts in einem Frame. Alles gehalten; Flanken (Ausrauben, Schlagen, Essen) erkennt der Kern. */
 export interface KeyState {
   left: boolean;
   right: boolean;
   up: boolean;
   down: boolean;
   action: boolean;
-  /** Klauen-Taste gehalten */
+  /** Ausrauben-Taste gehalten (Feldname steal) */
   steal: boolean;
   /** Schlagen-Taste gehalten */
   attack: boolean;

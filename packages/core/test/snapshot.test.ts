@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
-import { canBeRobbed, findStealTarget } from '../src/theft';
+import { canBeLooted, findLootTarget } from '../src/theft';
 import { projectSnapshot, stateFromSnapshot } from '../src/snapshot';
 import { input, newGame, runSteps, THIEF_ROWS } from './helpers';
 
@@ -86,15 +86,6 @@ describe('projectSnapshot', () => {
     expect(other.stealHeld).toBe(false);
   });
 
-  it('hides the steal cooldown of other players but keeps the own one', () => {
-    const s = game();
-    s.players.p1.stealCooldownMs = 4000;
-    s.players.p2.stealCooldownMs = 5000;
-    const snap = projectSnapshot(s, 'p1');
-    expect(snap.players.p1.stealCooldownMs).toBe(4000);
-    expect(snap.players.p2.stealCooldownMs).toBe(0);
-  });
-
   it('hides the deposit timer of other players but keeps the own one', () => {
     const s = game();
     s.players.p1.depositMs = 90;
@@ -147,13 +138,15 @@ describe('projectSnapshot', () => {
     expect(JSON.parse(JSON.stringify(snap))).toEqual(snap);
   });
 
-  it('keeps the steal hint working for the viewer through the projection', () => {
+  it('keeps the robbing hint working for the viewer through the projection', () => {
     const s = game();
     s.players.p1.bottles = { plastic: 0, glass: 0, crate: 0 };
     s.players.p1.containerLevel = 1;
+    s.players.p2.unconsciousMs = 5000;
+    s.players.p2.health = 0;
     const view = stateFromSnapshot(s.map, projectSnapshot(s, 'p1'));
-    expect(canBeRobbed(view.players.p1, view.players.p2)).toBe(true);
-    expect(findStealTarget(view, view.players.p1)?.id).toBe('p2');
+    expect(canBeLooted(view.players.p1, view.players.p2)).toBe(true);
+    expect(findLootTarget(view, view.players.p1)?.id).toBe('p2');
   });
 
   it('still projects correctly after the game has run', () => {
@@ -175,7 +168,7 @@ describe('snapshot key sets', () => {
   const PLAYER_KEYS = [
     'actionHeld', 'attackCooldownMs', 'attackHeld', 'bottles', 'containerLevel', 'depositMs', 'earnedRound',
     'earnedTotal', 'eatHeld', 'health', 'id', 'inventory', 'mode', 'money', 'robbed', 'searchProgressMs',
-    'searchSpotId', 'shieldMs', 'spawn', 'stealCooldownMs', 'stealHeld', 'unconsciousMs', 'upgrades', 'weapon', 'x', 'y',
+    'searchSpotId', 'shieldMs', 'spawn', 'stealHeld', 'unconsciousMs', 'upgrades', 'weapon', 'x', 'y',
   ];
 
   it('pins the keys of own and foreign players', () => {

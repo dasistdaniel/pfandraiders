@@ -52,7 +52,7 @@ export interface Input {
   moveY: -1 | 0 | 1;
   /** Aktionstaste gehalten */
   action: boolean;
-  /** Klauen-Taste gehalten (wirkt beim Drücken: klauen oder ausrauben) */
+  /** Ausrauben-Taste gehalten (wirkt beim Drücken, nur bei Ausgeknockten) */
   steal: boolean;
   /** Schlagen-Taste gehalten (wirkt beim Drücken) */
   attack: boolean;
@@ -100,7 +100,7 @@ export interface Player {
   depositMs: number;
   /** Aktionstaste im vorigen Tick gedrückt, für Flankenerkennung */
   actionHeld: boolean;
-  /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Klauen wirkt nur beim Drücken) */
+  /** Ausrauben-Taste im vorigen Tick gedrückt, für die Flanke (Ausrauben wirkt nur beim Drücken) */
   stealHeld: boolean;
   /** Essen-Taste im vorigen Tick gedrückt, für die Flanke */
   eatHeld: boolean;
@@ -112,11 +112,9 @@ export interface Player {
   upgrades: Upgrades;
   /** Waffe, bisher immer 'fist' */
   weapon: WeaponId;
-  /** Restzeit, bis der Spieler wieder klauen kann, 0 = bereit */
-  stealCooldownMs: number;
   /** Restzeit, bis der Spieler wieder schlagen kann, 0 = bereit */
   attackCooldownMs: number;
-  /** Restzeit des Schutzes nach einem Diebstahl, 0 = angreifbar */
+  /** Restzeit des Schutzes nach dem Aufstehen aus einem Knockout, 0 = angreifbar */
   shieldMs: number;
   /** Leben, 0 = bewusstlos (kann zwischen Ticks Nachkommastellen haben) */
   health: number;

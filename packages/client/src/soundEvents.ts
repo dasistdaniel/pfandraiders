@@ -54,36 +54,9 @@ export function detectSounds(
   let plings = 0;
   const audible = (id: string): boolean => ownIds === 'all' || ownIds.includes(id);
 
-  // Diebstahl: Das Opfer verliert Flaschen und bekommt Schutz (takeLoot). Der Dieb ist, wer dabei Flaschen
-  // gewann und dessen Klau-Abklingzeit neu startete (oder der mit Bolzenschneider sein Item verbrauchte).
-  // Die Abklingzeit sieht online nur ihr Besitzer; für fremde Diebe zählt das nicht, weil der Dieb nur
-  // wichtig ist, wenn er selbst zuhört.
-  const thieves = new Set<string>();
-  for (const v of Object.values(next.players)) {
-    const pv = prev.players[v.id];
-    if (!pv) continue;
-    const robbed =
-      pv.shieldMs === 0 &&
-      v.shieldMs > 0 &&
-      pv.unconsciousMs === 0 &&
-      v.unconsciousMs === 0 &&
-      totalBottles(v.bottles) < totalBottles(pv.bottles);
-    if (!robbed) continue;
-    let thiefId: string | null = null;
-    for (const t of Object.values(next.players)) {
-      const pt = prev.players[t.id];
-      if (!pt || t.id === v.id) continue;
-      if (totalBottles(t.bottles) <= totalBottles(pt.bottles)) continue;
-      if (t.stealCooldownMs > pt.stealCooldownMs || (pt.inventory.bolt_cutters && !t.inventory.bolt_cutters)) {
-        thiefId = t.id;
-        break;
-      }
-    }
-    if (thiefId !== null) thieves.add(thiefId);
-    if (audible(v.id) || (thiefId !== null && audible(thiefId))) out.add('stealSuccess');
-  }
-
   // Ausrauben: ein Ausgeknockter wird "robbed" und verliert Flaschen; Räuber ist, wer dabei Flaschen gewann
+  // (mit oder ohne Bolzenschneider). Für ihn gibt es stealSuccess statt pickup.
+  const thieves = new Set<string>();
   for (const v of Object.values(next.players)) {
     const pv = prev.players[v.id];
     if (!pv || pv.robbed || !v.robbed || v.unconsciousMs === 0) continue;
@@ -161,7 +134,7 @@ export interface Seizure {
 /**
  * Beschlagnahmen zwischen zwei Zuständen. Rein und nur aus Zustandsunterschieden, damit es lokal und
  * online gleich funktioniert. Erkennungszeichen: Am Ende einer Kontrolle lässt der Polizist den
- * Spieler in Ruhe (restId wechselt auf ihn) und dessen Flaschen werden weniger. Diebstahl und Abgabe
+ * Spieler in Ruhe (restId wechselt auf ihn) und dessen Flaschen werden weniger. Ausrauben und Abgabe
  * senken die Flaschen auch, setzen aber keinen Polizisten in Ruhe.
  */
 export function detectSeizures(prev: GameState | null, next: GameState, ownIds: string[] | 'all'): Seizure[] {

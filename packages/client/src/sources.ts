@@ -40,7 +40,7 @@ export interface PadSnapshot {
 /** Sticks unterhalb dieses Betrags zählen als in Ruhe. */
 export const STICK_DEADZONE = 0.4;
 
-/** A = Aktion, B = Klauen, X = Schlagen, Y = Essen. Stick und Steuerkreuz laufen. Schultertasten sind frei. */
+/** A = Aktion, B = Ausrauben, X = Schlagen, Y = Essen. Stick und Steuerkreuz laufen. Schultertasten sind frei. */
 export function padToHeld(s: PadSnapshot): KeyState {
   return {
     left: s.left || s.stickX < -STICK_DEADZONE,

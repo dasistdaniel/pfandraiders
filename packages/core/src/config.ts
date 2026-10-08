@@ -58,16 +58,12 @@ export const CONFIG = {
   ],
   /** Preis in Cent, um von Stufe i auf i+1 zu kommen */
   upgradePrices: UPGRADE_PRICES,
-  /** Diebstahl */
+  /** Ausrauben eines Ausgeknockten (Spec §4.4) */
   steal: {
-    /** größter Abstand Dieb zu Opfer in Pixeln */
+    /** größter Abstand Räuber zu Opfer in Pixeln */
     radius: 20,
-    /** Anteil des Opfer-Containers */
+    /** Anteil der Flaschen des Opfers (mit Bolzenschneider alles) */
     fraction: 0.5,
-    /** Schutz des Opfers nach einem Diebstahl */
-    shieldMs: 3000,
-    /** so lange kann der Dieb nach einem Diebstahl nicht erneut klauen */
-    cooldownMs: 6000,
   },
   /** Schlagen (Spec §4.1) */
   fight: {

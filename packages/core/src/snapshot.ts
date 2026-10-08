@@ -6,7 +6,7 @@ import type { GameState, MapData, Player, Spot } from './types';
 /**
  * Der Zustand, den ein bestimmter Spieler sehen darf (Spec §5).
  * Fremdes Geld und fremde Verdienste (bis Rundenende), fremder Container-Inhalt, fremdes Inventar und
- * fremde Upgrades, Such-, Abgabe- und Tastenzustände, die Klau-Abklingzeit und der Zufalls-Zustand werden entfernt.
+ * fremde Upgrades, Such-, Abgabe- und Tastenzustände und der Zufalls-Zustand werden entfernt.
  * Vom fremden Container bleibt nur "hat Flaschen" (als eine Plastikflasche).
  */
 export function projectSnapshot(state: GameState, viewerId: string): Snapshot {
@@ -42,7 +42,6 @@ export function projectSnapshot(state: GameState, viewerId: string): Snapshot {
       inventory: { dog_treat: 0, food: 0, bolt_cutters: false },
       upgrades: noUpgrades(),
       weapon: p.weapon,
-      stealCooldownMs: 0,
       attackCooldownMs: p.attackCooldownMs,
       shieldMs: p.shieldMs,
       health: p.health,
