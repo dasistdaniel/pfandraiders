@@ -1,6 +1,6 @@
 import { CONFIG } from './config';
 import { updateDeposit } from './economy';
-import { updateHealth } from './health';
+import { eatFood, updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
 import { cancelSearch, refillSpot, updateSearch } from './search';
@@ -43,6 +43,8 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   p.actionHeld = input.action;
   const stealPressed = input.steal && !p.stealHeld;
   p.stealHeld = input.steal;
+  const eatPressed = input.eat && !p.eatHeld;
+  p.eatHeld = input.eat;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
   p.stealCooldownMs = Math.max(0, p.stealCooldownMs - dt);
 
@@ -52,6 +54,8 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
     p.depositMs = 0;
     return;
   }
+
+  if (eatPressed) eatFood(p);
 
   // Abgabe hat Vorrang: wer mit Flaschen am Automaten drückt, beginnt im selben Tick keine Suche
   const depositing = updateDeposit(state, p, input, dt, pressed);

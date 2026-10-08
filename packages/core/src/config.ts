@@ -100,12 +100,9 @@ export const CONFIG = {
     hungerEveryMs: 8000,
     /** Eine Portion Essen aus dem Inventar heilt so viel */
     food: { heal: 30 },
-    unconsciousMs: 10000,
-    /** Leben nach dem Respawn */
+    /** Leben nach dem Aufstehen */
     reviveHealth: 60,
-    /** Anteil des Geldes, der beim Umfallen verloren geht (abgerundet) */
-    moneyLossFraction: 0.25,
-    /** Schutz gegen Diebstahl nach dem Respawn */
+    /** Schutz nach dem Aufstehen */
     spawnShieldMs: 3000,
   },
   npc: {

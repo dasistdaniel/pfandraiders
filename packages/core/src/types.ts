@@ -103,6 +103,8 @@ export interface Player {
   actionHeld: boolean;
   /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Klauen wirkt nur beim Drücken) */
   stealHeld: boolean;
+  /** Essen-Taste im vorigen Tick gedrückt, für die Flanke */
+  eatHeld: boolean;
   /** Verbrauchsgüter und Bolzenschneider (bleiben über Runden) */
   inventory: Inventory;
   /** Upgrade-Stufen (bleiben über Runden) */
@@ -117,11 +119,13 @@ export interface Player {
   health: number;
   /** Restzeit der Bewusstlosigkeit, 0 = bei Bewusstsein */
   unconsciousMs: number;
+  /** In diesem Knockout schon ausgeraubt (einmal pro Knockout, Spec §4.4) */
+  robbed: boolean;
   /** Rundenverdienst in Cent (Pfand dieser Runde) */
   earnedRound: number;
   /** Gesamtverdienst der Serie in Cent (alle Runden, inklusive der laufenden) */
   earnedTotal: number;
-  /** Startpunkt, hier erscheint der Spieler nach der Bewusstlosigkeit */
+  /** Startpunkt dieser Runde */
   spawn: Point;
 }
 
