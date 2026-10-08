@@ -41,14 +41,14 @@ function setup() {
 }
 
 function startMessage(tickValue = 0, x2 = 40): ServerMessage {
-  const s = createGame(1, CITY_MAP, ['p1', 'p2']);
+  const s = createGame(1, CITY_MAP, ['p1', 'p2'], { countdownMs: 0 });
   s.tick = tickValue;
   s.players.p2.x = x2;
   return { t: 'start', mapId: DEFAULT_MAP_ID, map: CITY_MAP, you: 'p1', players: roster(), snap: projectSnapshot(s, 'p1'), roundMs: DEFAULT_ROUND_MS };
 }
 
 function snapMessage(tickValue: number, x2: number): ServerMessage {
-  const s = createGame(1, CITY_MAP, ['p1', 'p2']);
+  const s = createGame(1, CITY_MAP, ['p1', 'p2'], { countdownMs: 0 });
   s.tick = tickValue;
   s.players.p2.x = x2;
   return { t: 'snap', snap: projectSnapshot(s, 'p1'), ack: 0 };
@@ -264,7 +264,7 @@ describe('OnlineConnection rendering state', () => {
   it('snaps the own player to a far away server position', () => {
     const { socket, conn } = setup();
     socket.receive(startMessage(0));
-    const s = createGame(1, CITY_MAP, ['p1', 'p2']);
+    const s = createGame(1, CITY_MAP, ['p1', 'p2'], { countdownMs: 0 });
     s.players.p1.x = 200;
     s.tick = 1;
     conn.update(100);
@@ -518,13 +518,13 @@ describe('OnlineConnection own-player prediction', () => {
   const SPEED = CONFIG.playerSpeed;
 
   function ownSnap(tickValue: number, ack: number, mutate: (p: Player) => void = () => {}): ServerMessage {
-    const s = createGame(1, CITY_MAP, ['p1', 'p2']);
+    const s = createGame(1, CITY_MAP, ['p1', 'p2'], { countdownMs: 0 });
     s.tick = tickValue;
     mutate(s.players.p1);
     return { t: 'snap', snap: projectSnapshot(s, 'p1'), ack };
   }
   function spawn() {
-    return createGame(1, CITY_MAP, ['p1', 'p2']).players.p1;
+    return createGame(1, CITY_MAP, ['p1', 'p2'], { countdownMs: 0 }).players.p1;
   }
   function lastSeq(socket: FakeSocket): number {
     const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
@@ -563,6 +563,27 @@ describe('OnlineConnection own-player prediction', () => {
     conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
     for (let i = 0; i < 10; i++) conn.update(16);
     expect(conn.getState().players.p1.x).toBe(x0);
+  });
+
+  it('does not walk during the countdown, but keeps sending the input; walks once it is over', () => {
+    const { socket, conn } = started();
+    socket.receive(ownSnap(1, 0, () => {}));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const counting = ownSnap(2, 0) as any;
+    counting.snap.countdownMs = 3000;
+    socket.receive(counting);
+    conn.update(16);
+    const x0 = conn.getState().players.p1.x;
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    for (let i = 0; i < 10; i++) conn.update(16);
+    expect(conn.getState().players.p1.x).toBe(x0);
+    expect(conn.getState().countdownMs).toBe(3000);
+    // gesendet wird trotzdem: der Server wendet die gehaltene Eingabe ab dem ersten Rundentakt an
+    const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
+    expect(inputs[inputs.length - 1].input.moveX).toBe(1);
+    socket.receive(ownSnap(3, lastSeq(socket)));
+    conn.update(16);
+    expect(conn.getState().players.p1.x).toBeGreaterThan(x0);
   });
 
   it('does not walk after the round has ended', () => {

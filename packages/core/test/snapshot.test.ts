@@ -65,6 +65,13 @@ describe('projectSnapshot', () => {
     expect(totalBottles(projectSnapshot(s, 'p1').players.p2.bottles)).toBe(0);
   });
 
+  it('shows the countdown before the round to everyone', () => {
+    const s = game();
+    s.countdownMs = 3200;
+    expect(projectSnapshot(s, 'p1').countdownMs).toBe(3200);
+    expect(projectSnapshot(s, 'p2').countdownMs).toBe(3200);
+  });
+
   it('never leaks the server random state or timers', () => {
     const snap = projectSnapshot(game(), 'p1');
     expect(snap.rngState).toBe(0);
@@ -181,7 +188,7 @@ describe('snapshot key sets', () => {
   it('pins the keys of the snapshot', () => {
     const snap = projectSnapshot(game(), 'p1');
     expect(Object.keys(snap).sort()).toEqual(
-      ['nextNpcId', 'nextNpcMs', 'npcs', 'phase', 'players', 'rngState', 'spots', 'tick', 'timeLeftMs', 'zones'],
+      ['countdownMs', 'nextNpcId', 'nextNpcMs', 'npcs', 'phase', 'players', 'rngState', 'spots', 'tick', 'timeLeftMs', 'zones'],
     );
   });
 

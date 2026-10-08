@@ -11,7 +11,7 @@ const ROWS = ['##########', '#@b.....n#', '##########'];
 const ZONES = [{ id: 'z', name: 'Zone', area: { x0: 32, y0: 16, x1: 64, y1: 32 } }];
 
 function game() {
-  const s = createGame(1, parseMap(ROWS, ZONES), ['p1']);
+  const s = createGame(1, parseMap(ROWS, ZONES), ['p1'], { countdownMs: 0 });
   s.nextNpcMs = 1e9;
   return s;
 }

@@ -1,5 +1,6 @@
 import { CONFIG, isBeingChecked, totalBottles } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
+import { countdownLeft } from './countdown';
 
 export type SoundId =
   | 'pickup'
@@ -13,6 +14,7 @@ export type SoundId =
   | 'zoneAnnounced'
   | 'roundEnd'
   | 'tick'
+  | 'countdownGo'
   | 'punch'
   | 'hit';
 
@@ -49,8 +51,15 @@ export function detectSounds(
   next: GameState,
   ownIds: string[] | 'all',
 ): SoundId[] {
-  if (prev === null) return [];
+  // Erster Frame einer Runde mitten im Countdown: Ton für die erste Zahl (die 5)
+  if (prev === null) return next.phase === 'running' && countdownLeft(next) > 0 ? ['tick'] : [];
   const out = new Set<SoundId>();
+
+  // Countdown vor der Runde: ein Ton je neuer Zahl, ein höherer bei "LOS!"
+  const cdBefore = countdownLeft(prev);
+  const cdNow = countdownLeft(next);
+  if (cdNow > 0 && Math.ceil(cdNow / 1000) < Math.ceil(cdBefore / 1000)) out.add('tick');
+  if (cdBefore > 0 && cdNow === 0 && next.phase === 'running') out.add('countdownGo');
   let plings = 0;
   const audible = (id: string): boolean => ownIds === 'all' || ownIds.includes(id);
 

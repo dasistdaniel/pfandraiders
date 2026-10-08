@@ -1,11 +1,18 @@
-import { CONFIG, createGame, parseMap } from '@pfandraiders/core';
+import { CONFIG, createGame as coreCreateGame, parseMap } from '@pfandraiders/core';
 import type { GameState } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
 import { formatMoney } from '../src/format';
 import { alertText, hintLines, playerName, resultFooter, resultHeader, resultLines, resultRows, seizeText, statusLines } from '../src/text';
 
-const KEYS: KeyLabels = { action: 'E', steal: 'Q', attack: 'F', eat: 'C' };
+/** Spiel ohne Countdown: Hinweise erscheinen erst, wenn die Runde läuft (Countdown-Test unten). */
+function createGame(...args: Parameters<typeof coreCreateGame>): GameState {
+  const s = coreCreateGame(...args);
+  s.countdownMs = 0;
+  return s;
+}
+
+const KEYS: KeyLabels ={ action: 'E', steal: 'Q', attack: 'F', eat: 'C' };
 const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.', eat: ',' };
 
 // p1 (24,24) und p2 am Ende des Ganges, weit weg voneinander
@@ -65,6 +72,16 @@ describe('hintLines', () => {
     s.players.p2.unconsciousMs = 5000;
     s.players.p1.bottles = { plastic: 3, glass: 0, crate: 0 };
     expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Ausrauben'))).toBe(false);
+  });
+
+  it('is empty during the countdown before the round', () => {
+    const s = coreCreateGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
+    s.players.p2.unconsciousMs = 5000;
+    s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
+    expect(s.countdownMs).toBeGreaterThan(0);
+    expect(hintLines(s, s.players.p1, KEYS)).toEqual([]);
+    s.countdownMs = 0;
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Ausrauben');
   });
 
   it('is empty after the round has ended', () => {

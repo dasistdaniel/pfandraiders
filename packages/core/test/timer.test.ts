@@ -9,7 +9,7 @@ describe('round timer', () => {
   const map = parseMap(openRows(20, 5));
 
   it('counts down and ends the round at zero', () => {
-    const s = createGame(1, map, ['p1'], { roundMs: 1000 });
+    const s = createGame(1, map, ['p1'], { roundMs: 1000, countdownMs: 0 });
     runSteps(s, {}, 49, 20);
     expect(s.phase).toBe('running');
     expect(s.timeLeftMs).toBe(20);
@@ -19,7 +19,7 @@ describe('round timer', () => {
   });
 
   it('freezes the game after the round has ended', () => {
-    const s = createGame(1, map, ['p1'], { roundMs: 100 });
+    const s = createGame(1, map, ['p1'], { roundMs: 100, countdownMs: 0 });
     runSteps(s, {}, 5, 20);
     expect(s.phase).toBe('ended');
     const tick = s.tick;
@@ -29,20 +29,20 @@ describe('round timer', () => {
   });
 
   it('uses the configured round length by default', () => {
-    const s = createGame(1, map, ['p1']);
+    const s = createGame(1, map, ['p1'], { countdownMs: 0 });
     expect(s.timeLeftMs).toBe(CONFIG.roundMs);
     step(s, {}, 20);
     expect(s.timeLeftMs).toBe(CONFIG.roundMs - 20);
   });
 
   it('ignores negative time steps', () => {
-    const s = createGame(1, map, ['p1']);
+    const s = createGame(1, map, ['p1'], { countdownMs: 0 });
     step(s, {}, -50);
     expect(s.timeLeftMs).toBe(CONFIG.roundMs);
   });
 
   it('ignores non-finite time steps instead of poisoning the state', () => {
-    const s = createGame(1, map, ['p1']);
+    const s = createGame(1, map, ['p1'], { countdownMs: 0 });
     step(s, {}, Number.NaN);
     step(s, {}, Number.POSITIVE_INFINITY);
     expect(Number.isNaN(s.timeLeftMs)).toBe(false);

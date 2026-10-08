@@ -70,7 +70,7 @@ async function connect(port: number, headers: Record<string, string> = {}): Prom
 }
 
 async function twoBotsInStartedRoom() {
-  server = await startServer({ port: 0, stepMs: 20 });
+  server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
   const a = await connect(server.port);
   const b = await connect(server.port);
   a.send({ t: 'create', name: 'Anna' });
@@ -95,6 +95,26 @@ describe('websocket server', () => {
     expect(seenByB.snap.players.p2).toBeDefined();
   });
 
+  it('counts the countdown down on the wire and only then lets the players move', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 300 });
+    const a = await connect(server.port);
+    const b = await connect(server.port);
+    a.send({ t: 'create', name: 'Anna' });
+    const joined = await a.until('joined');
+    b.send({ t: 'join', room: joined.room, name: 'Bob' });
+    await b.until('joined');
+    a.send({ t: 'start' });
+    const start = await a.until('start');
+    expect(start.snap.countdownMs).toBe(300);
+    a.send({ t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false, eat: false } });
+    const counting = await a.until('snap', (m) => m.snap.countdownMs > 0 && m.snap.countdownMs < 300);
+    expect(counting.snap.players.p1.x).toBe(start.snap.players.p1.x);
+    expect(counting.snap.timeLeftMs).toBe(start.snap.timeLeftMs);
+    const moved = await a.until('snap', (m) => m.snap.players.p1.x > start.snap.players.p1.x);
+    expect(moved.snap.countdownMs).toBe(0);
+    expect(moved.snap.timeLeftMs).toBeLessThan(start.snap.timeLeftMs);
+  });
+
   it('hides private data of the other player in the snapshots on the wire', async () => {
     const { a, b, code } = await twoBotsInStartedRoom();
     const room = server.manager.get(code)!;
@@ -111,7 +131,7 @@ describe('websocket server', () => {
   });
 
   it('survives malformed and hostile messages and keeps the connection usable', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);
     a.ws.send('this is not json');
     await a.until('error', (m) => m.code === 'bad_message');
@@ -128,7 +148,7 @@ describe('websocket server', () => {
   });
 
   it('rejects messages that are too large', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);
     const closed = new Promise<number>((resolve) => a.ws.once('close', (code) => resolve(code)));
     a.ws.send('x'.repeat(MAX_MESSAGE_BYTES * 4));
@@ -140,7 +160,7 @@ describe('websocket server', () => {
   });
 
   it('answers input before joining a room with an error instead of crashing', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);
     a.send({ t: 'input', seq: 1, input: {} });
     await a.until('error', (m) => m.code === 'not_in_room');
@@ -149,7 +169,7 @@ describe('websocket server', () => {
   });
 
   it('reports unknown rooms and lets only the host start', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);
     const b = await connect(server.port);
     a.send({ t: 'join', room: 'ABCD', name: 'Anna' });
@@ -163,7 +183,7 @@ describe('websocket server', () => {
   });
 
   it('delivers lobby chat to everybody and the history to a late joiner', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);
     const b = await connect(server.port);
     a.send({ t: 'create', name: 'Anna' });
@@ -216,7 +236,7 @@ describe('websocket server', () => {
   });
 
   it('rejects connections from origins that are not allowed', async () => {
-    server = await startServer({ port: 0, stepMs: 20, allowedOrigins: ['https://good.example'] });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, allowedOrigins: ['https://good.example'] });
     await expect(connect(server.port, { Origin: 'https://evil.example' })).rejects.toThrow();
     // Browser senden immer einen Origin; ohne Header wird abgelehnt, sobald eine Liste gesetzt ist
     await expect(connect(server.port)).rejects.toThrow();
@@ -226,7 +246,7 @@ describe('websocket server', () => {
   });
 
   it('accepts origins regardless of case, spaces and trailing slash', async () => {
-    server = await startServer({ port: 0, stepMs: 20, allowedOrigins: [' HTTPS://Good.Example/ '] });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, allowedOrigins: [' HTTPS://Good.Example/ '] });
     const ok = await connect(server.port, { Origin: 'https://good.example' });
     ok.send({ t: 'create', name: 'Anna' });
     await ok.until('joined');
@@ -237,7 +257,7 @@ describe('websocket server', () => {
   });
 
   it('closes sockets that never join a room', async () => {
-    server = await startServer({ port: 0, stepMs: 20, idleMs: 100 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, idleMs: 100 });
     const idle = await connect(server.port);
     const busy = await connect(server.port);
     busy.send({ t: 'create', name: 'Anna' });
@@ -247,7 +267,7 @@ describe('websocket server', () => {
   });
 
   it('caps connections per IP (X-Forwarded-For first entry)', async () => {
-    server = await startServer({ port: 0, stepMs: 20, maxPerIp: 1 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, maxPerIp: 1 });
     const a = await connect(server.port, { 'X-Forwarded-For': '1.1.1.1, 10.0.0.1' });
     await expect(connect(server.port, { 'X-Forwarded-For': '1.1.1.1, 10.0.0.2' })).rejects.toThrow(/429/);
     const other = await connect(server.port, { 'X-Forwarded-For': '2.2.2.2' });
@@ -260,7 +280,7 @@ describe('websocket server', () => {
   });
 
   it('throttles a message flood without taking the server down', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);
     a.send({ t: 'create', name: 'Anna' });
     await a.until('joined');
@@ -272,7 +292,7 @@ describe('websocket server', () => {
   });
 
   it('refuses connections beyond the connection cap', async () => {
-    server = await startServer({ port: 0, stepMs: 20, maxConnections: 1 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, maxConnections: 1 });
     const a = await connect(server.port);
     await expect(connect(server.port)).rejects.toThrow(/503/);
     a.ws.close();
@@ -283,7 +303,7 @@ describe('websocket server', () => {
   });
 
   it('rejects the start promise when the port is taken and leaves no timers behind', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const failure = await startServer({ port: server.port }).then(
       () => null,
       (e: NodeJS.ErrnoException) => e,
@@ -296,7 +316,7 @@ describe('websocket server', () => {
   });
 
   it('closes clients with 1001 on shutdown', async () => {
-    server = await startServer({ port: 0, stepMs: 20 });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);
     const closed = new Promise<number>((resolve) => a.ws.once('close', (c) => resolve(c)));
     await server.close();
@@ -305,7 +325,7 @@ describe('websocket server', () => {
 
   it('evicts a room whose tick keeps failing, keeps ticking others and serves new connections', async () => {
     const errors: unknown[] = [];
-    server = await startServer({ port: 0, stepMs: 20, onError: (e) => errors.push(e) });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, onError: (e) => errors.push(e) });
     const a = await connect(server.port);
     const b = await connect(server.port);
     a.send({ t: 'create', name: 'Anna' });
@@ -326,7 +346,7 @@ describe('websocket server', () => {
 
   it('survives a throwing message handler and answers with a generic error', async () => {
     const errors: unknown[] = [];
-    server = await startServer({ port: 0, stepMs: 20, onError: (e) => errors.push(e) });
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, onError: (e) => errors.push(e) });
     const a = await connect(server.port);
     a.send({ t: 'create', name: 'Anna' });
     const { room } = await a.until('joined');

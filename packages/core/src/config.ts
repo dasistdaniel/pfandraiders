@@ -27,6 +27,8 @@ const UPGRADE_PRICES: readonly number[] = [150, 400, 900];
 export const CONFIG = {
   /** Standard-Rundenzeit (5 Minuten); der Host wählt in der Lobby 3, 5, 7 oder 10 Minuten */
   roundMs: 5 * 60 * 1000,
+  /** Countdown vor jeder Runde (5, 4, 3, 2, 1, LOS!); solange er läuft, steht die Welt still */
+  countdownMs: 5000,
   /** größter Zeitschritt, den ein einzelner step verarbeitet */
   maxStepMs: 100,
   /** Pixel pro Sekunde */

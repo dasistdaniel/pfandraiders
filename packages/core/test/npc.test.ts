@@ -221,7 +221,7 @@ describe('dog', () => {
 
 describe('roaming npcs', () => {
   it('never despawn over 10 simulated minutes and stay inside the map, never in solid tiles', () => {
-    const s = createGame(3, CITY_MAP, ['a', 'b'], { roundMs: 700000 });
+    const s = createGame(3, CITY_MAP, ['a', 'b'], { roundMs: 700000, countdownMs: 0 });
     s.nextNpcMs = 100;
     const idle: Input = { ...NO_INPUT };
     let count = 0;
@@ -465,7 +465,7 @@ describe('npc spawning', () => {
   const SPAWN_ROWS = ['#######', '#@N...#', '#######'];
 
   it('spawns an active npc at an entrance when the timer runs out and re-arms the timer', () => {
-    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
+    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1'], { countdownMs: 0 });
     s.nextNpcMs = 20;
     runSteps(s, {}, 2, 20);
     expect(s.npcs).toHaveLength(1);
@@ -482,7 +482,7 @@ describe('npc spawning', () => {
   });
 
   it('never exceeds the cap of active npcs', () => {
-    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
+    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1'], { countdownMs: 0 });
     for (let i = 0; i < CONFIG.npc.maxCount; i++) addNpc(s, 'dog', 72, 24).lifeMs = 1e9;
     s.nextNpcMs = 20;
     runSteps(s, {}, 2, 20);
@@ -490,7 +490,7 @@ describe('npc spawning', () => {
   });
 
   it('sitting and roaming npcs do not count toward the active cap', () => {
-    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
+    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1'], { countdownMs: 0 });
     for (let i = 0; i < CONFIG.npc.maxCount; i++) {
       const n = addNpc(s, 'dog', 72, 24);
       if (i === 0) {
@@ -510,7 +510,7 @@ describe('npc spawning', () => {
 
   it('never exceeds the hard cap of all npcs', () => {
     expect(CONFIG.npc.maxTotal).toBe(6);
-    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1']);
+    const s = createGame(1, parseMap(SPAWN_ROWS), ['p1'], { countdownMs: 0 });
     for (let i = 0; i < CONFIG.npc.maxTotal; i++) {
       const n = addNpc(s, 'dog', 72, 24);
       n.mood = 'idle';
@@ -522,7 +522,7 @@ describe('npc spawning', () => {
   });
 
   it('a roaming npc that spots a player hunts even beyond the active cap', () => {
-    const s = quiet(createGame(1, parseMap(SPAWN_ROWS), ['p1']));
+    const s = quiet(createGame(1, parseMap(SPAWN_ROWS), ['p1'], { countdownMs: 0 }));
     for (let i = 0; i < CONFIG.npc.maxCount; i++) addNpc(s, 'dog', 72, 24).lifeMs = 1e9;
     roaming(addNpc(s, 'dog', 72, 24));
     runSteps(s, {}, 1, 20);
@@ -530,7 +530,7 @@ describe('npc spawning', () => {
   });
 
   it('spawns nothing on a map without entrances', () => {
-    const s = createGame(1, parseMap(['#####', '#@..#', '#####']), ['p1']);
+    const s = createGame(1, parseMap(['#####', '#@..#', '#####']), ['p1'], { countdownMs: 0 });
     s.nextNpcMs = 20;
     runSteps(s, {}, 2, 20);
     expect(s.npcs).toHaveLength(0);
@@ -539,7 +539,7 @@ describe('npc spawning', () => {
 
 describe('npc determinism', () => {
   function run(seed: number): string {
-    const s = createGame(seed, CITY_MAP, ['a', 'b'], { roundMs: 400000 });
+    const s = createGame(seed, CITY_MAP, ['a', 'b'], { roundMs: 400000, countdownMs: 0 });
     s.nextNpcMs = 100;
     const idle: Input = { ...NO_INPUT };
     for (let t = 0; t < 2000; t++) step(s, { a: idle, b: idle }, 100);
@@ -616,7 +616,7 @@ describe('pathfinding around walls', () => {
 
   it('roaming npcs only pick wander goals they can walk to and never get stuck at the wall', () => {
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const s = quiet(createGame(seed, parseMap(WALLED), ['p1']));
+      const s = quiet(createGame(seed, parseMap(WALLED), ['p1'], { countdownMs: 0 }));
       const cop = roaming(addNpc(s, 'police', 152, 88));
       let wasPaused = true;
       for (let t = 0; t < 1500; t++) {

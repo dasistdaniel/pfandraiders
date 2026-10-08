@@ -17,6 +17,8 @@ export function isValidSnapshot(x: unknown): x is Snapshot {
   if (!isObj(x)) return false;
   if (!fin(x.tick) || x.tick < 0 || !fin(x.timeLeftMs)) return false;
   if (x.phase !== 'running' && x.phase !== 'ended') return false;
+  // Countdown vor der Runde; fehlt bei älteren Servern (dann gibt es keinen)
+  if (x.countdownMs !== undefined && (!fin(x.countdownMs) || x.countdownMs < 0)) return false;
   if (!isObj(x.players)) return false;
   for (const p of Object.values(x.players)) {
     if (!isObj(p) || typeof p.id !== 'string') return false;

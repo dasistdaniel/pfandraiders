@@ -16,6 +16,7 @@ import { advanceClock, dogAnim, npcLook, policeAnim } from '../npcAnim';
 import type { AnimClock } from '../npcAnim';
 import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
+import { CountdownDisplay, musicModeFor } from '../countdown';
 import { PlayerHud } from '../hud';
 import { music, sfx, unlockAudio } from '../sfx';
 import { PLING_GAP_SEC } from '../sound';
@@ -125,6 +126,8 @@ export class GameScene extends Phaser.Scene {
   private roundTotalMs = 0;
   /** Esc-Menü (lokal pausiert es das Spiel, online läuft es weiter). */
   private pause = new PauseMenu();
+  /** Countdown vor der Runde (5..1, LOS!); in jedem Viewport mittig im HUD */
+  private countdown = new CountdownDisplay();
   /** Eigene Kamera über dem ganzen Bild, die nur das Esc-Menü zeigt. */
   private pauseCam: Phaser.Cameras.Scene2D.Camera | null = null;
   private pauseUi: PauseUi | null = null;
@@ -166,6 +169,7 @@ export class GameScene extends Phaser.Scene {
     this.notices = new Notices();
     this.roundTotalMs = 0;
     this.pause = new PauseMenu();
+    this.countdown = new CountdownDisplay();
     this.pauseCam = null;
     this.pauseUi = null;
     this.navPrev = {};
@@ -478,15 +482,20 @@ export class GameScene extends Phaser.Scene {
       body.setScale(isSwinging(p) ? 1.15 : 1);
       this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
     }
-    this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id], this.notices.lines(slot.id)));
+    const countdownText = this.countdown.update(state.countdownMs, viewDelta, state.phase);
+    this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id], this.notices.lines(slot.id), countdownText));
   }
 
-  /** Musik folgt der Runde: schneller und dichter gegen Ende, nach Rundenende und in der lokalen Pause leise und ruhig. */
+  /**
+   * Musik folgt der Runde: schneller und dichter gegen Ende, nach Rundenende und in der lokalen Pause leise und ruhig.
+   * Während des Countdowns bleibt die bisherige Musik (Fortschritt 0, die Rundenzeit steht), mit "LOS!" beginnt die Spielmusik.
+   */
   private updateMusic(state: GameState, paused: boolean): void {
     if (Number.isFinite(state.timeLeftMs) && state.timeLeftMs > this.roundTotalMs) this.roundTotalMs = state.timeLeftMs;
     const progress = this.roundTotalMs > 0 ? 1 - state.timeLeftMs / this.roundTotalMs : 0;
     music.setProgress(progress);
-    music.setMode(state.phase === 'ended' || paused ? 'ended' : 'game');
+    const mode = musicModeFor(state, paused);
+    if (mode) music.setMode(mode);
   }
 
   /**

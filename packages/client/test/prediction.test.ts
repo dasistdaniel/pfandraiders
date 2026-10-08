@@ -103,7 +103,7 @@ function simulate(o: SimOptions) {
   const jitter = o.jitter ?? 0;
   const rand = rng(o.seed ?? 1);
   const jit = () => rand() * jitter;
-  const state = createGame(1, map, ['p1']);
+  const state = createGame(1, map, ['p1'], { countdownMs: 0 });
   const me = state.players.p1;
   const pred = new Predictor();
   pred.reset({ x: me.x, y: me.y });

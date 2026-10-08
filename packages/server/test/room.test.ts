@@ -20,16 +20,16 @@ class FakeConn implements Conn {
   }
 }
 
-function setup(opts: { roundMs?: number; mapId?: MapId } = {}) {
+function setup(opts: { roundMs?: number; mapId?: MapId; countdownMs?: number } = {}) {
   let time = 0;
-  const room = new Room('ABCD', { now: () => time, random: () => 0.5, roundMs: opts.roundMs, mapId: opts.mapId });
+  const room = new Room('ABCD', { now: () => time, random: () => 0.5, roundMs: opts.roundMs, mapId: opts.mapId, countdownMs: opts.countdownMs ?? 0 });
   const advance = (ms: number) => {
     time += ms;
   };
   return { room, advance };
 }
 
-function twoPlayers(opts: { roundMs?: number; mapId?: MapId } = {}) {
+function twoPlayers(opts: { roundMs?: number; mapId?: MapId; countdownMs?: number } = {}) {
   const { room, advance } = setup(opts);
   const a = new FakeConn();
   const b = new FakeConn();

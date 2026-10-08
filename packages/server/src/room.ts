@@ -70,6 +70,8 @@ export interface RoomOptions {
   emptyMs?: number;
   /** Feste Rundenlänge (Umgebung ROUND_MS, für Tests); hat Vorrang vor der Wahl des Hosts. */
   roundMs?: number;
+  /** Countdown vor jeder Runde (Standard CONFIG.countdownMs; für Tests kürzer oder 0). */
+  countdownMs?: number;
   now?: () => number;
   random?: () => number;
   /** Build des Servers für joined (Standard currentBuild()). */
@@ -98,6 +100,7 @@ export class Room {
   private readonly graceMs: number;
   private readonly emptyMs: number;
   private readonly fixedRoundMs: number | undefined;
+  private readonly countdownMs: number | undefined;
   /** Vom Host gewählte Rundenzeit */
   private chosenRoundMs: number = DEFAULT_ROUND_MS;
   /** Rangliste der letzten Runde, für Nachzügler in der Shop-Phase */
@@ -121,6 +124,7 @@ export class Room {
     // Ein leerer Raum darf nie vor Ablauf der Rückkehrfrist verschwinden
     this.emptyMs = Math.max(opts.emptyMs ?? SERVER_CONFIG.emptyRoomMs, this.graceMs + 15_000);
     this.fixedRoundMs = opts.roundMs;
+    this.countdownMs = opts.countdownMs;
     this.now = opts.now ?? (() => Date.now());
     this.random = opts.random ?? Math.random;
     this.build = opts.build ?? currentBuild();
@@ -351,7 +355,8 @@ export class Room {
     const ids = this.members.map((m) => m.id);
     const progress: Record<string, Progress> = {};
     for (const id of ids) progress[id] = this.progress.get(id) ?? freshProgress();
-    this.state = createGame(seed, this.map, ids, { roundMs: this.roundMs(), progress });
+    // Jede Runde (auch nach der Shop-Phase) beginnt mit dem Countdown; der Raum ist dabei schon 'playing'
+    this.state = createGame(seed, this.map, ids, { roundMs: this.roundMs(), progress, countdownMs: this.countdownMs });
     for (const m of this.members) {
       m.input = { ...NO_INPUT };
       m.ackSeq = 0;

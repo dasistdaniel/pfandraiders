@@ -13,6 +13,8 @@ export interface ServerOptions {
   allowedOrigins?: string[];
   stepMs?: number;
   roundMs?: number;
+  /** Countdown vor jeder Runde in ms (Standard CONFIG.countdownMs; für Tests). */
+  countdownMs?: number;
   /** Frist für die Rückkehr eines getrennten Spielers in ms. Standard SERVER_CONFIG.graceMs. */
   graceMs?: number;
   /** Karte der Räume. Standard DEFAULT_MAP_ID. */
@@ -296,6 +298,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const manager = new RoomManager({
     stepMs,
     roundMs: opts.roundMs,
+    countdownMs: opts.countdownMs,
     graceMs: opts.graceMs,
     mapId: opts.mapId,
     now: opts.now,

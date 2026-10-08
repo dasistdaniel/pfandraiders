@@ -185,6 +185,8 @@ export interface ZoneState {
 
 export interface GameState {
   tick: number;
+  /** Restzeit des Countdowns vor der Runde; solange > 0, zählt step() nur ihn herunter (Rundenzeit steht) */
+  countdownMs: number;
   timeLeftMs: number;
   phase: 'running' | 'ended';
   rngState: number;

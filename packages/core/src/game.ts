@@ -8,6 +8,8 @@ import type { GameState, MapData, Player, Point, Spot, SpotDef } from './types';
 
 export interface GameOptions {
   roundMs?: number;
+  /** Countdown vor der Runde (Standard CONFIG.countdownMs; 0 = die Runde läuft sofort) */
+  countdownMs?: number;
   /** Fortschritt aus früheren Runden der Serie je Spieler-id; fehlt ein Spieler, beginnt er leer. */
   progress?: Record<string, Progress>;
 }
@@ -22,6 +24,7 @@ export function createGame(
   if (new Set(playerIds).size !== playerIds.length) throw new Error('duplicate player id');
   const state: GameState = {
     tick: 0,
+    countdownMs: Math.max(0, options.countdownMs ?? CONFIG.countdownMs),
     timeLeftMs: options.roundMs ?? CONFIG.roundMs,
     phase: 'running',
     rngState: seed >>> 0,
