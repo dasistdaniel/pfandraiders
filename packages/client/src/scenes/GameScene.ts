@@ -403,7 +403,7 @@ export class GameScene extends Phaser.Scene {
     const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
     // Esc zählt hier nur, wenn das Esc-Menü nicht zuständig war (Rundenende, Wiederverbindung).
     // Online zählt nur das B des gewählten Gamepads, und nur am Rundenende: beim Wiederverbinden nur Esc,
-    // denn B ist Klauen und ein Verbindungsabbruch mitten im Klauen soll nicht hinauswerfen.
+    // denn B ist Ausrauben und ein Verbindungsabbruch mitten im Ausrauben soll nicht hinauswerfen.
     const padB = padBLeaves(this.online !== null, deviceBefore, this.padBPresses());
     const escMenu = !menuAllowed && escPressed;
     const menuPressed = escMenu || padB;
