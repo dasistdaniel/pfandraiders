@@ -41,6 +41,9 @@ function npc(over: Partial<Npc> = {}): Npc {
     cooldownMs: 0,
     distractedMs: 0,
     checkMs: 0,
+    pathX: 0,
+    pathY: 0,
+    pathMs: 0,
     ...over,
   };
 }

@@ -1,3 +1,4 @@
+import type { DeviceRef } from './devices';
 import type { KeyState } from './input';
 
 /** Beschriftung der Tasten eines Geräts für Hinweistexte. */
@@ -97,4 +98,13 @@ export class EdgeTracker {
     this.prevFood = h.buyFood;
     return k;
   }
+}
+
+/**
+ * Zählt ein neu gedrücktes Gamepad-B (`pressed`: Indizes der Pads mit neuem B-Druck) als "zurück ins Menü"?
+ * Lokal jedes Pad. Online nur das gewählte Gerät, damit ein fremdes oder liegendes Pad nicht versehentlich hinauswirft.
+ */
+export function padBLeaves(online: boolean, device: DeviceRef | undefined, pressed: ReadonlySet<number>): boolean {
+  if (!online) return pressed.size > 0;
+  return device?.kind === 'pad' && pressed.has(device.index);
 }

@@ -17,14 +17,17 @@ import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
 import { music, sfx, unlockAudio } from '../sfx';
 import { PLING_GAP_SEC } from '../sound';
-import { detectSounds, snapshotForSound } from '../soundEvents';
+import { detectSeizures, detectSounds, snapshotForSound } from '../soundEvents';
+import { Notices } from '../notices';
 import { buildInput } from '../input';
 import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
 import { PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../pauseMenu';
 import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
+import { padBLeaves } from '../sources';
 import type { InputSource } from '../sources';
-import { playerName } from '../text';
+import { autoSwitchTarget, deviceLabel, loadAutoSwitch, loadOnlineDevice, saveOnlineDevice } from '../settings';
+import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
@@ -104,6 +107,8 @@ export class GameScene extends Phaser.Scene {
   /** Zustand des vorigen Frames für Sound-Ereignisse, null = noch keiner (erster Frame ohne Sounds) */
   private prevSoundState: GameState | null = null;
   private ownSoundIds: string[] | 'all' = 'all';
+  /** Kurze HUD-Hinweise je Spieler (Beschlagnahme durch die Polizei). */
+  private notices = new Notices();
   /** Nur online: läuft, solange die Verbindung weg ist und wir automatisch neu verbinden. */
   private plan: ReconnectPlan | null = null;
   private overlay: Phaser.GameObjects.Text | null = null;
@@ -125,6 +130,9 @@ export class GameScene extends Phaser.Scene {
   private navKeys!: Record<NavKey, Phaser.Input.Keyboard.Key>;
   private navPrev: Partial<Record<NavKey, boolean>> = {};
   private padNavPrev: Record<number, PadNav> = {};
+  /** Online: Auto-Wechsel aufs Gamepad erlaubt (Einstellung) und Index des Pads, dessen Taste zuletzt gedrückt wurde. */
+  private autoSwitch = true;
+  private pendingPad: number | null = null;
 
   constructor() {
     super('game');
@@ -148,12 +156,15 @@ export class GameScene extends Phaser.Scene {
     this.joinedSeen = false;
     this.padBPrev = {};
     this.prevSoundState = null;
+    this.notices = new Notices();
     this.roundTotalMs = 0;
     this.pause = new PauseMenu();
     this.pauseCam = null;
     this.pauseUi = null;
     this.navPrev = {};
     this.padNavPrev = {};
+    this.pendingPad = null;
+    this.autoSwitch = loadAutoSwitch();
     let state: GameState;
     this.playerColors = new Map();
     let localParams: URLSearchParams | null = null;
@@ -162,10 +173,10 @@ export class GameScene extends Phaser.Scene {
       this.conn = online;
       state = online.getState();
       this.mapId = online.mapId;
-      // Ein Spieler pro Browser, Tastatur 1. Farben kommen aus der Raumliste des Servers.
+      // Ein Spieler pro Browser mit dem Gerät aus den Einstellungen. Farben kommen aus der Raumliste des Servers.
       for (const r of online.roster) this.playerColors.set(r.id, r.color);
       this.slots = [
-        { id: online.you, color: this.playerColors.get(online.you) ?? ROOM_COLORS[0], device: { kind: 'keyboard', layout: 0 } },
+        { id: online.you, color: this.playerColors.get(online.you) ?? ROOM_COLORS[0], device: loadOnlineDevice() },
       ];
       // Neue Runde (Server schickt erneut `start`) und Verbindungsverlust
       online.onStart = () => this.scene.restart({ online });
@@ -334,14 +345,23 @@ export class GameScene extends Phaser.Scene {
     // Tastatur und Maus schaltet der Modul-Listener frei, das Gamepad hier
     const unlock = (): void => unlockAudio();
     this.input.gamepad?.on('down', unlock);
+    // Online: merkt sich das Pad für den Auto-Wechsel (ausgewertet am Anfang von update)
+    const padDown = (pad: Phaser.Input.Gamepad.Gamepad): void => {
+      if (this.online) this.pendingPad = pad.index;
+    };
+    this.input.gamepad?.on('down', padDown);
     this.events.once('shutdown', () => {
       this.input.gamepad?.off('down', unlock);
+      this.input.gamepad?.off('down', padDown);
       if (this.online) this.online.onJoined = null;
     });
   }
 
   update(_time: number, delta: number): void {
     // Esc genau einmal je Frame lesen (kein alter Druck bleibt liegen); die Menütasten ebenfalls jeden Frame.
+    // Gerät für B als 'zurück' vor dem Auto-Wechsel: der Druck, der wechselt, soll nicht zugleich hinauswerfen
+    const deviceBefore = this.slots[0]?.device;
+    this.applyAutoSwitch();
     const escPressed = Phaser.Input.Keyboard.JustDown(this.menuKey);
     const nav = this.readMenuNav();
     // Das Esc-Menü gibt es nur in der laufenden Runde ohne Wiederverbindung; sonst gilt das bisherige Esc.
@@ -370,10 +390,12 @@ export class GameScene extends Phaser.Scene {
     const restartPressed = Phaser.Input.Keyboard.JustDown(this.restartKey);
     const confirmPressed = this.sources.map((s) => s.confirmPressed()).some(Boolean);
     // Esc zählt hier nur, wenn das Esc-Menü nicht zuständig war (Rundenende, Wiederverbindung).
-    // Online nur Esc: das Gamepad-B gehört keinem lokalen Slot und soll nicht versehentlich verlassen
-    const padB = !this.online && this.padBPressed();
-    const menuPressed = (!menuAllowed && escPressed) || padB;
-    if (this.plan && this.tickReconnect(delta, menuPressed)) return;
+    // Online zählt nur das B des gewählten Gamepads, und nur am Rundenende: beim Wiederverbinden nur Esc,
+    // denn B ist Klauen und ein Verbindungsabbruch mitten im Klauen soll nicht hinauswerfen.
+    const padB = padBLeaves(this.online !== null, deviceBefore, this.padBPresses());
+    const escMenu = !menuAllowed && escPressed;
+    const menuPressed = escMenu || padB;
+    if (this.plan && this.tickReconnect(delta, this.online ? escMenu : menuPressed)) return;
     if (state.phase === 'ended') this.endedForMs += delta;
     if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && menuPressed) {
       if (this.online) {
@@ -402,6 +424,8 @@ export class GameScene extends Phaser.Scene {
     for (const id of detectSounds(this.prevSoundState, state, this.ownSoundIds)) {
       sfx.play(id, id === 'pling' ? PLING_GAP_SEC * plings++ : 0);
     }
+    this.notices.tick(viewDelta);
+    for (const z of detectSeizures(this.prevSoundState, state, this.ownSoundIds)) this.notices.show(z.id, seizeText(z.count));
     this.prevSoundState = snapshotForSound(state);
 
     state.spots.forEach((spot, i) => {
@@ -436,7 +460,7 @@ export class GameScene extends Phaser.Scene {
       body.setAlpha(unconscious ? 0.6 : 1);
       this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
     }
-    this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
+    this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id], this.notices.lines(slot.id)));
   }
 
   /** Musik folgt der Runde: schneller und dichter gegen Ende, nach Rundenende und in der lokalen Pause leise und ruhig. */
@@ -662,14 +686,34 @@ export class GameScene extends Phaser.Scene {
     return false;
   }
 
-  /** Flanke von Gamepad-B; beim ersten Blick auf ein Pad nur den Zustand merken (gehaltene Taste zählt nicht). */
-  private padBPressed(): boolean {
-    let pressed = false;
+  /**
+   * Online, Tastatur gewählt, Auto-Wechsel an und eine Gamepad-Taste gedrückt: Steuerung auf dieses Pad
+   * umstellen und speichern. Die neue Quelle wird einmal gelesen, damit der auslösende Druck keinen Kauf auslöst.
+   */
+  private applyAutoSwitch(): void {
+    const padIndex = this.pendingPad;
+    this.pendingPad = null;
+    const slot = this.slots[0];
+    if (!this.online || padIndex === null || !slot) return;
+    const next = autoSwitchTarget(slot.device, this.autoSwitch, padIndex);
+    if (!next) return;
+    slot.device = next;
+    saveOnlineDevice(next);
+    const source = createSource(this, next);
+    source.read();
+    this.sources[0] = source;
+    this.huds[0]?.setLabels(source.labels);
+    this.notices.show(slot.id, `Steuerung: ${deviceLabel(next)}`);
+  }
+
+  /** Pads mit neuem B-Druck; beim ersten Blick auf ein Pad nur den Zustand merken (gehaltene Taste zählt nicht). */
+  private padBPresses(): Set<number> {
+    const pressed = new Set<number>();
     for (const pad of this.input.gamepad?.gamepads ?? []) {
       if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
       const prev = this.padBPrev[pad.index];
       this.padBPrev[pad.index] = pad.B;
-      if (prev !== undefined && pad.B && !prev) pressed = true;
+      if (prev !== undefined && pad.B && !prev) pressed.add(pad.index);
     }
     return pressed;
   }

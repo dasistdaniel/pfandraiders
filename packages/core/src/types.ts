@@ -131,6 +131,10 @@ export interface Npc {
   distractedMs: number;
   /** Polizei: wie lange die laufende Kontrolle schon dauert */
   checkMs: number;
+  /** Jagd um Wände herum: aktueller Wegpunkt (Kachelmitte) und Zeit bis zur nächsten Wegsuche (0 = sofort) */
+  pathX: number;
+  pathY: number;
+  pathMs: number;
 }
 
 export type ZonePhase = 'idle' | 'announced' | 'active';

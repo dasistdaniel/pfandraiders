@@ -84,6 +84,10 @@ export const CONFIG = {
     wanderProgressPx: 4,
     /** Pause zwischen zwei Wegstücken */
     wanderPauseMs: [1500, 4000] as Range,
+    /** Ist der direkte Weg zum Ziel verbaut, sucht der NPC höchstens so oft einen neuen Weg um die Wände (ms) */
+    pathEveryMs: 300,
+    /** So nah am Wegpunkt gilt er als erreicht, dann wird sofort der nächste gesucht (px) */
+    pathArrivePx: 1.5,
     firstSpawnMs: 15000,
     spawnEveryMs: [20000, 40000] as Range,
     dogChance: 0.6,

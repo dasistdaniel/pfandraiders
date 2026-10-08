@@ -3,7 +3,7 @@ import type { GameState } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
 import { formatMoney } from '../src/format';
-import { alertText, hintLines, playerName, resultFooter, resultLines, resultRows, statusLines } from '../src/text';
+import { alertText, hintLines, playerName, resultFooter, resultLines, resultRows, seizeText, statusLines } from '../src/text';
 
 const KEYS: KeyLabels = { action: 'E', upgrade: '1', item: '2', steal: 'Q', treat: '3', food: '4' };
 const KEYS2: KeyLabels = { action: 'Enter', upgrade: ',', item: '.', steal: '/', treat: ';', food: "'" };
@@ -233,7 +233,7 @@ describe('more alerts', () => {
 
   it('warns during a police check', () => {
     const s = shopGame();
-    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, mood: 'active', moodMs: 0, targetId: 'p1', restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 300 });
+    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, mood: 'active', moodMs: 0, targetId: 'p1', restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 300, pathX: 0, pathY: 0, pathMs: 0 });
     expect(alertText(s, s.players.p1)).toContain('KONTROLLE! Lauf weg!');
   });
 
@@ -290,7 +290,7 @@ describe('final review fixes', () => {
     const s = createGame(1, parseMap(['#####', '#@..#', '#####'], ZONES), ['p1', 'p2']);
     s.players.p1.unconsciousMs = 4000;
     s.players.p1.shieldMs = 2000;
-    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, mood: 'active', moodMs: 0, targetId: 'p1', restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 300 });
+    s.npcs.push({ id: 0, kind: 'police', x: 30, y: 24, lifeMs: 5000, mood: 'active', moodMs: 0, targetId: 'p1', restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 300, pathX: 0, pathY: 0, pathMs: 0 });
     s.zones[0].phase = 'announced';
     s.zones[0].timerMs = 5000;
     s.zones[1].phase = 'active';
@@ -364,5 +364,26 @@ describe('resultFooter', () => {
 
   it('tells guests to wait', () => {
     expect(resultFooter('guest', KEYS)).toEqual(['Warte auf den Host…', 'Menü: Esc']);
+  });
+});
+
+describe('seizure notice', () => {
+  it('names the number of confiscated bottles', () => {
+    expect(seizeText(1)).toBe('1 Flasche beschlagnahmt!');
+    expect(seizeText(5)).toBe('5 Flaschen beschlagnahmt!');
+  });
+
+  it('shows notices first in the alert, before the other warnings', () => {
+    const s = shopGame();
+    s.players.p1.shieldMs = 2500;
+    s.players.p1.unconsciousMs = 0;
+    expect(alertText(s, s.players.p1, ['3 Flaschen beschlagnahmt!'])).toBe('3 Flaschen beschlagnahmt!\nSchutz 3 s');
+    expect(alertText(s, s.players.p1, [])).toBe('Schutz 3 s');
+  });
+
+  it('hides notices after the round', () => {
+    const s = shopGame();
+    s.phase = 'ended';
+    expect(alertText(s, s.players.p1, ['3 Flaschen beschlagnahmt!'])).toBe('');
   });
 });

@@ -3,6 +3,7 @@ import { CONFIG } from './config';
 import { distance } from './economy';
 import { damage } from './health';
 import { boxBlocked } from './map';
+import { lineClear, nextWaypoint } from './path';
 import { nextRandom, randInt } from './rng';
 import type { GameState, Npc, NpcKind, Player, Point } from './types';
 
@@ -15,6 +16,28 @@ function moveToward(state: GameState, npc: Npc, to: Point, speed: number, dtMs: 
   const dy = ((to.y - npc.y) / d) * step;
   if (!boxBlocked(state.map, npc.x + dx, npc.y, CONFIG.playerHalf)) npc.x += dx;
   if (!boxBlocked(state.map, npc.x, npc.y + dy, CONFIG.playerHalf)) npc.y += dy;
+}
+
+/**
+ * Jagt `to` um Wände herum. Ist die gerade Linie frei, läuft er direkt hin (wie moveToward).
+ * Sonst folgt er dem Wegpunkt aus der Breitensuche; neu gesucht wird höchstens alle pathEveryMs
+ * oder sobald der Wegpunkt erreicht ist. Ohne Weg läuft er geradeaus (rutscht an der Wand entlang).
+ */
+function chase(state: GameState, npc: Npc, to: Point, speed: number, dtMs: number): void {
+  npc.pathMs = Math.max(0, npc.pathMs - dtMs);
+  if (lineClear(state.map, npc, to)) {
+    npc.pathMs = 0; // verliert er die Sicht, sucht er sofort einen Weg
+    moveToward(state, npc, to, speed, dtMs);
+    return;
+  }
+  const way = { x: npc.pathX, y: npc.pathY };
+  if (npc.pathMs === 0 || distance(npc, way) <= CONFIG.npc.pathArrivePx) {
+    const next = nextWaypoint(state.map, npc, to) ?? to;
+    npc.pathX = next.x;
+    npc.pathY = next.y;
+    npc.pathMs = CONFIG.npc.pathEveryMs;
+  }
+  moveToward(state, npc, { x: npc.pathX, y: npc.pathY }, speed, dtMs);
 }
 
 function senseRadius(npc: Npc): number {
@@ -52,7 +75,9 @@ function pickTarget(state: GameState, npc: Npc): Player | null {
   const current = npc.targetId === null ? undefined : state.players[npc.targetId];
   if (current && wants(npc, current) && distance(npc, current) <= senseRadius(npc)) return current;
   const best = nearestTarget(state, npc);
-  npc.targetId = best ? best.id : null;
+  const id = best ? best.id : null;
+  if (id !== npc.targetId) npc.pathMs = 0; // neues Ziel: alten Wegpunkt verwerfen
+  npc.targetId = id;
   return best;
 }
 
@@ -81,7 +106,8 @@ function pickWander(state: GameState, npc: Npc): void {
     const dx = (nextRandom(state) * 2 - 1) * r;
     const dy = (nextRandom(state) * 2 - 1) * r;
     if (dx * dx + dy * dy > r * r) continue;
-    if (boxBlocked(state.map, npc.x + dx, npc.y + dy, CONFIG.playerHalf)) continue;
+    // nur Ziele, die er auf gerader Linie erreicht: sonst hinge er an einer Wand fest
+    if (!lineClear(state.map, npc, { x: npc.x + dx, y: npc.y + dy })) continue;
     npc.wanderX = npc.x + dx;
     npc.wanderY = npc.y + dy;
     break;
@@ -101,6 +127,7 @@ function startRoaming(state: GameState, npc: Npc): void {
   npc.targetId = null;
   npc.checkMs = 0;
   npc.pauseMs = 0;
+  npc.pathMs = 0;
   pickWander(state, npc);
 }
 
@@ -116,6 +143,7 @@ function tryEngage(state: GameState, npc: Npc): boolean {
   npc.lifeMs = staminaMs(npc.kind);
   npc.moodMs = 0;
   npc.pauseMs = 0;
+  npc.pathMs = 0;
   npc.targetId = target.id;
   return true;
 }
@@ -155,7 +183,7 @@ function updateDog(state: GameState, npc: Npc, dtMs: number): void {
     return;
   }
   if (distance(npc, target) > cfg.biteRadius) {
-    moveToward(state, npc, target, cfg.speed, dtMs);
+    chase(state, npc, target, cfg.speed, dtMs);
     return;
   }
   if (npc.cooldownMs > 0) return;
@@ -181,7 +209,7 @@ function updatePolice(state: GameState, npc: Npc, dtMs: number): void {
   if (target.id !== previous) npc.checkMs = 0;
   if (distance(npc, target) > cfg.controlRadius) {
     npc.checkMs = 0; // Spieler ist weg: Kontrolle beginnt von vorn
-    moveToward(state, npc, target, cfg.speed, dtMs);
+    chase(state, npc, target, cfg.speed, dtMs);
     return;
   }
   npc.checkMs += dtMs;
@@ -224,6 +252,9 @@ function trySpawn(state: GameState): void {
     cooldownMs: 0,
     distractedMs: 0,
     checkMs: 0,
+    pathX: at.x,
+    pathY: at.y,
+    pathMs: 0,
   });
 }
 

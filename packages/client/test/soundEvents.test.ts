@@ -1,7 +1,7 @@
-import { CITY_MAP, CONFIG, createGame } from '@pfandraiders/core';
+import { CITY_MAP, CONFIG, createGame, parseMap, projectSnapshot, stateFromSnapshot, step } from '@pfandraiders/core';
 import type { GameState, Npc } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
-import { detectSounds, PLING_MAX_STEP, PLING_RESET_MS, plingStep, snapshotForSound } from '../src/soundEvents';
+import { detectSeizures, detectSounds, PLING_MAX_STEP, PLING_RESET_MS, plingStep, snapshotForSound } from '../src/soundEvents';
 
 function fresh(): GameState {
   return createGame(1, CITY_MAP, ['a', 'b']);
@@ -16,7 +16,7 @@ function next(prev: GameState, edit: (s: GameState) => void): GameState {
 
 function npc(over: Partial<Npc>): Npc {
   return {
-    id: 99, kind: 'dog', x: 0, y: 0, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 0,
+    id: 99, kind: 'dog', x: 0, y: 0, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 0, pathX: 0, pathY: 0, pathMs: 0,
     ...over,
   };
 }
@@ -246,5 +246,74 @@ describe('plingStep', () => {
       last = t;
     }
     expect(step).toBe(PLING_MAX_STEP);
+  });
+});
+
+describe('detectSeizures', () => {
+  /** Polizist beendet die Kontrolle: Spieler a verliert Flaschen, der Polizist lässt a nun in Ruhe. */
+  function seized(): [GameState, GameState] {
+    const p = next(fresh(), (s) => {
+      s.players.a.bottles = { plastic: 3, glass: 2, crate: 0 };
+      s.npcs = [npc({ kind: 'police', targetId: 'a', checkMs: 1980 })];
+    });
+    const n = next(p, (s) => {
+      s.players.a.bottles = { plastic: 0, glass: 2, crate: 0 };
+      Object.assign(s.npcs[0], { mood: 'roaming', targetId: null, checkMs: 0, restId: 'a', restMs: 20000 });
+    });
+    return [p, n];
+  }
+
+  it('reports how many bottles the police took', () => {
+    const [p, n] = seized();
+    expect(detectSeizures(p, n, 'all')).toEqual([{ id: 'a', count: 3 }]);
+    expect(detectSeizures(p, n, ['a'])).toEqual([{ id: 'a', count: 3 }]);
+    expect(detectSeizures(p, n, ['b'])).toEqual([]);
+    expect(detectSeizures(null, n, 'all')).toEqual([]);
+    expect(detectSeizures(n, snapshotForSound(n), 'all')).toEqual([]);
+  });
+
+  it('plays policeSeize for the affected player only', () => {
+    const [p, n] = seized();
+    expect(detectSounds(p, n, 'all')).toEqual(['policeSeize']);
+    expect(detectSounds(p, n, ['b'])).toEqual([]);
+  });
+
+  it('ignores bottle losses without a police npc (theft, deposit) and a dog resting on the player', () => {
+    const p = next(fresh(), (s) => {
+      s.players.a.bottles = { plastic: 3, glass: 0, crate: 0 };
+      s.npcs = [npc({ kind: 'dog', targetId: 'a' })];
+    });
+    const n = next(p, (s) => {
+      s.players.a.bottles.plastic = 1;
+      Object.assign(s.npcs[0], { restId: 'a', restMs: 20000 });
+    });
+    expect(detectSeizures(p, n, 'all')).toEqual([]);
+  });
+
+  it('detects a real confiscation from the core, also through the online snapshot', () => {
+    const map = parseMap(['##########', '#@.......#', '##########']);
+    const s = createGame(1, map, ['a']);
+    s.nextNpcMs = 1e9;
+    s.players.a.containerLevel = 1;
+    s.players.a.bottles = { plastic: 4, glass: 0, crate: 0 };
+    s.npcs.push(npc({ id: 1, kind: 'police', x: 40, y: 24, lifeMs: 30000 }));
+    let prevLocal = snapshotForSound(s);
+    let prevOnline = stateFromSnapshot(map, projectSnapshot(s, 'a'));
+    const local: unknown[] = [];
+    const online: unknown[] = [];
+    for (let t = 0; t < 150; t++) {
+      step(s, {}, 20);
+      const nowLocal = snapshotForSound(s);
+      local.push(...detectSeizures(prevLocal, nowLocal, 'all'));
+      prevLocal = nowLocal;
+      if (t % 3 === 0) {
+        // online kommt nur jeder dritte Zustand an (20 Hz)
+        const nowOnline = stateFromSnapshot(map, projectSnapshot(s, 'a'));
+        online.push(...detectSeizures(prevOnline, nowOnline, ['a']));
+        prevOnline = nowOnline;
+      }
+    }
+    expect(local).toEqual([{ id: 'a', count: 2 }]);
+    expect(online).toEqual([{ id: 'a', count: 2 }]);
   });
 });
