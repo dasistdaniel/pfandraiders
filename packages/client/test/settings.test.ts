@@ -7,6 +7,17 @@ import {
   saveMusicVolume,
   saveVolume,
   stepVolume,
+  autoSwitchTarget,
+  DEFAULT_ONLINE_DEVICE,
+  deviceLabel,
+  loadAutoSwitch,
+  loadOnlineDevice,
+  ONLINE_DEVICES,
+  parseDevice,
+  saveAutoSwitch,
+  saveOnlineDevice,
+  serializeDevice,
+  stepDevice,
   type KeyValueStore,
 } from '../src/settings';
 
@@ -127,5 +138,83 @@ describe('saveMusicVolume', () => {
     const store: KeyValueStore = { getItem: () => null, setItem: () => { throw new Error('full'); } };
     expect(() => saveMusicVolume(50, store)).not.toThrow();
     expect(() => saveMusicVolume(50)).not.toThrow();
+  });
+});
+
+describe('online control device', () => {
+  const store = (raw?: string): KeyValueStore & { map: Map<string, string> } => {
+    const s = memStore();
+    if (raw !== undefined) s.map.set('pfandraiders.onlineDevice', raw);
+    return s;
+  };
+
+  it('offers Tastatur 1 and 2 and Gamepad 1 to 4, Tastatur 1 is the default', () => {
+    expect(ONLINE_DEVICES.map(deviceLabel)).toEqual([
+      'Tastatur 1', 'Tastatur 2', 'Gamepad 1', 'Gamepad 2', 'Gamepad 3', 'Gamepad 4',
+    ]);
+    expect(DEFAULT_ONLINE_DEVICE).toEqual({ kind: 'keyboard', layout: 0 });
+  });
+
+  it('serializes and parses every device', () => {
+    for (const d of ONLINE_DEVICES) expect(parseDevice(serializeDevice(d))).toEqual(d);
+    expect(serializeDevice({ kind: 'pad', index: 2 })).toBe('pad:2');
+    expect(serializeDevice({ kind: 'keyboard', layout: 1 })).toBe('kb:1');
+  });
+
+  it.each([null, undefined, '', 'kb:2', 'pad:4', 'pad:-1', 'pad:1.5', 'mouse:0', 'kb:', 'pad:01x', '{}'])(
+    'parses %j to the default',
+    (raw) => {
+      expect(parseDevice(raw)).toEqual(DEFAULT_ONLINE_DEVICE);
+    },
+  );
+
+  it('loads and saves through the store, survives errors', () => {
+    const s = store();
+    expect(loadOnlineDevice(s)).toEqual(DEFAULT_ONLINE_DEVICE);
+    saveOnlineDevice({ kind: 'pad', index: 3 }, s);
+    expect(s.map.get('pfandraiders.onlineDevice')).toBe('pad:3');
+    expect(loadOnlineDevice(s)).toEqual({ kind: 'pad', index: 3 });
+    expect(loadOnlineDevice(store('garbage'))).toEqual(DEFAULT_ONLINE_DEVICE);
+    const broken: KeyValueStore = { getItem: () => { throw new Error('locked'); }, setItem: () => { throw new Error('full'); } };
+    expect(loadOnlineDevice(broken)).toEqual(DEFAULT_ONLINE_DEVICE);
+    expect(() => saveOnlineDevice({ kind: 'pad', index: 0 }, broken)).not.toThrow();
+    expect(loadOnlineDevice()).toEqual(DEFAULT_ONLINE_DEVICE);
+  });
+
+  it('cycles through the devices in both directions', () => {
+    expect(stepDevice({ kind: 'keyboard', layout: 0 }, 1)).toEqual({ kind: 'keyboard', layout: 1 });
+    expect(stepDevice({ kind: 'keyboard', layout: 1 }, 1)).toEqual({ kind: 'pad', index: 0 });
+    expect(stepDevice({ kind: 'pad', index: 3 }, 1)).toEqual({ kind: 'keyboard', layout: 0 });
+    expect(stepDevice({ kind: 'keyboard', layout: 0 }, -1)).toEqual({ kind: 'pad', index: 3 });
+  });
+});
+
+describe('auto switch', () => {
+  it('is on by default and stored as 1/0', () => {
+    const s = memStore();
+    expect(loadAutoSwitch(s)).toBe(true);
+    saveAutoSwitch(false, s);
+    expect(s.map.get('pfandraiders.autoSwitch')).toBe('0');
+    expect(loadAutoSwitch(s)).toBe(false);
+    saveAutoSwitch(true, s);
+    expect(loadAutoSwitch(s)).toBe(true);
+    s.map.set('pfandraiders.autoSwitch', 'kaputt');
+    expect(loadAutoSwitch(s)).toBe(true);
+    const broken: KeyValueStore = { getItem: () => { throw new Error('locked'); }, setItem: () => { throw new Error('full'); } };
+    expect(loadAutoSwitch(broken)).toBe(true);
+    expect(() => saveAutoSwitch(false, broken)).not.toThrow();
+  });
+
+  it('switches from a keyboard to the gamepad whose button was pressed', () => {
+    expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, true, 2)).toEqual({ kind: 'pad', index: 2 });
+    expect(autoSwitchTarget({ kind: 'keyboard', layout: 1 }, true, 0)).toEqual({ kind: 'pad', index: 0 });
+  });
+
+  it('does nothing when disabled, when a gamepad is already chosen or for unknown pads', () => {
+    expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, false, 0)).toBeNull();
+    expect(autoSwitchTarget({ kind: 'pad', index: 1 }, true, 0)).toBeNull();
+    expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, true, 4)).toBeNull();
+    expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, true, -1)).toBeNull();
+    expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, true, Number.NaN)).toBeNull();
   });
 });

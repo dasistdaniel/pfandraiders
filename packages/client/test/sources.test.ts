@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EdgeTracker, padToHeld, STICK_DEADZONE } from '../src/sources';
+import { EdgeTracker, padBLeaves, padToHeld, STICK_DEADZONE } from '../src/sources';
 import type { HeldKeys, PadSnapshot } from '../src/sources';
 
 const IDLE: PadSnapshot = {
@@ -106,5 +106,22 @@ describe('EdgeTracker', () => {
   it('passes movement and action through unchanged', () => {
     const t = new EdgeTracker();
     expect(t.apply(held({ left: true, action: true }))).toMatchObject({ left: true, action: true });
+  });
+});
+
+describe('padBLeaves', () => {
+  const pressed = (...i: number[]): Set<number> => new Set(i);
+
+  it('locally every gamepad B counts', () => {
+    expect(padBLeaves(false, undefined, pressed(2))).toBe(true);
+    expect(padBLeaves(false, { kind: 'keyboard', layout: 0 }, pressed(0))).toBe(true);
+    expect(padBLeaves(false, undefined, pressed())).toBe(false);
+  });
+
+  it('online only the B of the chosen gamepad counts', () => {
+    expect(padBLeaves(true, { kind: 'pad', index: 1 }, pressed(1))).toBe(true);
+    expect(padBLeaves(true, { kind: 'pad', index: 1 }, pressed(0, 2))).toBe(false);
+    expect(padBLeaves(true, { kind: 'keyboard', layout: 0 }, pressed(0))).toBe(false);
+    expect(padBLeaves(true, undefined, pressed(0))).toBe(false);
   });
 });

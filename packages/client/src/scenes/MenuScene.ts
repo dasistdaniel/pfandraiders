@@ -10,7 +10,8 @@ import { showOnlineMenu } from '../onlineMenu';
 import { music, sfx } from '../sfx';
 import { resolveServerUrl } from '../serverUrl';
 import { PAD_LABELS } from '../sources';
-import { stepVolume } from '../settings';
+import { deviceLabel, loadAutoSwitch, loadOnlineDevice, saveAutoSwitch, saveOnlineDevice, stepDevice, stepVolume } from '../settings';
+import type { DeviceRef } from '../devices';
 import { tileTexture } from '../textureKeys';
 
 const STICK_THRESHOLD = 0.5;
@@ -40,6 +41,8 @@ const SETTINGS_ITEMS: MenuItem[] = [
   { id: 'volume', label: 'Lautstärke' },
   { id: 'music', label: 'Musik' },
   { id: 'mute', label: 'Ton' },
+  { id: 'onlineDevice', label: 'Steuerung online' },
+  { id: 'autoSwitch', label: 'Auto-Wechsel' },
   { id: 'controls', label: 'Steuerung anzeigen' },
   { id: 'back', label: 'Zurück' },
 ];
@@ -69,6 +72,9 @@ const NOTICE_Y_MAIN = 236;
 const NOTICE_Y_SUB = 140;
 const ITEMS_TOP_MAIN = 276;
 const ITEMS_TOP_SUB = 200;
+/** Zeilenabstand der Einträge: Hauptseite 44 px, Einstellungen enger, damit Steuerungsübersicht und Hilfezeile darunter passen. */
+const ROW_H_MAIN = 44;
+const ROW_H_SUB = 36;
 const CREDITS_LAST_Y = 470;
 const CREDITS_ROW_H = Math.min(56, Math.floor((CREDITS_LAST_Y - CREDITS_TOP) / Math.max(1, CREDIT_ITEMS.length - 1)));
 const CREDITS_WRAP = GAME_W - 64;
@@ -88,6 +94,9 @@ export class MenuScene extends Phaser.Scene {
   private controlsText!: Phaser.GameObjects.Text;
   private keys!: Record<KeyName, Phaser.Input.Keyboard.Key>;
   private padPrev: Record<number, PadPrev> = {};
+  /** Gerät für das Online-Spiel und Auto-Wechsel aufs Gamepad (beide im Browser gespeichert). */
+  private onlineDevice: DeviceRef = { kind: 'keyboard', layout: 0 };
+  private autoSwitch = true;
 
   constructor() {
     super('menu');
@@ -108,6 +117,8 @@ export class MenuScene extends Phaser.Scene {
     this.showControls = false;
     this.busy = false;
     this.padPrev = {};
+    this.onlineDevice = loadOnlineDevice();
+    this.autoSwitch = loadAutoSwitch();
     this.itemTexts = [];
     this.detailTexts = [];
     this.model = new MenuModel(MAIN_ITEMS);
@@ -202,7 +213,7 @@ export class MenuScene extends Phaser.Scene {
       this.model.move(move);
       this.render();
     } else if (adjust !== 0) {
-      this.adjustVolume(adjust);
+      this.adjustSetting(adjust);
     } else if (confirm) {
       this.activate(this.model.activate());
     } else if (back) {
@@ -220,6 +231,9 @@ export class MenuScene extends Phaser.Scene {
     this.logo.setScale(main ? 1 : LOGO_SCALE_SUB);
     this.noticeText?.setY(main ? NOTICE_Y_MAIN : NOTICE_Y_SUB);
     const itemsTop = main ? ITEMS_TOP_MAIN : ITEMS_TOP_SUB;
+    const rowH = main ? ROW_H_MAIN : ROW_H_SUB;
+    // Steuerungsübersicht unter dem letzten Eintrag
+    this.controlsText.setY(itemsTop + this.model.items.length * rowH - rowH / 2 + 8);
     this.itemTexts = this.model.items.map((item, i) => {
       const t = credits
         ? this.add
@@ -232,7 +246,7 @@ export class MenuScene extends Phaser.Scene {
             })
             .setOrigin(0.5, 0)
         : this.add
-            .text(GAME_W / 2, itemsTop + i * 44, '', { fontFamily: 'monospace', fontSize: '24px', color: COLOR_NORMAL })
+            .text(GAME_W / 2, itemsTop + i * rowH, '', { fontFamily: 'monospace', fontSize: '24px', color: COLOR_NORMAL })
             .setOrigin(0.5);
       this.bindPointer(t, i);
       const entry = this.creditFor(item.id);
@@ -267,10 +281,10 @@ export class MenuScene extends Phaser.Scene {
       this.model.select(i);
       this.render();
       const id = this.model.activate();
-      if (id === 'volume' || id === 'music') {
-        // Nur ein Klick auf einen der Pfeile ändert die Lautstärke
+      if (id === 'volume' || id === 'music' || id === 'onlineDevice') {
+        // Nur ein Klick auf einen der Pfeile ändert den Wert
         const dir = arrowAt(this.labelFor(this.model.items[i]), localX, t.width);
-        if (dir !== 0) this.adjustVolume(dir);
+        if (dir !== 0) this.adjustSetting(dir);
         return;
       }
       this.activate(id);
@@ -287,6 +301,8 @@ export class MenuScene extends Phaser.Scene {
     if (item.id === 'volume') return `Lautstärke: ◄ ${sfx.volume} % ►`;
     if (item.id === 'music') return `Musik: ◄ ${music.volume} % ►`;
     if (item.id === 'mute') return `Ton: ${sfx.muted ? 'aus' : 'an'}`;
+    if (item.id === 'onlineDevice') return `Steuerung online: ◄ ${deviceLabel(this.onlineDevice)} ►`;
+    if (item.id === 'autoSwitch') return `Auto-Wechsel: ${this.autoSwitch ? 'an' : 'aus'}`;
     return item.label;
   }
 
@@ -318,6 +334,9 @@ export class MenuScene extends Phaser.Scene {
         sfx.toggleMute();
         this.render();
         break;
+      case 'autoSwitch':
+        this.toggleAutoSwitch();
+        break;
       case 'controls':
         this.showControls = !this.showControls;
         this.render();
@@ -331,7 +350,7 @@ export class MenuScene extends Phaser.Scene {
       default: {
         const entry = this.creditFor(id);
         if (entry) window.open(entry.url, '_blank', 'noopener,noreferrer');
-        // sonst 'volume' und 'music': ändern sich nur mit links/rechts
+        // sonst 'volume', 'music' und 'onlineDevice': ändern sich nur mit links/rechts
       }
     }
   }
@@ -350,9 +369,26 @@ export class MenuScene extends Phaser.Scene {
     if (this.page !== 'main') this.showPage('main');
   }
 
-  private adjustVolume(dir: -1 | 1): void {
+  private toggleAutoSwitch(): void {
+    this.autoSwitch = !this.autoSwitch;
+    saveAutoSwitch(this.autoSwitch);
+    this.render();
+  }
+
+  /** Links/rechts auf einer Reglerzeile (Lautstärke, Musik, Steuerung online, Auto-Wechsel). */
+  private adjustSetting(dir: -1 | 1): void {
     if (this.page !== 'settings') return;
     const id = this.model.activate();
+    if (id === 'onlineDevice') {
+      this.onlineDevice = stepDevice(this.onlineDevice, dir);
+      saveOnlineDevice(this.onlineDevice);
+      this.render();
+      return;
+    }
+    if (id === 'autoSwitch') {
+      this.toggleAutoSwitch();
+      return;
+    }
     if (id === 'volume') {
       const next = stepVolume(sfx.volume, dir);
       if (next === sfx.volume) return;

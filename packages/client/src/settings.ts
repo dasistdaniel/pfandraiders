@@ -1,3 +1,5 @@
+import type { DeviceRef } from './devices';
+
 export interface KeyValueStore {
   getItem(k: string): string | null;
   setItem(k: string, v: string): void;
@@ -64,4 +66,94 @@ export function stepVolume(v: number, dir: -1 | 1): number {
   if (!Number.isFinite(v)) return DEFAULT_VOLUME;
   const stepped = dir === 1 ? Math.floor(v / 10) * 10 + 10 : Math.ceil(v / 10) * 10 - 10;
   return clampVolume(stepped);
+}
+
+// ---- Steuerung online ----
+
+const ONLINE_DEVICE_KEY = 'pfandraiders.onlineDevice';
+const AUTO_SWITCH_KEY = 'pfandraiders.autoSwitch';
+
+/** Wählbare Geräte für den einen Online-Platz, in der Reihenfolge des Menüs. */
+export const ONLINE_DEVICES: readonly DeviceRef[] = [
+  { kind: 'keyboard', layout: 0 },
+  { kind: 'keyboard', layout: 1 },
+  { kind: 'pad', index: 0 },
+  { kind: 'pad', index: 1 },
+  { kind: 'pad', index: 2 },
+  { kind: 'pad', index: 3 },
+];
+
+export const DEFAULT_ONLINE_DEVICE: DeviceRef = { kind: 'keyboard', layout: 0 };
+
+const sameDevice = (a: DeviceRef, b: DeviceRef): boolean =>
+  a.kind === 'keyboard' ? b.kind === 'keyboard' && a.layout === b.layout : b.kind === 'pad' && a.index === b.index;
+
+/** Kopie, damit niemand die Einträge von ONLINE_DEVICES verändert. */
+const copy = (d: DeviceRef): DeviceRef => ({ ...d });
+
+/** "kb:0", "kb:1", "pad:0" bis "pad:3". */
+export function serializeDevice(d: DeviceRef): string {
+  return d.kind === 'keyboard' ? `kb:${d.layout}` : `pad:${d.index}`;
+}
+
+/** Gegenstück zu serializeDevice; alles Unbekannte ergibt Tastatur 1. */
+export function parseDevice(raw: string | null | undefined): DeviceRef {
+  const found = ONLINE_DEVICES.find((d) => serializeDevice(d) === raw);
+  return copy(found ?? DEFAULT_ONLINE_DEVICE);
+}
+
+/** Anzeige im Menü: "Tastatur 1", "Gamepad 3". */
+export function deviceLabel(d: DeviceRef): string {
+  return d.kind === 'keyboard' ? `Tastatur ${d.layout + 1}` : `Gamepad ${d.index + 1}`;
+}
+
+/** Nächstes oder voriges Gerät, zyklisch. */
+export function stepDevice(d: DeviceRef, dir: -1 | 1): DeviceRef {
+  const n = ONLINE_DEVICES.length;
+  const i = Math.max(0, ONLINE_DEVICES.findIndex((x) => sameDevice(x, d)));
+  return copy(ONLINE_DEVICES[(i + dir + n) % n]);
+}
+
+/** Gerät für das Online-Spiel. Wirft nie; ungültige Werte ergeben Tastatur 1. */
+export function loadOnlineDevice(store: KeyValueStore | undefined = defaultStore()): DeviceRef {
+  try {
+    return parseDevice(store?.getItem(ONLINE_DEVICE_KEY));
+  } catch {
+    return copy(DEFAULT_ONLINE_DEVICE);
+  }
+}
+
+export function saveOnlineDevice(d: DeviceRef, store: KeyValueStore | undefined = defaultStore()): void {
+  try {
+    store?.setItem(ONLINE_DEVICE_KEY, serializeDevice(d));
+  } catch {
+    // Speicher gesperrt: Wahl gilt nur für diese Sitzung
+  }
+}
+
+/** Auto-Wechsel aufs Gamepad (Standard an). Wirft nie. */
+export function loadAutoSwitch(store: KeyValueStore | undefined = defaultStore()): boolean {
+  try {
+    return store?.getItem(AUTO_SWITCH_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function saveAutoSwitch(on: boolean, store: KeyValueStore | undefined = defaultStore()): void {
+  try {
+    store?.setItem(AUTO_SWITCH_KEY, on ? '1' : '0');
+  } catch {
+    // Speicher gesperrt: Wahl gilt nur für diese Sitzung
+  }
+}
+
+/**
+ * Online mit Tastatur gespielt und eine Gamepad-Taste gedrückt: auf dieses Gamepad wechseln?
+ * Liefert das neue Gerät oder null (Auto-Wechsel aus, schon ein Gamepad gewählt, unbekanntes Pad).
+ */
+export function autoSwitchTarget(current: DeviceRef, enabled: boolean, padIndex: number): DeviceRef | null {
+  if (!enabled || current.kind !== 'keyboard') return null;
+  const target = ONLINE_DEVICES.find((d) => d.kind === 'pad' && d.index === padIndex);
+  return target ? copy(target) : null;
 }

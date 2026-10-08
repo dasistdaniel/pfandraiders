@@ -102,7 +102,7 @@ export class PlayerHud {
   private readonly barBg: Phaser.GameObjects.Rectangle;
   private readonly bar: Phaser.GameObjects.Rectangle;
 
-  constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private readonly labels: KeyLabels,
+  constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private labels: KeyLabels,
     private readonly nameOf: (id: string) => string,
     private readonly role: () => HudRole,
     private readonly colorOf: (id: string) => number = () => 0xffffff,
@@ -132,6 +132,11 @@ export class PlayerHud {
     }
     this.bar.setDepth(11);
     this.objects.push(...this.results.objects);
+  }
+
+  /** Anderes Gerät (online Auto-Wechsel aufs Gamepad): Tastenhinweise passen sich an. */
+  setLabels(labels: KeyLabels): void {
+    this.labels = labels;
   }
 
   /** `notices`: kurze Hinweise (etwa die Beschlagnahme), oben in der Warnung. */
