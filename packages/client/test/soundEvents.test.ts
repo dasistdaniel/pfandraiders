@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { detectSeizures, detectSounds, PLING_MAX_STEP, PLING_RESET_MS, plingStep, snapshotForSound } from '../src/soundEvents';
 
 function fresh(): GameState {
-  return createGame(1, CITY_MAP, ['a', 'b']);
+  return createGame(1, CITY_MAP, ['a', 'b'], { countdownMs: 0 });
 }
 
 /** Kopie des Zustands, auf die der Test Änderungen anwendet. */
@@ -26,6 +26,26 @@ describe('detectSounds', () => {
     const s = fresh();
     expect(detectSounds(null, s, 'all')).toEqual([]);
     expect(detectSounds(s, snapshotForSound(s), 'all')).toEqual([]);
+  });
+
+  it('ticks on the first frame of a countdown (the 5) and on every new second', () => {
+    const p = next(fresh(), (s) => { s.countdownMs = 5000; });
+    expect(detectSounds(null, p, 'all')).toEqual(['tick']);
+    const same = next(p, (s) => { s.countdownMs = 4050; });
+    expect(detectSounds(p, same, 'all')).toEqual([]);
+    const four = next(same, (s) => { s.countdownMs = 4000; });
+    expect(detectSounds(same, four, 'all')).toEqual(['tick']);
+    const one = next(p, (s) => { s.countdownMs = 1000; });
+    expect(detectSounds(next(p, (s) => { s.countdownMs = 1050; }), one, 'all')).toEqual(['tick']);
+    expect(detectSounds(one, next(p, (s) => { s.countdownMs = 950; }), 'all')).toEqual([]);
+  });
+
+  it('plays countdownGo when the countdown reaches zero, but not for a running round', () => {
+    const p = next(fresh(), (s) => { s.countdownMs = 40; });
+    const go = next(p, (s) => { s.countdownMs = 0; });
+    expect(detectSounds(p, go, 'all')).toEqual(['countdownGo']);
+    expect(detectSounds(go, snapshotForSound(go), 'all')).toEqual([]);
+    expect(detectSounds(null, go, 'all')).toEqual([]);
   });
 
   it('plays pickup when bottles increase', () => {
@@ -266,7 +286,7 @@ describe('detectSeizures', () => {
 
   it('detects a real confiscation from the core, also through the online snapshot', () => {
     const map = parseMap(['##########', '#@.......#', '##########']);
-    const s = createGame(1, map, ['a']);
+    const s = createGame(1, map, ['a'], { countdownMs: 0 });
     s.nextNpcMs = 1e9;
     s.players.a.containerLevel = 1;
     s.players.a.bottles = { plastic: 4, glass: 0, crate: 0 };

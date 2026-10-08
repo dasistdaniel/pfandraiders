@@ -61,6 +61,8 @@ const RECIPES: Record<SoundId, Recipe> = {
     notes: [{ f: 523, d: 0.15 }, { f: 659, d: 0.15 }, { f: 784, d: 0.15 }, { f: 1047, d: 0.5 }],
   },
   tick: { wave: 'square', gain: 0.35, notes: [{ f: 1800, d: 0.02 }] },
+  /** Ende des Countdowns ("LOS!"): höherer, längerer Ton */
+  countdownGo: { wave: 'square', gain: 0.45, notes: [{ f: 1568, d: 0.06 }, { f: 2093, d: 0.3 }] },
 };
 
 export function loadMuted(): boolean {

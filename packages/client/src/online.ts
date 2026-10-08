@@ -19,6 +19,7 @@ import type {
 } from '@pfandraiders/core';
 import { NO_INPUT } from '@pfandraiders/core';
 import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
+import { countdownLeft } from './countdown';
 import type { GameConnection } from './connection';
 import { interpolateSnapshot } from './interpolate';
 import { Predictor } from './prediction';
@@ -387,8 +388,10 @@ export class OnlineConnection implements GameConnection {
     const latest = this.buffer[this.buffer.length - 1].snap;
     const server = latest.players[this.you];
     // Ohne offene Verbindung geht keine Eingabe hinaus, nach Rundenende rechnet der Server nicht mehr:
-    // in beiden Fällen bleibt die Figur auf dem Server stehen, hier ebenso
-    const input = this.status === 'open' && latest.phase !== 'ended' ? this.pendingInput : NO_INPUT;
+    // in beiden Fällen bleibt die Figur auf dem Server stehen, hier ebenso. Während des Countdowns vor der Runde
+    // bewegt der Server niemanden: keine Vorhersage (die Eingabe geht trotzdem hinaus und wirkt ab "LOS!")
+    const live = this.status === 'open' && latest.phase !== 'ended' && countdownLeft(latest) === 0;
+    const input = live ? this.pendingInput : NO_INPUT;
     this.predictor.step(dt, input, server, this.map, this.clock);
     const pos = this.predictor.position;
     const shown = rendered.players[this.you];

@@ -4,7 +4,7 @@ import { LOCAL_STEP_MS, LocalConnection } from '../src/connection';
 
 // Ein Spieler auf einem kurzen Gang
 function soloGame() {
-  const state = createGame(1, parseMap(['#####', '#@..#', '#####']), ['p1']);
+  const state = createGame(1, parseMap(['#####', '#@..#', '#####']), ['p1'], { countdownMs: 0 });
   state.players.p1.money = 1000;
   return state;
 }

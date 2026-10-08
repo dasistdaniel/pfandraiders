@@ -12,6 +12,7 @@ import {
   totalBottles,
 } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
+import { countdownLeft } from './countdown';
 import type { KeyLabels } from './sources';
 import { formatMoney, formatTime } from './format';
 
@@ -39,7 +40,8 @@ export function statusLines(state: GameState, p: Player): string[] {
 }
 
 export function hintLines(state: GameState, p: Player, labels: KeyLabels): string[] {
-  if (state.phase === 'ended' || p.unconsciousMs > 0) return [];
+  // Vor dem Start (Countdown) geht nichts davon: keine Hinweise
+  if (state.phase === 'ended' || p.unconsciousMs > 0 || countdownLeft(state) > 0) return [];
   const lines: string[] = [];
 
   if (isNear(state.map.dropoffs, p)) {
