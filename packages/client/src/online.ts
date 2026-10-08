@@ -7,6 +7,7 @@ import type {
   Input,
   MapData,
   MapId,
+  RoomPhase,
   RosterEntry,
   ServerBuild,
   ServerMessage,
@@ -50,7 +51,8 @@ function sameInput(a: Input, b: Input): boolean {
     a.moveY === b.moveY &&
     a.action === b.action &&
     a.steal === b.steal &&
-    a.buy === b.buy
+    a.attack === b.attack &&
+    a.eat === b.eat
   );
 }
 
@@ -68,6 +70,8 @@ export class OnlineConnection implements GameConnection {
   serverBuild: ServerBuild | null = null;
   /** Lobby-Chat, älteste zuerst (höchstens CLIENT_CHAT_SIZE). chathistory ersetzt die Liste. */
   chat: ChatMessage[] = [];
+  /** Phase des Raums laut Server (lobby, playing, shop). */
+  roomPhase: RoomPhase = 'lobby';
 
   onJoined: (() => void) | null = null;
   onLobby: (() => void) | null = null;
@@ -83,7 +87,6 @@ export class OnlineConnection implements GameConnection {
   private clock = 0;
   private seq = 0;
   private pendingInput: Input = { ...NO_INPUT };
-  private pendingBuy: Input['buy'] = null;
   private lastSent: Input | null = null;
   private sinceSent = 0;
   private rendered: GameState | null = null;
@@ -133,7 +136,6 @@ export class OnlineConnection implements GameConnection {
         // schon geschlossen
       }
     }
-    this.pendingBuy = null; // ein während des Ausfalls gedrückter Kauf darf nicht nachträglich greifen
     this.status = 'connecting';
     let socket: SocketLike;
     try {
@@ -189,6 +191,12 @@ export class OnlineConnection implements GameConnection {
     if (this.isHost()) this.sendMsg({ t: 'start' });
   }
 
+  /** Shop-Phase: bereit oder nicht mehr bereit (der Server prüft die Phase). */
+  setReady(ready: boolean): void {
+    if (this.status !== 'open') return;
+    this.sendMsg({ t: 'ready', ready });
+  }
+
   /** Raum absichtlich verlassen: der Server gibt den Platz sofort frei. Schließt die Verbindung nicht selbst. */
   leave(): void {
     if (this.status !== 'open') return;
@@ -229,6 +237,7 @@ export class OnlineConnection implements GameConnection {
       case 'lobby':
         this.host = msg.host;
         this.roster = msg.players;
+        this.roomPhase = msg.phase;
         this.onLobby?.();
         break;
       case 'start':
@@ -276,6 +285,9 @@ export class OnlineConnection implements GameConnection {
         this.onChat?.();
         break;
       }
+      case 'phase':
+        this.roomPhase = msg.phase;
+        break;
       case 'error':
         this.onError?.(msg.code, msg.message);
         break;
@@ -286,9 +298,7 @@ export class OnlineConnection implements GameConnection {
 
   setInput(playerId: string, input: Input): void {
     if (playerId !== this.you) return;
-    // Ein Kaufbefehl geht nicht verloren, wenn der nächste Frame "nicht gedrückt" meldet.
-    if (input.buy !== null) this.pendingBuy = input.buy;
-    this.pendingInput = { ...input, buy: null };
+    this.pendingInput = { ...input };
   }
 
   update(deltaMs: number): void {
@@ -336,14 +346,13 @@ export class OnlineConnection implements GameConnection {
 
   private sendInputIfNeeded(): void {
     if (!this.map || this.status !== 'open') return;
-    const input: Input = { ...this.pendingInput, buy: this.pendingBuy };
+    const input: Input = { ...this.pendingInput };
     const changed = this.lastSent === null || !sameInput(this.lastSent, input);
     if (!changed && this.sinceSent < HEARTBEAT_MS) return;
     this.sendMsg({ t: 'input', seq: ++this.seq, input });
     this.predictor.noteSent(this.seq, this.clock);
     this.lastSent = input;
     this.sinceSent = 0;
-    this.pendingBuy = null;
   }
 
   private computeRendered(): GameState | null {

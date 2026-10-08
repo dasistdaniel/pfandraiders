@@ -408,7 +408,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && !this.plan && (restartPressed || confirmPressed)) {
       if (this.online) {
-        this.online.requestStart(); // nur der Host löst aus, alle bekommen danach `start`
+        // Zwischen den Runden: alle melden "bereit", der Server startet die nächste Runde der Serie
+        this.online.setReady(true);
       } else {
         this.scene.restart({ slots: this.slots });
         return;

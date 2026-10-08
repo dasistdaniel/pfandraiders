@@ -22,20 +22,14 @@ function axis(negative: boolean, positive: boolean): -1 | 0 | 1 {
   return ((positive ? 1 : 0) - (negative ? 1 : 0)) as -1 | 0 | 1;
 }
 
+/** Die früheren Kauftasten (buy*) wirken nicht mehr; Schlagen und Essen bekommen in Plan 2 eigene Tasten. */
 export function buildInput(k: KeyState): Input {
   return {
     moveX: axis(k.left, k.right),
     moveY: axis(k.up, k.down),
     action: k.action,
     steal: k.steal,
-    buy: k.buyUpgrade
-      ? 'upgrade'
-      : k.buyItem
-        ? 'bolt_cutters'
-        : k.buyTreat
-          ? 'dog_treat'
-          : k.buyFood
-            ? 'food'
-            : null,
+    attack: false,
+    eat: false,
   };
 }

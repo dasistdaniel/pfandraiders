@@ -71,7 +71,7 @@ export function detectSounds(
       const pt = prev.players[t.id];
       if (!pt || t.id === v.id) continue;
       if (totalBottles(t.bottles) <= totalBottles(pt.bottles)) continue;
-      if (t.stealCooldownMs > pt.stealCooldownMs || (pt.item === 'bolt_cutters' && t.item === null)) {
+      if (t.stealCooldownMs > pt.stealCooldownMs || (pt.inventory.bolt_cutters && !t.inventory.bolt_cutters)) {
         thiefId = t.id;
         break;
       }
@@ -93,9 +93,9 @@ export function detectSounds(
     // Abgabe am Pfandautomaten: pro Flasche ein Pling
     if (p.money > q.money && bottlesNow < bottlesBefore) plings += bottlesBefore - bottlesNow;
 
-    // Geld sinkt bei Bewusstsein nur durch Käufe (Umfallen verliert Geld, aber bewusstlos)
+    // Geld sinkt bei Bewusstsein nur durch Käufe
     const spent = p.money < q.money && q.unconsciousMs === 0 && p.unconsciousMs === 0;
-    if (p.containerLevel > q.containerLevel || (q.item === null && p.item !== null) || spent) {
+    if (p.containerLevel > q.containerLevel || spent) {
       out.add('buy');
     }
 
@@ -174,7 +174,7 @@ function dogNear(state: GameState, p: Player): boolean {
 export function snapshotForSound(state: GameState): GameState {
   const players: GameState['players'] = {};
   for (const [id, p] of Object.entries(state.players)) {
-    players[id] = { ...p, bottles: { ...p.bottles }, spawn: { ...p.spawn } };
+    players[id] = { ...p, bottles: { ...p.bottles }, inventory: { ...p.inventory }, upgrades: { ...p.upgrades }, spawn: { ...p.spawn } };
   }
   return {
     ...state,

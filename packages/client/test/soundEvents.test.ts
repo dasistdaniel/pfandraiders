@@ -56,12 +56,11 @@ describe('detectSounds', () => {
     expect(detectSounds(p, robbed, ['a'])).not.toContain('pling');
   });
 
-  it('plays buy for upgrade, item and food', () => {
+  it('plays buy for a container upgrade and for spending', () => {
     const p = next(fresh(), (s) => { s.players.a.money = 1000; });
     expect(detectSounds(p, next(p, (s) => { s.players.a.containerLevel++; s.players.a.money -= 300; }), 'all')).toEqual(['buy']);
-    expect(detectSounds(p, next(p, (s) => { s.players.a.item = 'dog_treat'; s.players.a.money -= 100; }), 'all')).toEqual(['buy']);
     const hungry = next(p, (s) => { s.players.a.health = 40; });
-    const fed = next(hungry, (s) => { s.players.a.money -= CONFIG.health.food.price; s.players.a.health += CONFIG.health.food.heal; });
+    const fed = next(hungry, (s) => { s.players.a.money -= 100; s.players.a.health += CONFIG.health.food.heal; });
     expect(detectSounds(hungry, fed, 'all')).toEqual(['buy']);
   });
 
@@ -115,16 +114,24 @@ describe('detectSounds', () => {
   it('recognises a bolt-cutter theft and keeps it silent for bystanders', () => {
     const p = next(fresh(), (s) => {
       s.players.b.bottles.glass = 3;
-      s.players.a.item = 'bolt_cutters';
+      s.players.a.inventory.bolt_cutters = true;
     });
     const n = next(p, (s) => {
       s.players.b.bottles.glass = 0;
       s.players.b.shieldMs = 3000;
       s.players.a.bottles.glass = 3;
-      s.players.a.item = null;
+      s.players.a.inventory.bolt_cutters = false;
     });
     expect(detectSounds(p, n, 'all')).toEqual(['stealSuccess']);
     expect(detectSounds(p, n, ['x'])).toEqual([]);
+  });
+
+  it('copies the inventory deeply so a used bolt cutter is seen in the local game', () => {
+    const s = fresh();
+    s.players.a.inventory.bolt_cutters = true;
+    const copy = snapshotForSound(s);
+    s.players.a.inventory.bolt_cutters = false;
+    expect(copy.players.a.inventory.bolt_cutters).toBe(true);
   });
 
   it('plays bite on a large health drop but not on hunger', () => {

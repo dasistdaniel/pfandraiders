@@ -66,6 +66,8 @@ const ERRORS: Record<ErrorCode, string> = {
   too_many_rooms: 'Der Server ist ausgelastet.',
   chat_too_fast: 'Zu schnell.',
   chat_closed: 'Chat gibt es nur in der Lobby.',
+  wrong_phase: 'Das geht gerade nicht.',
+  cannot_buy: 'Kauf abgelehnt.',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(
