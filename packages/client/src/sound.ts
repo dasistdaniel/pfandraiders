@@ -35,6 +35,10 @@ const RECIPES: Record<SoundId, Recipe> = {
   stealSuccess: { wave: 'square', gain: 0.5, notes: [{ f: 700, d: 0.3, to: 200 }] },
   bite: { wave: 'sawtooth', gain: 0.9, notes: [{ f: 0, d: 0.12 }], noise: true },
   knockout: { wave: 'triangle', gain: 0.9, notes: [{ f: 440, d: 0.7, to: 70 }] },
+  /** eigener Schlag: kurzer dumpfer Luftzug */
+  punch: { wave: 'sawtooth', gain: 0.6, notes: [{ f: 0, d: 0.06 }], noise: true },
+  /** selbst getroffen: tiefer Schlag mit Abfall */
+  hit: { wave: 'square', gain: 0.8, notes: [{ f: 220, d: 0.15, to: 90 }] },
   policeCheck: {
     wave: 'square',
     gain: 0.4,

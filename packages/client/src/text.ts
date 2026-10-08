@@ -3,6 +3,8 @@ import {
   capacityOf,
   CONFIG,
   containerOf,
+  findAttackTarget,
+  findLootTarget,
   findSearchableSpot,
   findStealTarget,
   isBeingChecked,
@@ -18,14 +20,22 @@ export function playerName(id: string): string {
   return id.toUpperCase();
 }
 
+/** Inventar als kurze Teile, nur was vorhanden ist. */
+function inventoryParts(p: Player): string[] {
+  const parts: string[] = [];
+  if (p.inventory.food > 0) parts.push(`Essen ${p.inventory.food}`);
+  if (p.inventory.dog_treat > 0) parts.push(`Leckerli ${p.inventory.dog_treat}`);
+  if (p.inventory.bolt_cutters) parts.push('Bolzenschneider');
+  return parts;
+}
+
 export function statusLines(state: GameState, p: Player): string[] {
   const lines = [
     `Zeit ${formatTime(state.timeLeftMs)}   Geld ${formatMoney(p.money)}`,
     `${containerOf(p).name} ${totalBottles(p.bottles)}/${capacityOf(p)}` +
       `   Pl${p.bottles.plastic} Gl${p.bottles.glass} Ka${p.bottles.crate}`,
   ];
-  const health = `Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`;
-  lines.push(health);
+  lines.push([`Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`, ...inventoryParts(p)].join('   '));
   return lines;
 }
 
@@ -45,9 +55,15 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   if (findSearchableSpot(state, p)) {
     lines.push(full ? 'Container voll' : `[${labels.action} drücken, halten] Suchen`);
   }
+  if (!full && findLootTarget(state, p)) lines.push(`[${labels.steal}] Ausrauben`);
   if (!full && findStealTarget(state, p)) {
     if (p.stealCooldownMs > 0) lines.push(`Klauen in ${Math.ceil(p.stealCooldownMs / 1000)} s`);
     else lines.push(p.inventory.bolt_cutters ? `[${labels.steal}] Bolzenschneider einsetzen` : `[${labels.steal}] Klauen`);
+  }
+  if (p.attackCooldownMs === 0 && findAttackTarget(state, p)) lines.push(`[${labels.attack}] Schlagen`);
+  const food = p.inventory.food;
+  if (food > 0 && p.health <= CONFIG.health.max - CONFIG.health.food.heal) {
+    lines.push(`[${labels.eat}] Essen (+${CONFIG.health.food.heal} Leben, noch ${food})`);
   }
   return lines;
 }
@@ -61,7 +77,9 @@ export function seizeText(count: number): string {
 export function alertText(state: GameState, p: Player, notices: string[] = []): string {
   if (state.phase === 'ended') return '';
   const lines: string[] = [...notices];
-  if (p.unconsciousMs > 0) lines.push(`Bewusstlos! Noch ${Math.ceil(p.unconsciousMs / 1000)} s`);
+  if (p.unconsciousMs > 0) {
+    lines.push(`Bewusstlos! Noch ${Math.ceil(p.unconsciousMs / 1000)} s${p.robbed ? ' (ausgeraubt)' : ''}`);
+  }
   if (isBeingChecked(state, p.id)) lines.push('KONTROLLE! Lauf weg!');
   if (p.shieldMs > 0) lines.push(`Schutz ${Math.ceil(p.shieldMs / 1000)} s`);
   for (const z of state.zones) {
@@ -80,7 +98,7 @@ export function resultLines(
   const places = ranking(state).map(
     (r, i) => `${i + 1}. ${nameOf(r.id)}  ${formatMoney(r.round)}`,
   );
-  return ['Runde vorbei!', ...places, '', `Neue Runde: R oder ${labels.action}`];
+  return ['Runde vorbei!', ...places, '', `Weiter zum Shop: R oder ${labels.action}`];
 }
 
 export interface ResultRow {
@@ -119,7 +137,12 @@ export function resultRows(
   return rows;
 }
 
-export function resultFooter(role: 'local' | 'host' | 'guest', labels: KeyLabels): string[] {
-  const first = role === 'local' ? `Neue Runde: R oder ${labels.action}` : `Bereit für die nächste Runde: R oder ${labels.action}`;
-  return [first, 'Menü: Esc'];
+/** Kopfzeile des Ergebnisfelds (Spalten wie in hud.ts). */
+export function resultHeader(): string {
+  return 'Platz  Name              Runde     Gesamt';
+}
+
+/** Fußzeile am Rundenende: in der Serie geht es für alle in den Shop. */
+export function resultFooter(_role: 'local' | 'host' | 'guest', labels: KeyLabels): string[] {
+  return [`Weiter zum Shop: R oder ${labels.action}`, 'Menü: Esc'];
 }

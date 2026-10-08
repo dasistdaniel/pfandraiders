@@ -1,3 +1,4 @@
+import { DEFAULT_ROUND_MS, isRoundMs } from '@pfandraiders/core';
 import type { DeviceRef } from './devices';
 
 export interface KeyValueStore {
@@ -156,4 +157,27 @@ export function autoSwitchTarget(current: DeviceRef, enabled: boolean, padIndex:
   if (!enabled || current.kind !== 'keyboard') return null;
   const target = ONLINE_DEVICES.find((d) => d.kind === 'pad' && d.index === padIndex);
   return target ? copy(target) : null;
+}
+
+// ---- Rundenzeit lokal ----
+
+const LOCAL_ROUND_KEY = 'pfandraiders.roundMs';
+
+/** Rundenzeit der lokalen Lobby (3, 5, 7 oder 10 min). Wirft nie; Unbekanntes ergibt 5 min. */
+export function loadLocalRoundMs(store: KeyValueStore | undefined = defaultStore()): number {
+  try {
+    const n = Number(store?.getItem(LOCAL_ROUND_KEY));
+    return isRoundMs(n) ? n : DEFAULT_ROUND_MS;
+  } catch {
+    return DEFAULT_ROUND_MS;
+  }
+}
+
+export function saveLocalRoundMs(ms: number, store: KeyValueStore | undefined = defaultStore()): void {
+  if (!isRoundMs(ms)) return;
+  try {
+    store?.setItem(LOCAL_ROUND_KEY, String(ms));
+  } catch {
+    // Speicher gesperrt: Wahl gilt nur für diese Sitzung
+  }
 }

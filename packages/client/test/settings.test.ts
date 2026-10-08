@@ -18,6 +18,8 @@ import {
   saveOnlineDevice,
   serializeDevice,
   stepDevice,
+  loadLocalRoundMs,
+  saveLocalRoundMs,
   type KeyValueStore,
 } from '../src/settings';
 
@@ -216,5 +218,37 @@ describe('auto switch', () => {
     expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, true, 4)).toBeNull();
     expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, true, -1)).toBeNull();
     expect(autoSwitchTarget({ kind: 'keyboard', layout: 0 }, true, Number.NaN)).toBeNull();
+  });
+});
+
+describe('local round time', () => {
+  function memory(): KeyValueStore & { data: Map<string, string> } {
+    const data = new Map<string, string>();
+    return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) };
+  }
+
+  it('defaults to five minutes and remembers an allowed choice', () => {
+    const store = memory();
+    expect(loadLocalRoundMs(store)).toBe(300_000);
+    saveLocalRoundMs(420_000, store);
+    expect(loadLocalRoundMs(store)).toBe(420_000);
+  });
+
+  it('ignores stored values that are not allowed and never throws', () => {
+    const store = memory();
+    store.data.set('pfandraiders.roundMs', '123');
+    expect(loadLocalRoundMs(store)).toBe(300_000);
+    saveLocalRoundMs(999, store);
+    expect(store.data.get('pfandraiders.roundMs')).toBe('123');
+    const broken: KeyValueStore = {
+      getItem: () => {
+        throw new Error('gesperrt');
+      },
+      setItem: () => {
+        throw new Error('gesperrt');
+      },
+    };
+    expect(loadLocalRoundMs(broken)).toBe(300_000);
+    expect(() => saveLocalRoundMs(300_000, broken)).not.toThrow();
   });
 });

@@ -1,4 +1,4 @@
-import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, RETRO_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
+import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, RETRO_MAP, createGame, freshProgress, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
 import type { ClientMessage, Player, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
@@ -661,5 +661,51 @@ describe('OnlineConnection own-player prediction', () => {
     socket.receive(startMessage(0, 40));
     conn.update(16);
     expect(conn.getState().players.p1.x).toBe(spawn().x);
+  });
+});
+
+describe('shop phase messages', () => {
+  it('stores the own shop state and ready flag and tells the scene', () => {
+    const { socket, conn } = setup();
+    let calls = 0;
+    conn.onShopState = () => calls++;
+    socket.receive({ t: 'shopState', you: { ...freshProgress(), money: 250 }, ready: true });
+    expect(conn.shop?.money).toBe(250);
+    expect(conn.shopReady).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  it('keeps the old shop state when a broken one arrives', () => {
+    const { socket, conn } = setup();
+    socket.receive({ t: 'shopState', you: { ...freshProgress(), money: 250 }, ready: false });
+    socket.onmessage?.({ data: JSON.stringify({ t: 'shopState', you: { money: -5 }, ready: true }) });
+    expect(conn.shop?.money).toBe(250);
+    expect(conn.shopReady).toBe(false);
+  });
+
+  it('stores the ranking and the phase and calls onPhase', () => {
+    const { socket, conn } = setup();
+    let phases = 0;
+    conn.onPhase = () => phases++;
+    socket.receive({ t: 'ranking', entries: [{ id: 'p1', money: 5, round: 5, total: 5 }] });
+    socket.receive({ t: 'phase', phase: 'shop' });
+    expect(conn.ranking).toEqual([{ id: 'p1', money: 5, round: 5, total: 5 }]);
+    expect(conn.roomPhase).toBe('shop');
+    expect(phases).toBe(1);
+  });
+
+  it('sends shopBuy, and setRoundMs and endSeries only as host', () => {
+    const { socket, conn } = setup();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
+    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby', roundMs: 420_000 });
+    expect(conn.roundMs).toBe(420_000);
+    conn.shopBuy('defense', 'food', 3);
+    conn.setRoundMs(180_000);
+    conn.endSeries();
+    expect(socket.sent.filter((m) => m.t !== 'join')).toEqual([{ t: 'shopBuy', category: 'defense', item: 'food', qty: 3 }]);
+    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'shop', roundMs: 420_000 });
+    conn.setRoundMs(180_000);
+    conn.endSeries();
+    expect(socket.sent.slice(-2)).toEqual([{ t: 'setRoundMs', roundMs: 180_000 }, { t: 'endSeries' }]);
   });
 });

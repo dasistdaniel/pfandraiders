@@ -3,7 +3,7 @@ import { searchMsOf } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
 import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
-import { alertText, hintLines, resultFooter, resultRows, statusLines } from './text';
+import { alertText, hintLines, resultFooter, resultHeader, resultRows, statusLines } from './text';
 import { formatMoney } from './format';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
@@ -12,9 +12,9 @@ const BAR_WIDTH = 80;
 const BAR_Y = 76;
 const ALERT_Y = 92;
 const MAX_RESULT_ROWS = 8;
-const PANEL_MAX_W = 360;
+const PANEL_MAX_W = 440;
 const PANEL_PAD = 12;
-const TITLE_H = 36;
+const TITLE_H = 54;
 const ROW_H = 22;
 const FOOTER_LINE_H = 18;
 
@@ -27,6 +27,7 @@ class ResultsPanel {
   readonly objects: Phaser.GameObjects.GameObject[];
   private readonly bg: Phaser.GameObjects.Rectangle;
   private readonly title: Phaser.GameObjects.Text;
+  private readonly header: Phaser.GameObjects.Text;
   private readonly rows: Phaser.GameObjects.Text[];
   private readonly footer: Phaser.GameObjects.Text;
   private readonly panelW: number;
@@ -38,13 +39,16 @@ class ResultsPanel {
     this.title = scene.add
       .text(view.w / 2, 0, 'Runde vorbei!', { ...FONT, fontSize: '24px', color: '#ffee58', align: 'center' })
       .setOrigin(0.5, 0);
+    this.header = scene.add
+      .text(0, 0, resultHeader(), { ...FONT, color: '#aaaaaa' }) // gleiche Schrift wie die Zeilen, damit die Spalten passen
+      .setOrigin(0, 0);
     this.rows = Array.from({ length: MAX_RESULT_ROWS }, () =>
       scene.add.text(0, 0, '', { ...FONT, wordWrap: { width: inner } }).setOrigin(0, 0),
     );
     this.footer = scene.add
       .text(view.w / 2, 0, '', { ...FONT, fontSize: '14px', color: '#aaaaaa', align: 'center', wordWrap: { width: inner } })
       .setOrigin(0.5, 0);
-    this.objects = [this.bg, this.title, ...this.rows, this.footer];
+    this.objects = [this.bg, this.title, this.header, ...this.rows, this.footer];
     this.objects.forEach((o, i) => {
       (o as Phaser.GameObjects.Text).setScrollFactor(0).setDepth(i === 0 ? 20 : 21);
     });
@@ -70,12 +74,15 @@ class ResultsPanel {
     const left = Math.round((this.view.w - this.panelW) / 2) + PANEL_PAD;
     this.bg.setPosition(this.view.w / 2, top).setSize(this.panelW, height);
     this.title.setPosition(this.view.w / 2, top + PANEL_PAD);
+    this.header.setPosition(left, top + PANEL_PAD + 34).setVisible(true);
     this.rows.forEach((t, i) => {
       const row = rows[i];
       t.setVisible(row !== undefined);
       if (!row) return;
-      const mark = (row.isWinner ? '★ ' : '') + (row.isViewer ? '> ' : '');
-      t.setText(`${mark}${row.place}. ${row.name}  ${formatMoney(row.round)}  (gesamt ${formatMoney(row.total)})`);
+      const mark = (row.isWinner ? '★' : ' ') + (row.isViewer ? '>' : ' ');
+      const place = `${mark}${row.place}.`.padEnd(7);
+      const name = row.name.padEnd(17);
+      t.setText(`${place}${name}${formatMoney(row.round).padStart(9)}  ${formatMoney(row.total).padStart(9)}`);
       t.setColor(toCss(colorOf(row.id)));
       t.setPosition(left, top + PANEL_PAD + TITLE_H + i * ROW_H);
     });

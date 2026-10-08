@@ -80,10 +80,10 @@ describe('SoundFx', () => {
     let t = 0;
     const fx = new SoundFx(() => ctx as unknown as AudioContext, () => (t += 1000), false);
     fx.unlock();
-    for (const id of ['pickup', 'pling', 'buy', 'stealSuccess', 'bite', 'knockout', 'policeCheck', 'zoneAnnounced', 'roundEnd', 'tick'] as const) {
+    for (const id of ['pickup', 'pling', 'buy', 'stealSuccess', 'bite', 'knockout', 'policeCheck', 'zoneAnnounced', 'roundEnd', 'tick', 'punch', 'hit'] as const) {
       expect(() => fx.play(id)).not.toThrow();
     }
-    expect(ctx.createBufferSource).toHaveBeenCalledTimes(1); // nur bite
+    expect(ctx.createBufferSource).toHaveBeenCalledTimes(2); // bite und punch
   });
   it('uses master gain 0.15 * 0.7 at the default volume', () => {
     const ctx = fakeContext();
