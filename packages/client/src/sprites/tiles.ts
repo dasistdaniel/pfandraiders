@@ -283,7 +283,7 @@ export const SPOT_SPRITES: Record<SpotType, { full: readonly string[]; empty: re
   },
 };
 
-export const OBJECT_SPRITES: { dropoff: readonly string[]; shop: readonly string[] } = {
+export const OBJECT_SPRITES: { dropoff: readonly string[] } = {
   dropoff: [
     '..kkkkkkkkkkkk..',
     '..kddddddddddk..',
@@ -301,23 +301,5 @@ export const OBJECT_SPRITES: { dropoff: readonly string[]; shop: readonly string
     '..kbbbbbbbbbBk..',
     '..kBBBBBBBBBBk..',
     '..kkkkkkkkkkkk..',
-  ],
-  shop: [
-    'kkkkkkkkkkkkkkkk',
-    'kyyooyyooyyooyyk',
-    'kyyooyyooyyooyyk',
-    'kyyooyyooyyooyyk',
-    'kooooooooooooook',
-    '.kffffffffffffk.',
-    '.kfkkkkkkkkkkfk.',
-    '.kfkbbbbbbbbkfk.',
-    '.kfkckkekkykkfk.',
-    '.kkkkkkkkkkkkkk.',
-    '.knnnnnnnnnnnnk.',
-    '.knnnnnnnnnnnnk.',
-    '.kNNNNNNNNNNNNk.',
-    '.kffffffffffffk.',
-    'kFFFFFFFFFFFFFFk',
-    'kkkkkkkkkkkkkkkk',
   ],
 };

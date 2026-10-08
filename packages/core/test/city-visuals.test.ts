@@ -11,7 +11,7 @@ const COLS = 64;
 const ROWS = 40;
 const BUILDINGS = 'RYEX';
 /** Zeichen ohne eigene Grafik in den Ebenen (Sprites im Client) */
-const NO_GRAPHIC = '@DSNbngmp';
+const NO_GRAPHIC = '@DNbngmp';
 
 const at = (r: number, c: number): string => CITY_PLAN[r][c];
 const idx = (r: number, c: number): number => r * COLS + c;
@@ -123,7 +123,7 @@ describe('city visuals: layers', () => {
     for (const { r, c } of cellsOf('loc')) expect(below[idx(r, c)], `${at(r, c)} ${r},${c}`).not.toBe(0);
   });
 
-  it('gives spots, dropoffs, shops, spawns and NPC entrances no graphic, only plain ground', () => {
+  it('gives spots, dropoffs, spawns and NPC entrances no graphic, only plain ground', () => {
     for (const { r, c } of cellsOf(NO_GRAPHIC)) {
       expect(below[idx(r, c)], `below ${at(r, c)} ${r},${c}`).toBe(0);
       expect(CITY_CELLS.plainGround.has(ground[idx(r, c)]), `ground ${at(r, c)} ${r},${c}`).toBe(true);

@@ -7,7 +7,7 @@ const SPOT_TYPES = ['bus_stop', 'bench', 'bush', 'bin', 'park'];
 describe('kenneyMap', () => {
   it('has every tile key, both objects and all spot types', () => {
     expect(Object.keys(KENNEY_TILES).sort()).toEqual([...TILE_KEYS].sort());
-    expect(Object.keys(KENNEY_OBJECTS).sort()).toEqual(['dropoff', 'shop']);
+    expect(Object.keys(KENNEY_OBJECTS)).toEqual(['dropoff']);
     expect(Object.keys(KENNEY_SPOTS).sort()).toEqual([...SPOT_TYPES].sort());
   });
 

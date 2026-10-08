@@ -8,12 +8,12 @@ describe('textureKeys', () => {
     expect(spotTexture('city', 'bin', true)).toBe('city:spot:bin:full');
     expect(spotTexture('retro', 'bin', false)).toBe('retro:spot:bin:empty');
     expect(objectTexture('city', 'dropoff')).toBe('city:object:dropoff');
-    expect(objectTexture('retro', 'shop')).toBe('retro:object:shop');
+    expect(objectTexture('retro', 'dropoff')).toBe('retro:object:dropoff');
   });
   it('keeps the tilesets apart', () => {
     expect(tileTexture('city', 'floor_0')).not.toBe(tileTexture('retro', 'floor_0'));
     expect(spotTexture('city', 'bin', true)).not.toBe(spotTexture('retro', 'bin', true));
-    expect(objectTexture('city', 'shop')).not.toBe(objectTexture('retro', 'shop'));
+    expect(objectTexture('city', 'dropoff')).not.toBe(objectTexture('retro', 'dropoff'));
   });
   it('formats map image keys', () => {
     expect(mapTexture('city', 'ground-below')).toBe('map:city:ground-below');

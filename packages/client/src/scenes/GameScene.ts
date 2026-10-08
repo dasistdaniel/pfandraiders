@@ -823,10 +823,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
     for (const d of map.dropoffs) this.marker(d.x, d.y, 'dropoff', 'PFAND');
-    for (const s of map.shops) this.marker(s.x, s.y, 'shop', 'SHOP');
   }
 
-  private marker(x: number, y: number, object: 'dropoff' | 'shop', label: string): void {
+  private marker(x: number, y: number, object: 'dropoff', label: string): void {
     this.add.image(x, y, objectTexture(this.tileset, object));
     this.add.text(x, y - TILE / 2, label, FONT).setOrigin(0.5, 1).setDepth(7);
   }

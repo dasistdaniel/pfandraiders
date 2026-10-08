@@ -35,22 +35,27 @@ describe('parseTiledMap', () => {
     expect(m.spawns).toEqual([{ x: 24, y: 24 }]);
     expect(m.spots).toEqual([{ id: 0, type: 'bench', x: 40, y: 24 }]);
     expect(m.dropoffs).toEqual([]);
-    expect(m.shops).toEqual([]);
+    expect('shops' in m).toBe(false);
     expect(m.npcSpawns).toEqual([]);
     expect(m.zones).toEqual([]);
   });
 
-  it('sorts dropoff, shop and npc_spawn into their lists', () => {
+  it('sorts dropoff and npc_spawn into their lists', () => {
     const b = base();
     b.layers[1].objects = [
-      pt(1, 'dropoff', 20, 20), pt(2, 'shop', 30, 20), pt(3, 'npc_spawn', 40, 20),
+      pt(1, 'dropoff', 20, 20), pt(3, 'npc_spawn', 40, 20),
       pt(4, 'spawn', 20, 30), pt(5, 'spawn', 30, 30),
     ];
     const m = parseTiledMap(b);
     expect(m.dropoffs).toEqual([{ x: 20, y: 20 }]);
-    expect(m.shops).toEqual([{ x: 30, y: 20 }]);
     expect(m.npcSpawns).toEqual([{ x: 40, y: 20 }]);
     expect(m.spawns).toEqual([{ x: 20, y: 30 }, { x: 30, y: 30 }]);
+  });
+
+  it('rejects the former shop object', () => {
+    const b = base();
+    b.layers[1].objects = [pt(1, 'spawn', 24, 24), pt(2, 'shop', 30, 20)];
+    expect(() => parseTiledMap(b)).toThrow(/unknown object type shop/);
   });
 
   it('numbers spots 0, 1, 2 in object order', () => {

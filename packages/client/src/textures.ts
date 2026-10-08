@@ -59,7 +59,6 @@ function bakeDrawnSet(scene: Phaser.Scene, set: TilesetId): void {
     bake(scene, spotTexture(set, type, false), decodeSprite(sprites.empty));
   }
   bake(scene, objectTexture(set, 'dropoff'), decodeSprite(OBJECT_SPRITES.dropoff));
-  bake(scene, objectTexture(set, 'shop'), decodeSprite(OBJECT_SPRITES.shop));
 }
 
 /** Der Kenney-Satz der Stadt (setzt den geladenen Bogen voraus). */
@@ -73,7 +72,6 @@ function bakeCitySet(scene: Phaser.Scene): void {
     bakeFromSheet(scene, spotTexture('city', type, true), cell, [{ cell: KENNEY_BOTTLES, size: 10, at: 5 }], floor);
   }
   bakeFromSheet(scene, objectTexture('city', 'dropoff'), KENNEY_OBJECTS.dropoff);
-  bakeFromSheet(scene, objectTexture('city', 'shop'), KENNEY_OBJECTS.shop);
 }
 
 export function bakeStaticTextures(scene: Phaser.Scene): void {
