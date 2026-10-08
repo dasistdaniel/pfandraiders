@@ -105,6 +105,8 @@ export interface Player {
   stealHeld: boolean;
   /** Essen-Taste im vorigen Tick gedrückt, für die Flanke */
   eatHeld: boolean;
+  /** Schlagen-Taste im vorigen Tick gedrückt, für die Flanke */
+  attackHeld: boolean;
   /** Verbrauchsgüter und Bolzenschneider (bleiben über Runden) */
   inventory: Inventory;
   /** Upgrade-Stufen (bleiben über Runden) */
@@ -113,6 +115,8 @@ export interface Player {
   weapon: WeaponId;
   /** Restzeit, bis der Spieler wieder klauen kann, 0 = bereit */
   stealCooldownMs: number;
+  /** Restzeit, bis der Spieler wieder schlagen kann, 0 = bereit */
+  attackCooldownMs: number;
   /** Restzeit des Schutzes nach einem Diebstahl, 0 = angreifbar */
   shieldMs: number;
   /** Leben, 0 = bewusstlos (kann zwischen Ticks Nachkommastellen haben) */

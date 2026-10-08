@@ -1,5 +1,6 @@
 import { CONFIG } from './config';
 import { updateDeposit } from './economy';
+import { tryAttack } from './fight';
 import { eatFood, updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
@@ -45,8 +46,11 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   p.stealHeld = input.steal;
   const eatPressed = input.eat && !p.eatHeld;
   p.eatHeld = input.eat;
+  const attackPressed = input.attack && !p.attackHeld;
+  p.attackHeld = input.attack;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
   p.stealCooldownMs = Math.max(0, p.stealCooldownMs - dt);
+  p.attackCooldownMs = Math.max(0, p.attackCooldownMs - dt);
 
   if (updateHealth(p, dt)) {
     // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgeführt)
@@ -56,6 +60,8 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   }
 
   if (eatPressed) eatFood(p);
+  // Schlagen geht auch im Laufen; die eigene Suche bricht ab
+  if (attackPressed && tryAttack(state, p)) cancelSearch(p);
 
   // Abgabe hat Vorrang: wer mit Flaschen am Automaten drückt, beginnt im selben Tick keine Suche
   const depositing = updateDeposit(state, p, input, dt, pressed);

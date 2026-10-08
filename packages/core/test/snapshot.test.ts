@@ -36,6 +36,15 @@ describe('projectSnapshot', () => {
     expect(other.eatHeld).toBe(false);
   });
 
+  it('shows the attack cooldown of a foreign player but not his attack key', () => {
+    const s = game();
+    s.players.p2.attackCooldownMs = 300;
+    s.players.p2.attackHeld = true;
+    const other = projectSnapshot(s, 'p1').players.p2;
+    expect(other.attackCooldownMs).toBe(300);
+    expect(other.attackHeld).toBe(false);
+  });
+
   it('hides money, container contents, inventory and upgrades of other players', () => {
     const s = game();
     const other = projectSnapshot(s, 'p1').players.p2;
@@ -164,9 +173,9 @@ describe('projectSnapshot', () => {
 // (und in snapshot.ts entscheiden, ob das Feld öffentlich ist).
 describe('snapshot key sets', () => {
   const PLAYER_KEYS = [
-    'actionHeld', 'bottles', 'containerLevel', 'depositMs', 'earnedRound', 'earnedTotal', 'eatHeld', 'health', 'id',
-    'inventory', 'mode', 'money', 'robbed', 'searchProgressMs', 'searchSpotId', 'shieldMs', 'spawn', 'stealCooldownMs',
-    'stealHeld', 'unconsciousMs', 'upgrades', 'weapon', 'x', 'y',
+    'actionHeld', 'attackCooldownMs', 'attackHeld', 'bottles', 'containerLevel', 'depositMs', 'earnedRound',
+    'earnedTotal', 'eatHeld', 'health', 'id', 'inventory', 'mode', 'money', 'robbed', 'searchProgressMs',
+    'searchSpotId', 'shieldMs', 'spawn', 'stealCooldownMs', 'stealHeld', 'unconsciousMs', 'upgrades', 'weapon', 'x', 'y',
   ];
 
   it('pins the keys of own and foreign players', () => {

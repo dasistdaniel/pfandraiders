@@ -68,6 +68,17 @@ export const CONFIG = {
     /** so lange kann der Dieb nach einem Diebstahl nicht erneut klauen */
     cooldownMs: 6000,
   },
+  /** Schlagen (Spec §4.1) */
+  fight: {
+    /** größter Abstand zum Opfer in Pixeln */
+    radius: 20,
+    /** so lange nach einem Schlag (auch ohne Treffer) kein neuer */
+    cooldownMs: 600,
+    /** Grundschaden; Schlag-Upgrade erhöht, Rüstung des Opfers senkt */
+    damage: 20,
+    /** Untergrenze des Schadens */
+    minDamage: 5,
+  },
   /**
    * Shop-Phase (Spec §3). Reihenfolge der Einträge = Reihenfolge im Shop. Preise und Wirkungen sind
    * Startwerte für das spätere Balancing.
