@@ -40,7 +40,7 @@ function takeLoot(thief: Player, victim: Player, fraction: number): void {
 /**
  * Sofort-Diebstahl im Schritt, in dem die Klauen-Taste neu gedrückt wurde.
  * Nimmt dem nächsten gültigen Opfer CONFIG.steal.fraction seines Containers ab (aufgerundet,
- * begrenzt durch den freien Platz); mit Bolzenschneider alles, das Item wird verbraucht.
+ * begrenzt durch den freien Platz); mit Bolzenschneider alles, der Bolzenschneider wird verbraucht.
  * Das Opfer bekommt Schutz, der Dieb eine Abklingzeit. Gibt true zurück, wenn geklaut wurde.
  * Während der Abklingzeit, mit vollem Container oder ohne Opfer passiert nichts.
  */
@@ -50,9 +50,9 @@ export function tryInstantSteal(state: GameState, thief: Player): boolean {
   const target = findStealTarget(state, thief);
   if (target === null) return false;
 
-  if (thief.item === 'bolt_cutters') {
+  if (thief.inventory.bolt_cutters) {
     takeLoot(thief, target, 1);
-    thief.item = null;
+    thief.inventory.bolt_cutters = false;
   } else {
     takeLoot(thief, target, CONFIG.steal.fraction);
   }

@@ -2,10 +2,14 @@ import { emptyBottles } from './bottles';
 import { CONFIG } from './config';
 import { rollContents } from './loot';
 import { nextRandom, randInt } from './rng';
+import { freshProgress, progressOf } from './shop';
+import type { Progress } from './shop';
 import type { GameState, MapData, Player, Point, Spot, SpotDef } from './types';
 
 export interface GameOptions {
   roundMs?: number;
+  /** Fortschritt aus früheren Runden der Serie je Spieler-id; fehlt ein Spieler, beginnt er leer. */
+  progress?: Record<string, Progress>;
 }
 
 export function createGame(
@@ -29,8 +33,10 @@ export function createGame(
     nextNpcMs: CONFIG.npc.firstSpawnMs,
     zones: [],
   };
+  const progress = options.progress ?? {};
   playerIds.forEach((id, i) => {
-    state.players[id] = newPlayer(id, map.spawns[i % map.spawns.length]);
+    const own = Object.hasOwn(progress, id) ? progress[id] : freshProgress();
+    state.players[id] = newPlayer(id, map.spawns[i % map.spawns.length], own);
   });
   for (const def of map.spots) state.spots.push(newSpot(state, def));
   state.zones = map.zones.map((def) => ({
@@ -41,25 +47,31 @@ export function createGame(
   return state;
 }
 
-function newPlayer(id: string, at: Point): Player {
+function newPlayer(id: string, at: Point, prog: Progress): Player {
+  // Kopie: die Runde verändert Geld und Inventar, der Aufrufer behält seinen Stand
+  const own = progressOf(prog);
   return {
     id,
     x: at.x,
     y: at.y,
-    money: 0,
+    money: own.money,
     bottles: emptyBottles(),
-    containerLevel: 0,
+    containerLevel: own.containerLevel,
     mode: 'walking',
     searchSpotId: null,
     searchProgressMs: 0,
     depositMs: 0,
     actionHeld: false,
     stealHeld: false,
-    item: null,
+    inventory: own.inventory,
+    upgrades: own.upgrades,
+    weapon: 'fist',
     stealCooldownMs: 0,
     shieldMs: 0,
     health: CONFIG.health.max,
     unconsciousMs: 0,
+    earnedRound: 0,
+    earnedTotal: own.earnedTotal,
     spawn: { x: at.x, y: at.y },
   };
 }

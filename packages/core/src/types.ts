@@ -2,7 +2,31 @@ export type BottleKind = 'plastic' | 'glass' | 'crate';
 export type Bottles = Record<BottleKind, number>;
 export type SpotType = 'bus_stop' | 'bench' | 'bush' | 'bin' | 'park';
 export type Mode = 'walking' | 'searching' | 'unconscious';
-export type ItemId = 'bolt_cutters' | 'dog_treat';
+/** Upgrades mit Stufen (die Tasche ist containerLevel) */
+export type UpgradeId = 'knockout' | 'speed' | 'search' | 'punch' | 'armor';
+/** Stufe je Upgrade, 0 = nicht gekauft */
+export type Upgrades = Record<UpgradeId, number>;
+/** Verbrauchsgüter (Stückzahl) und der Bolzenschneider (höchstens einer) */
+export interface Inventory {
+  dog_treat: number;
+  food: number;
+  bolt_cutters: boolean;
+}
+/** Waffe; bisher nur die Faust, Fernkampf folgt in einem späteren Plan */
+export type WeaponId = 'fist' | 'sling' | 'pistol';
+export type ShopCategory = 'bags' | 'upgrades' | 'attack' | 'defense';
+export type ShopItemId =
+  | 'bag'
+  | 'knockout'
+  | 'speed'
+  | 'search'
+  | 'punch'
+  | 'bolt_cutters'
+  | 'sling'
+  | 'pistol'
+  | 'dog_treat'
+  | 'food'
+  | 'armor';
 
 export interface Point {
   x: number;
@@ -79,8 +103,12 @@ export interface Player {
   actionHeld: boolean;
   /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Klauen wirkt nur beim Drücken) */
   stealHeld: boolean;
-  /** Special Item im einzigen Slot, null = keins */
-  item: ItemId | null;
+  /** Verbrauchsgüter und Bolzenschneider (bleiben über Runden) */
+  inventory: Inventory;
+  /** Upgrade-Stufen (bleiben über Runden) */
+  upgrades: Upgrades;
+  /** Waffe, bisher immer 'fist' */
+  weapon: WeaponId;
   /** Restzeit, bis der Spieler wieder klauen kann, 0 = bereit */
   stealCooldownMs: number;
   /** Restzeit des Schutzes nach einem Diebstahl, 0 = angreifbar */
@@ -89,6 +117,10 @@ export interface Player {
   health: number;
   /** Restzeit der Bewusstlosigkeit, 0 = bei Bewusstsein */
   unconsciousMs: number;
+  /** Rundenverdienst in Cent (Pfand dieser Runde) */
+  earnedRound: number;
+  /** Gesamtverdienst der Serie in Cent (alle Runden, inklusive der laufenden) */
+  earnedTotal: number;
   /** Startpunkt, hier erscheint der Spieler nach der Bewusstlosigkeit */
   spawn: Point;
 }

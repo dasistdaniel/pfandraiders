@@ -1,11 +1,12 @@
 import { totalBottles } from './bottles';
 import type { Snapshot } from './protocol';
+import { noUpgrades } from './shop';
 import type { GameState, MapData, Player, Spot } from './types';
 
 /**
  * Der Zustand, den ein bestimmter Spieler sehen darf (Spec §5).
- * Fremdes Geld (bis Rundenende), fremder Container-Inhalt, fremde Items,
- * Such-, Abgabe- und Tastenzustände, die Klau-Abklingzeit und der Zufalls-Zustand werden entfernt.
+ * Fremdes Geld und fremde Verdienste (bis Rundenende), fremder Container-Inhalt, fremdes Inventar und
+ * fremde Upgrades, Such-, Abgabe- und Tastenzustände, die Klau-Abklingzeit und der Zufalls-Zustand werden entfernt.
  * Vom fremden Container bleibt nur "hat Flaschen" (als eine Plastikflasche).
  */
 export function projectSnapshot(state: GameState, viewerId: string): Snapshot {
@@ -36,11 +37,15 @@ export function projectSnapshot(state: GameState, viewerId: string): Snapshot {
       depositMs: 0,
       actionHeld: false,
       stealHeld: false,
-      item: null,
+      inventory: { dog_treat: 0, food: 0, bolt_cutters: false },
+      upgrades: noUpgrades(),
+      weapon: p.weapon,
       stealCooldownMs: 0,
       shieldMs: p.shieldMs,
       health: p.health,
       unconsciousMs: p.unconsciousMs,
+      earnedRound: revealMoney ? p.earnedRound : 0,
+      earnedTotal: revealMoney ? p.earnedTotal : 0,
       spawn: p.spawn,
     };
     players[id] = foreign;

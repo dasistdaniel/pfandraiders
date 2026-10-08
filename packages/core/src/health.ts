@@ -3,13 +3,12 @@ import { CONFIG } from './config';
 import { cancelSearch } from './search';
 import type { Player } from './types';
 
-/** Umfallen: Flaschen, Item und ein Teil des Geldes gehen verloren. */
+/** Umfallen: Flaschen und ein Teil des Geldes gehen verloren, das Inventar bleibt. */
 export function knockOut(p: Player): void {
   p.health = 0;
   p.unconsciousMs = CONFIG.health.unconsciousMs;
   p.bottles = emptyBottles();
   p.money -= Math.floor(p.money * CONFIG.health.moneyLossFraction);
-  p.item = null;
   cancelSearch(p);
   p.depositMs = 0;
   p.mode = 'unconscious';

@@ -27,15 +27,15 @@ describe('knock out', () => {
     const p = s.players.p1;
     p.money = 1001;
     p.bottles = { plastic: 2, glass: 1, crate: 0 };
-    p.item = 'bolt_cutters';
+    p.inventory.bolt_cutters = true;
     damage(p, 1000);
     return s;
   }
 
-  it('drops bottles and item and loses a quarter of the money (rounded down)', () => {
+  it('drops bottles, keeps the inventory and loses a quarter of the money (rounded down)', () => {
     const p = knocked().players.p1;
     expect(totalBottles(p.bottles)).toBe(0);
-    expect(p.item).toBeNull();
+    expect(p.inventory.bolt_cutters).toBe(true);
     expect(p.money).toBe(1001 - Math.floor(1001 * CONFIG.health.moneyLossFraction));
     expect(p.mode).toBe('unconscious');
     expect(p.health).toBe(0);
