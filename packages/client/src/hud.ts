@@ -134,10 +134,11 @@ export class PlayerHud {
     this.objects.push(...this.results.objects);
   }
 
-  update(state: GameState, p: Player): void {
+  /** `notices`: kurze Hinweise (etwa die Beschlagnahme), oben in der Warnung. */
+  update(state: GameState, p: Player, notices: string[] = []): void {
     this.status.setText(statusLines(state, p).join('\n'));
     this.hint.setText(hintLines(state, p, this.labels).join('\n'));
-    this.alert.setText(alertText(state, p));
+    this.alert.setText(alertText(state, p, notices));
 
     let progress = 0;
     if (p.mode === 'searching') {

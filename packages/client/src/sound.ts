@@ -40,6 +40,12 @@ const RECIPES: Record<SoundId, Recipe> = {
     gain: 0.4,
     notes: [{ f: 880, d: 0.12 }, { f: 660, d: 0.12 }, { f: 880, d: 0.12 }, { f: 660, d: 0.12 }],
   },
+  /** Polizei hat Flaschen beschlagnahmt: zwei tiefe, absteigende Töne */
+  policeSeize: {
+    wave: 'square',
+    gain: 0.45,
+    notes: [{ f: 392, d: 0.16 }, { f: 330, d: 0.16 }, { f: 262, d: 0.35, to: 180 }],
+  },
   zoneAnnounced: {
     wave: 'sine',
     gain: 0.8,

@@ -9,6 +9,7 @@ export type SoundId =
   | 'bite'
   | 'knockout'
   | 'policeCheck'
+  | 'policeSeize'
   | 'zoneAnnounced'
   | 'roundEnd'
   | 'tick';
@@ -108,6 +109,7 @@ export function detectSounds(
 
     if (!isBeingChecked(prev, p.id) && isBeingChecked(next, p.id)) out.add('policeCheck');
   }
+  if (detectSeizures(prev, next, ownIds).length > 0) out.add('policeSeize');
 
   for (let i = 0; i < next.zones.length; i++) {
     const before = prev.zones[i];
@@ -127,6 +129,38 @@ export function detectSounds(
 
   const plingIds: SoundId[] = Array.from({ length: Math.min(plings, PLING_MAX_PER_FRAME) }, () => 'pling');
   return [...out, ...plingIds];
+}
+
+export interface Seizure {
+  /** Spieler, dem die Polizei Flaschen abgenommen hat */
+  id: string;
+  /** so viele Flaschen */
+  count: number;
+}
+
+/**
+ * Beschlagnahmen zwischen zwei Zuständen. Rein und nur aus Zustandsunterschieden, damit es lokal und
+ * online gleich funktioniert. Erkennungszeichen: Am Ende einer Kontrolle lässt der Polizist den
+ * Spieler in Ruhe (restId wechselt auf ihn) und dessen Flaschen werden weniger. Diebstahl und Abgabe
+ * senken die Flaschen auch, setzen aber keinen Polizisten in Ruhe.
+ */
+export function detectSeizures(prev: GameState | null, next: GameState, ownIds: string[] | 'all'): Seizure[] {
+  if (prev === null) return [];
+  const out: Seizure[] = [];
+  for (const p of Object.values(next.players)) {
+    if (ownIds !== 'all' && !ownIds.includes(p.id)) continue;
+    const q = prev.players[p.id];
+    if (!q) continue;
+    const count = totalBottles(q.bottles) - totalBottles(p.bottles);
+    if (count <= 0) continue;
+    const byPolice = next.npcs.some((n) => {
+      if (n.kind !== 'police' || n.restId !== p.id) return false;
+      const before = prev.npcs.find((m) => m.id === n.id);
+      return before !== undefined && before.restId !== p.id;
+    });
+    if (byPolice) out.push({ id: p.id, count });
+  }
+  return out;
 }
 
 function dogNear(state: GameState, p: Player): boolean {

@@ -17,14 +17,15 @@ import { tileKey } from '../tiles';
 import { PlayerHud } from '../hud';
 import { music, sfx, unlockAudio } from '../sfx';
 import { PLING_GAP_SEC } from '../sound';
-import { detectSounds, snapshotForSound } from '../soundEvents';
+import { detectSeizures, detectSounds, snapshotForSound } from '../soundEvents';
+import { Notices } from '../notices';
 import { buildInput } from '../input';
 import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
 import { PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../pauseMenu';
 import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
 import type { InputSource } from '../sources';
-import { playerName } from '../text';
+import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
@@ -104,6 +105,8 @@ export class GameScene extends Phaser.Scene {
   /** Zustand des vorigen Frames für Sound-Ereignisse, null = noch keiner (erster Frame ohne Sounds) */
   private prevSoundState: GameState | null = null;
   private ownSoundIds: string[] | 'all' = 'all';
+  /** Kurze HUD-Hinweise je Spieler (Beschlagnahme durch die Polizei). */
+  private notices = new Notices();
   /** Nur online: läuft, solange die Verbindung weg ist und wir automatisch neu verbinden. */
   private plan: ReconnectPlan | null = null;
   private overlay: Phaser.GameObjects.Text | null = null;
@@ -148,6 +151,7 @@ export class GameScene extends Phaser.Scene {
     this.joinedSeen = false;
     this.padBPrev = {};
     this.prevSoundState = null;
+    this.notices = new Notices();
     this.roundTotalMs = 0;
     this.pause = new PauseMenu();
     this.pauseCam = null;
@@ -402,6 +406,8 @@ export class GameScene extends Phaser.Scene {
     for (const id of detectSounds(this.prevSoundState, state, this.ownSoundIds)) {
       sfx.play(id, id === 'pling' ? PLING_GAP_SEC * plings++ : 0);
     }
+    this.notices.tick(viewDelta);
+    for (const z of detectSeizures(this.prevSoundState, state, this.ownSoundIds)) this.notices.show(z.id, seizeText(z.count));
     this.prevSoundState = snapshotForSound(state);
 
     state.spots.forEach((spot, i) => {
@@ -436,7 +442,7 @@ export class GameScene extends Phaser.Scene {
       body.setAlpha(unconscious ? 0.6 : 1);
       this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
     }
-    this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id]));
+    this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id], this.notices.lines(slot.id)));
   }
 
   /** Musik folgt der Runde: schneller und dichter gegen Ende, nach Rundenende und in der lokalen Pause leise und ruhig. */

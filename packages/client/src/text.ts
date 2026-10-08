@@ -67,9 +67,15 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   return lines;
 }
 
-export function alertText(state: GameState, p: Player): string {
+/** Hinweis nach einer Polizeikontrolle. */
+export function seizeText(count: number): string {
+  return count === 1 ? '1 Flasche beschlagnahmt!' : `${count} Flaschen beschlagnahmt!`;
+}
+
+/** Warnungen im HUD, höchstens drei Zeilen. `notices` (kurze Hinweise wie die Beschlagnahme) stehen zuerst. */
+export function alertText(state: GameState, p: Player, notices: string[] = []): string {
   if (state.phase === 'ended') return '';
-  const lines: string[] = [];
+  const lines: string[] = [...notices];
   if (p.unconsciousMs > 0) lines.push(`Bewusstlos! Noch ${Math.ceil(p.unconsciousMs / 1000)} s`);
   if (isBeingChecked(state, p.id)) lines.push('KONTROLLE! Lauf weg!');
   if (p.shieldMs > 0) lines.push(`Schutz ${Math.ceil(p.shieldMs / 1000)} s`);
