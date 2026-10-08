@@ -54,13 +54,13 @@ export function detectSounds(
   let plings = 0;
   const audible = (id: string): boolean => ownIds === 'all' || ownIds.includes(id);
 
-  // Ausrauben: ein Ausgeknockter wird "robbed" und verliert Flaschen; Räuber ist, wer dabei Flaschen gewann
-  // (mit oder ohne Bolzenschneider). Für ihn gibt es stealSuccess statt pickup.
+  // Ausrauben: bei einem Ausgeknockten springt "robbed" auf true; Räuber ist, wer dabei Flaschen gewann
+  // (mit oder ohne Bolzenschneider). Online sieht der Client vom Opfer nur, ob es Flaschen hat, daher zählt
+  // dessen Flaschenzahl nicht. Für den Räuber gibt es stealSuccess statt pickup.
   const thieves = new Set<string>();
   for (const v of Object.values(next.players)) {
     const pv = prev.players[v.id];
     if (!pv || pv.robbed || !v.robbed || v.unconsciousMs === 0) continue;
-    if (totalBottles(v.bottles) >= totalBottles(pv.bottles)) continue;
     for (const t of Object.values(next.players)) {
       const pt = prev.players[t.id];
       if (!pt || t.id === v.id || totalBottles(t.bottles) <= totalBottles(pt.bottles)) continue;

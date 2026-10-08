@@ -342,4 +342,18 @@ describe('fight sounds', () => {
     expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
     expect(detectSounds(p, n, ['x'])).toEqual([]);
   });
+
+  it('plays stealSuccess when the victim still shows bottles (online view hides the exact count)', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.bottles.plastic = 1; // online: nur 'hat Flaschen'
+      s.players.b.unconsciousMs = 10000;
+      s.players.b.health = 0;
+    });
+    const n = next(p, (s) => {
+      s.players.b.bottles.plastic = 1;
+      s.players.b.robbed = true;
+      s.players.a.bottles.plastic = 3;
+    });
+    expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
+  });
 });
