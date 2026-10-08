@@ -20,9 +20,9 @@ class FakeConn implements Conn {
 }
 
 /** Raum mit drei verbundenen Spielern; die erste Runde ist nach zwei Ticks vorbei (roundMs 100). */
-function series(opts: { roundMs?: number } = { roundMs: 100 }) {
+function series(opts: { roundMs?: number; countdownMs?: number } = { roundMs: 100 }) {
   let time = 0;
-  const room = new Room('ABCD', { now: () => time, random: () => 0.5, roundMs: opts.roundMs });
+  const room = new Room('ABCD', { now: () => time, random: () => 0.5, roundMs: opts.roundMs, countdownMs: opts.countdownMs ?? 0 });
   const conns = [new FakeConn(), new FakeConn(), new FakeConn()];
   const members = ['Anna', 'Bob', 'Cara'].map((name, i) => {
     const r = room.join(name, conns[i]);

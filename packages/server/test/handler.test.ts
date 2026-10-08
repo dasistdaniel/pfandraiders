@@ -19,7 +19,7 @@ const INPUT = { t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, 
 function setup() {
   let t = 1000;
   const errors: unknown[] = [];
-  const manager = new RoomManager({ maxRooms: 5 });
+  const manager = new RoomManager({ maxRooms: 5, countdownMs: 0 });
   const sockets = new Map<Conn, ReturnType<typeof fakeSock>>();
   const env: Env = { manager, sockets, now: () => t, onError: (e) => errors.push(e) };
   return { env, manager, sockets, errors, advance: (ms: number) => (t += ms) };
