@@ -24,9 +24,7 @@ export class LocalConnection implements GameConnection {
   ) {}
 
   setInput(playerId: string, input: Input): void {
-    // Ein noch nicht verarbeiteter Kaufbefehl geht nicht durch einen Frame ohne Schritt verloren.
-    const pendingBuy = this.inputs[playerId]?.buy ?? null;
-    this.inputs[playerId] = { ...input, buy: input.buy ?? pendingBuy };
+    this.inputs[playerId] = { ...input };
   }
 
   update(deltaMs: number): void {
@@ -34,10 +32,6 @@ export class LocalConnection implements GameConnection {
     while (this.accumulator >= LOCAL_STEP_MS) {
       step(this.state, this.inputs, LOCAL_STEP_MS);
       this.accumulator -= LOCAL_STEP_MS;
-      // Einmalige Befehle sind verbraucht
-      for (const id of Object.keys(this.inputs)) {
-        this.inputs[id] = { ...this.inputs[id], buy: null };
-      }
     }
   }
 

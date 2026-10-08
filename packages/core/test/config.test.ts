@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { CONFIG, TILE } from '../src/config';
 
 describe('config sanity', () => {
+  it('plays five minutes per round by default', () => {
+    expect(CONFIG.roundMs).toBe(5 * 60 * 1000);
+  });
+
   it('keeps the collision box smaller than one tile (boxBlocked precondition)', () => {
     expect(CONFIG.playerHalf).toBeLessThan(TILE / 2);
   });

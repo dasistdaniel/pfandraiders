@@ -87,7 +87,7 @@ async function twoBotsInStartedRoom() {
 describe('websocket server', () => {
   it('plays a full flow: create, join, start, inputs, snapshots', async () => {
     const { a, b } = await twoBotsInStartedRoom();
-    a.send({ t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, buy: null } });
+    a.send({ t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false, eat: false } });
     const first = await a.until('snap');
     const moved = await a.until('snap', (m) => m.snap.players.p1.x > first.snap.players.p1.x);
     expect(moved.ack).toBe(1);
@@ -100,13 +100,13 @@ describe('websocket server', () => {
     const room = server.manager.get(code)!;
     room.state!.players.p1.money = 4242;
     room.state!.players.p1.bottles = { plastic: 3, glass: 0, crate: 0 };
-    room.state!.players.p1.item = 'bolt_cutters';
+    room.state!.players.p1.inventory.bolt_cutters = true;
     const seenByB = await b.until('snap', (m) => m.snap.players.p1.bottles.plastic === 1);
     expect(seenByB.snap.players.p1.money).toBe(0);
-    expect(seenByB.snap.players.p1.item).toBeNull();
+    expect(seenByB.snap.players.p1.inventory.bolt_cutters).toBe(false);
     expect(seenByB.snap.rngState).toBe(0);
     const seenByA = await a.until('snap', (m) => m.snap.players.p1.money === 4242);
-    expect(seenByA.snap.players.p1.item).toBe('bolt_cutters');
+    expect(seenByA.snap.players.p1.inventory.bolt_cutters).toBe(true);
     expect(seenByA.snap.players.p1.bottles.plastic).toBe(3);
   });
 
@@ -207,11 +207,11 @@ describe('websocket server', () => {
     const x0 = room.state!.players.p1.x;
     // Der Server hat die alte Verbindung zum Schliessen markiert, sie kann aber noch Nachrichten schicken
     for (let i = 0; i < 5; i++) {
-      a.send({ t: 'input', seq: 5, input: { moveX: 1, moveY: 0, action: false, steal: false, buy: null } });
+      a.send({ t: 'input', seq: 5, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false, eat: false } });
     }
     await expect(oldClosed).resolves.toBeGreaterThan(0);
     expect(room.state!.players.p1.x).toBe(x0);
-    a2.send({ t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, buy: null } });
+    a2.send({ t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false, eat: false } });
     await a2.until('snap', (m) => m.snap.players.p1.x > x0);
   });
 

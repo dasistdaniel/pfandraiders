@@ -188,8 +188,8 @@ function updateDog(state: GameState, npc: Npc, dtMs: number): void {
   }
   if (npc.cooldownMs > 0) return;
   npc.cooldownMs = cfg.biteCooldownMs;
-  if (target.item === 'dog_treat') {
-    target.item = null;
+  if (target.inventory.dog_treat > 0) {
+    target.inventory.dog_treat--;
     npc.distractedMs = cfg.distractedMs;
   } else {
     damage(target, cfg.biteDamage);

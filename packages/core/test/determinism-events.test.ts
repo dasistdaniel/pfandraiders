@@ -3,6 +3,7 @@ import { CONFIG } from '../src/config';
 import { createGame } from '../src/game';
 import { CITY_MAP } from '../src/maps';
 import { step } from '../src/step';
+import { NO_INPUT } from '../src/types';
 import type { GameState, Input } from '../src/types';
 
 function scripted(tick: number, shift: number): Input {
@@ -12,7 +13,8 @@ function scripted(tick: number, shift: number): Input {
     moveY: dirs[(Math.floor(tick / 13) + shift) % 3],
     action: (tick + shift) % 9 < 5,
     steal: tick % 211 < 6,
-    buy: tick % 300 === 0 ? 'food' : tick % 450 === 0 ? 'dog_treat' : null,
+    attack: tick % 97 < 3,
+    eat: tick % 300 === 0,
   };
 }
 
@@ -79,7 +81,7 @@ describe('determinism with events', () => {
     s.zones.forEach((z) => {
       z.timerMs = 1e9;
     });
-    const idle: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+    const idle: Input = { ...NO_INPUT };
     for (let t = 0; t < 100; t++) step(s, { a: idle, b: idle }, 100);
     for (const p of Object.values(s.players)) {
       expect(p.health).toBeCloseTo(CONFIG.health.max - 10000 / CONFIG.health.hungerEveryMs, 5);

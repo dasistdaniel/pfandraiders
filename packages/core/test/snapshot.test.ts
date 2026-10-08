@@ -8,11 +8,13 @@ function game() {
   const s = newGame(THIEF_ROWS, ['p1', 'p2']);
   s.players.p1.money = 1234;
   s.players.p1.bottles = { plastic: 2, glass: 1, crate: 1 };
-  s.players.p1.item = 'bolt_cutters';
+  s.players.p1.inventory.bolt_cutters = true;
   s.players.p1.containerLevel = 1;
   s.players.p2.money = 777;
   s.players.p2.bottles = { plastic: 0, glass: 3, crate: 0 };
-  s.players.p2.item = 'dog_treat';
+  s.players.p2.inventory.dog_treat = 3;
+  s.players.p2.upgrades.armor = 2;
+  s.players.p2.earnedRound = 55;
   s.rngState = 987654321;
   s.nextNpcId = 7;
   return s;
@@ -25,11 +27,32 @@ describe('projectSnapshot', () => {
     expect(snap.players.p1).toEqual(s.players.p1);
   });
 
-  it('hides money, container contents and item of other players', () => {
+  it('shows whether a foreign player was robbed but never his eat key', () => {
+    const s = game();
+    s.players.p2.robbed = true;
+    s.players.p2.eatHeld = true;
+    const other = projectSnapshot(s, 'p1').players.p2;
+    expect(other.robbed).toBe(true);
+    expect(other.eatHeld).toBe(false);
+  });
+
+  it('shows the attack cooldown of a foreign player but not his attack key', () => {
+    const s = game();
+    s.players.p2.attackCooldownMs = 300;
+    s.players.p2.attackHeld = true;
+    const other = projectSnapshot(s, 'p1').players.p2;
+    expect(other.attackCooldownMs).toBe(300);
+    expect(other.attackHeld).toBe(false);
+  });
+
+  it('hides money, container contents, inventory and upgrades of other players', () => {
     const s = game();
     const other = projectSnapshot(s, 'p1').players.p2;
     expect(other.money).toBe(0);
-    expect(other.item).toBeNull();
+    expect(other.inventory).toEqual({ dog_treat: 0, food: 0, bolt_cutters: false });
+    expect(other.upgrades.armor).toBe(0);
+    expect(other.earnedRound).toBe(0);
+    expect(other.weapon).toBe('fist');
     expect(other.bottles).toEqual({ plastic: 1, glass: 0, crate: 0 }); // nur "hat Flaschen"
     expect(other.containerLevel).toBe(s.players.p2.containerLevel);
     expect(other.health).toBe(s.players.p2.health);
@@ -105,7 +128,8 @@ describe('projectSnapshot', () => {
     expect(snap.players.p2.money).toBe(777);
     expect(snap.players.p1.money).toBe(1234);
     expect(snap.players.p2.bottles.plastic).toBe(1); // Container-Inhalt bleibt auch dann verborgen
-    expect(snap.players.p2.item).toBeNull();
+    expect(snap.players.p2.inventory.dog_treat).toBe(0); // Inventar bleibt auch dann verborgen
+    expect(snap.players.p2.earnedRound).toBe(55);
   });
 
   it('does not contain the map and does not alias the server state', () => {
@@ -149,8 +173,9 @@ describe('projectSnapshot', () => {
 // (und in snapshot.ts entscheiden, ob das Feld öffentlich ist).
 describe('snapshot key sets', () => {
   const PLAYER_KEYS = [
-    'actionHeld', 'bottles', 'containerLevel', 'depositMs', 'health', 'id', 'item', 'mode', 'money', 'searchProgressMs',
-    'searchSpotId', 'shieldMs', 'spawn', 'stealCooldownMs', 'stealHeld', 'unconsciousMs', 'x', 'y',
+    'actionHeld', 'attackCooldownMs', 'attackHeld', 'bottles', 'containerLevel', 'depositMs', 'earnedRound',
+    'earnedTotal', 'eatHeld', 'health', 'id', 'inventory', 'mode', 'money', 'robbed', 'searchProgressMs',
+    'searchSpotId', 'shieldMs', 'spawn', 'stealCooldownMs', 'stealHeld', 'unconsciousMs', 'upgrades', 'weapon', 'x', 'y',
   ];
 
   it('pins the keys of own and foreign players', () => {

@@ -13,7 +13,8 @@ function scripted(tick: number, shift: number): Input {
     moveY: dirs[(Math.floor(tick / 5) + shift) % 3],
     action: (tick + shift) % 7 < 4,
     steal: false,
-    buy: tick % 400 === 0 ? 'upgrade' : null,
+    attack: false,
+    eat: false,
   };
 }
 
@@ -36,14 +37,12 @@ function comprehensive(seed: number): {
   moneyAfterDeposit: number;
   depositAmount: number;
   bottlesAfterDeposit: number;
-  upgradeSucceeded: boolean;
 } {
   // Short round: 90 seconds = 900 steps of 100ms
   const s = createGame(seed, CITY_MAP, ['a'], { roundMs: 90 * 1000 });
   const player = s.players['a'];
   const firstSpot = s.spots[0];
   const dropoff = s.map.dropoffs[0];
-  const shop = s.map.shops[0];
 
   // Guard: verify spot 0 is active at start
   const initialSpotBottles = firstSpot.contents.plastic + firstSpot.contents.glass + firstSpot.contents.crate;
@@ -58,7 +57,6 @@ function comprehensive(seed: number): {
   let moneyAfterDeposit = 0;
   let depositAmount = 0;
   let bottlesAfterDeposit = -1;
-  let upgradeSucceeded = false;
 
   let phase = 0;
   // Die Abgabe dauert: erste Flasche beim Drücken, danach alle CONFIG.depositEveryMs eine.
@@ -73,7 +71,7 @@ function comprehensive(seed: number): {
       // Phase 0: teleport to spot and search (hold action for 31 steps = 3100ms > CONFIG.searchMs)
       player.x = firstSpot.x;
       player.y = firstSpot.y;
-      const input: Input = t < 31 ? { moveX: 0, moveY: 0, action: true, steal: false, buy: null } : NO_INPUT;
+      const input: Input = t < 31 ? { ...NO_INPUT, action: true } : NO_INPUT;
       step(s, { a: input }, dt);
       if (t === 31) {
         searchCompleted = player.bottles.plastic + player.bottles.glass + player.bottles.crate > 0;
@@ -88,7 +86,7 @@ function comprehensive(seed: number): {
         depositAmount = player.bottles.plastic + player.bottles.glass + player.bottles.crate;
         depositEnd = 32 + Math.ceil(((depositAmount - 1) * CONFIG.depositEveryMs) / dt);
       }
-      const input: Input = { moveX: 0, moveY: 0, action: true, steal: false, buy: null };
+      const input: Input = { ...NO_INPUT, action: true };
       step(s, { a: input }, dt);
       if (t === depositEnd) {
         moneyAfterDeposit = player.money;
@@ -101,24 +99,9 @@ function comprehensive(seed: number): {
       player.y = firstSpot.y;
       // a new search needs a fresh press: release once after the deposit press, then hold
       const holdAction = t > depositEnd + 1 && t < depositEnd + 451; // 451 steps to ensure > 45s wait
-      const input: Input = { moveX: 0, moveY: 0, action: holdAction, steal: false, buy: null };
+      const input: Input = { ...NO_INPUT, action: holdAction };
       step(s, { a: input }, dt);
       if (t === depositEnd + 451) phase = 3;
-    } else if (phase === 3) {
-      // Phase 3: fund player and attempt upgrade at shop
-      player.x = shop.x;
-      player.y = shop.y;
-      // Fund player with enough money for first upgrade (150 cents) before attempting
-      if (t === depositEnd + 452) {
-        player.money = 200; // Enough for upgrade (costs 150)
-      }
-      const attemptUpgrade = t === depositEnd + 453; // Attempt upgrade one step after funding
-      const input: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: attemptUpgrade ? 'upgrade' : null };
-      step(s, { a: input }, dt);
-      if (t === depositEnd + 453) {
-        upgradeSucceeded = player.containerLevel === 1 && player.money === 50;
-        phase = 4;
-      }
     } else {
       // Phase 4: run until round ends (phase === 'ended' and timeLeftMs === 0)
       step(s, { a: NO_INPUT }, dt);
@@ -147,7 +130,6 @@ function comprehensive(seed: number): {
     moneyAfterDeposit,
     depositAmount,
     bottlesAfterDeposit,
-    upgradeSucceeded,
   };
 }
 
@@ -187,9 +169,6 @@ describe('determinism', () => {
     expect(first.moneyAfterDeposit).toBeGreaterThan(first.moneyBeforeDeposit);
     expect(first.moneyAfterDeposit - first.moneyBeforeDeposit).toBeGreaterThan(0);
 
-    // Verify upgrade succeeded: containerLevel incremented and money deducted
-    expect(first.upgradeSucceeded).toBe(true);
-
     // Verify determinism: same seed + deterministic inputs = identical state and events
     expect(JSON.stringify(second.state)).toBe(JSON.stringify(first.state));
     expect(second.searchCompleted).toBe(first.searchCompleted);
@@ -198,6 +177,5 @@ describe('determinism', () => {
     expect(second.spotRefilled).toBe(first.spotRefilled);
     expect(second.spotRefillStep).toBe(first.spotRefillStep);
     expect(second.moneyAfterDeposit).toBe(first.moneyAfterDeposit);
-    expect(second.upgradeSucceeded).toBe(first.upgradeSucceeded);
   });
 });

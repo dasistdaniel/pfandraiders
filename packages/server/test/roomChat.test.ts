@@ -64,7 +64,7 @@ describe('Room.chat', () => {
     const { room, a, b, ma } = setup();
     expect(room.start(ma.id).ok).toBe(true);
     expect(room.chat(a, 'hi')).toMatchObject({ ok: false, code: 'chat_closed' });
-    room.phase = 'ended';
+    room.phase = 'shop';
     expect(room.chat(b, 'hi')).toMatchObject({ ok: false, code: 'chat_closed' });
     expect(a.of('chat')).toHaveLength(0);
     expect(b.of('chat')).toHaveLength(0);

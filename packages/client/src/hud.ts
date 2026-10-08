@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CONFIG } from '@pfandraiders/core';
+import { searchMsOf } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
 import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
@@ -75,7 +75,7 @@ class ResultsPanel {
       t.setVisible(row !== undefined);
       if (!row) return;
       const mark = (row.isWinner ? '★ ' : '') + (row.isViewer ? '> ' : '');
-      t.setText(`${mark}${row.place}. ${row.name}  ${formatMoney(row.money)}`);
+      t.setText(`${mark}${row.place}. ${row.name}  ${formatMoney(row.round)}  (gesamt ${formatMoney(row.total)})`);
       t.setColor(toCss(colorOf(row.id)));
       t.setPosition(left, top + PANEL_PAD + TITLE_H + i * ROW_H);
     });
@@ -147,7 +147,7 @@ export class PlayerHud {
 
     let progress = 0;
     if (p.mode === 'searching') {
-      progress = p.searchProgressMs / CONFIG.searchMs;
+      progress = p.searchProgressMs / searchMsOf(p);
       this.bar.setFillStyle(0xffee58);
     }
     this.barBg.setVisible(progress > 0);

@@ -57,10 +57,14 @@ describe('createGame', () => {
     expect(() => createGame(1, noSpawn, ['a'])).toThrow(/spawn/);
   });
 
-  it('starts players without item, steal cooldown or shield', () => {
+  it('starts players with an empty inventory, the fist and without cooldown or shield', () => {
     const s = createGame(1, CITY_MAP, ['a']);
     expect(s.players.a).toMatchObject({
-      item: null,
+      inventory: { dog_treat: 0, food: 0, bolt_cutters: false },
+      upgrades: { knockout: 0, speed: 0, search: 0, punch: 0, armor: 0 },
+      weapon: 'fist',
+      earnedRound: 0,
+      earnedTotal: 0,
       stealCooldownMs: 0,
       shieldMs: 0,
     });

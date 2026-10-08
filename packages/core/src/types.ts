@@ -2,9 +2,31 @@ export type BottleKind = 'plastic' | 'glass' | 'crate';
 export type Bottles = Record<BottleKind, number>;
 export type SpotType = 'bus_stop' | 'bench' | 'bush' | 'bin' | 'park';
 export type Mode = 'walking' | 'searching' | 'unconscious';
-export type ItemId = 'bolt_cutters' | 'dog_treat';
-/** Kaufbefehl: Container-Upgrade, Essen oder ein Special Item */
-export type BuyCommand = 'upgrade' | 'food' | ItemId;
+/** Upgrades mit Stufen (die Tasche ist containerLevel) */
+export type UpgradeId = 'knockout' | 'speed' | 'search' | 'punch' | 'armor';
+/** Stufe je Upgrade, 0 = nicht gekauft */
+export type Upgrades = Record<UpgradeId, number>;
+/** Verbrauchsgüter (Stückzahl) und der Bolzenschneider (höchstens einer) */
+export interface Inventory {
+  dog_treat: number;
+  food: number;
+  bolt_cutters: boolean;
+}
+/** Waffe; bisher nur die Faust, Fernkampf folgt in einem späteren Plan */
+export type WeaponId = 'fist' | 'sling' | 'pistol';
+export type ShopCategory = 'bags' | 'upgrades' | 'attack' | 'defense';
+export type ShopItemId =
+  | 'bag'
+  | 'knockout'
+  | 'speed'
+  | 'search'
+  | 'punch'
+  | 'bolt_cutters'
+  | 'sling'
+  | 'pistol'
+  | 'dog_treat'
+  | 'food'
+  | 'armor';
 
 export interface Point {
   x: number;
@@ -30,13 +52,15 @@ export interface Input {
   moveY: -1 | 0 | 1;
   /** Aktionstaste gehalten */
   action: boolean;
-  /** Klauen-Taste gehalten */
+  /** Klauen-Taste gehalten (wirkt beim Drücken: klauen oder ausrauben) */
   steal: boolean;
-  /** Einmaliger Kaufbefehl, null = nichts kaufen */
-  buy: BuyCommand | null;
+  /** Schlagen-Taste gehalten (wirkt beim Drücken) */
+  attack: boolean;
+  /** Essen-Taste gehalten (wirkt beim Drücken: eine Portion aus dem Inventar) */
+  eat: boolean;
 }
 
-export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, attack: false, eat: false };
 
 export interface SpotDef extends Point {
   id: number;
@@ -79,17 +103,33 @@ export interface Player {
   actionHeld: boolean;
   /** Klauen-Taste im vorigen Tick gedrückt, für die Flanke (Klauen wirkt nur beim Drücken) */
   stealHeld: boolean;
-  /** Special Item im einzigen Slot, null = keins */
-  item: ItemId | null;
+  /** Essen-Taste im vorigen Tick gedrückt, für die Flanke */
+  eatHeld: boolean;
+  /** Schlagen-Taste im vorigen Tick gedrückt, für die Flanke */
+  attackHeld: boolean;
+  /** Verbrauchsgüter und Bolzenschneider (bleiben über Runden) */
+  inventory: Inventory;
+  /** Upgrade-Stufen (bleiben über Runden) */
+  upgrades: Upgrades;
+  /** Waffe, bisher immer 'fist' */
+  weapon: WeaponId;
   /** Restzeit, bis der Spieler wieder klauen kann, 0 = bereit */
   stealCooldownMs: number;
+  /** Restzeit, bis der Spieler wieder schlagen kann, 0 = bereit */
+  attackCooldownMs: number;
   /** Restzeit des Schutzes nach einem Diebstahl, 0 = angreifbar */
   shieldMs: number;
   /** Leben, 0 = bewusstlos (kann zwischen Ticks Nachkommastellen haben) */
   health: number;
   /** Restzeit der Bewusstlosigkeit, 0 = bei Bewusstsein */
   unconsciousMs: number;
-  /** Startpunkt, hier erscheint der Spieler nach der Bewusstlosigkeit */
+  /** In diesem Knockout schon ausgeraubt (einmal pro Knockout, Spec §4.4) */
+  robbed: boolean;
+  /** Rundenverdienst in Cent (Pfand dieser Runde) */
+  earnedRound: number;
+  /** Gesamtverdienst der Serie in Cent (alle Runden, inklusive der laufenden) */
+  earnedTotal: number;
+  /** Startpunkt dieser Runde */
   spawn: Point;
 }
 

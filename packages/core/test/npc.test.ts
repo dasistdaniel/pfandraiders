@@ -7,6 +7,7 @@ import { boxBlocked, parseMap } from '../src/map';
 import { CITY_MAP } from '../src/maps';
 import { isBeingChecked } from '../src/npc';
 import { step } from '../src/step';
+import { NO_INPUT } from '../src/types';
 import type { GameState, Input, Npc, NpcKind, Point } from '../src/types';
 import { input, newGame, openRows, runFor, runSteps, SEARCH_ROWS, teleport } from './helpers';
 
@@ -127,7 +128,7 @@ describe('dog', () => {
 
   it('a treat distracts the dog without making it sit', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.item = 'dog_treat';
+    s.players.p1.inventory.dog_treat = 1;
     const dog = addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
     expect(dog.mood).toBe('active');
@@ -148,19 +149,28 @@ describe('dog', () => {
 
   it('is distracted by a treat instead of biting, and the treat is used up', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.item = 'dog_treat';
+    s.players.p1.inventory.dog_treat = 1;
     const dog = addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
-    expect(s.players.p1.item).toBeNull();
+    expect(s.players.p1.inventory.dog_treat).toBe(0);
     expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
     expect(dog.distractedMs).toBeGreaterThan(CONFIG.npc.dog.distractedMs - 100);
     runFor(s, {}, 3000); // beschäftigt: kein Biss
     expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
   });
 
+  it('uses only one of several treats per bite attempt', () => {
+    const s = quiet(newGame(openRows(30, 5)));
+    s.players.p1.inventory.dog_treat = 3;
+    addNpc(s, 'dog', 30, 24);
+    runSteps(s, {}, 3, 20);
+    expect(s.players.p1.inventory.dog_treat).toBe(2);
+    expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
+  });
+
   it('bites after the treat distraction is over and then sits', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.item = 'dog_treat';
+    s.players.p1.inventory.dog_treat = 1;
     const dog = addNpc(s, 'dog', 30, 24);
     runFor(s, {}, CONFIG.npc.dog.distractedMs + 200);
     expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
@@ -169,10 +179,10 @@ describe('dog', () => {
 
   it('does not use a bolt cutters item up on a bite', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
-    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
     expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
   });
 
@@ -213,7 +223,7 @@ describe('roaming npcs', () => {
   it('never despawn over 10 simulated minutes and stay inside the map, never in solid tiles', () => {
     const s = createGame(3, CITY_MAP, ['a', 'b'], { roundMs: 700000 });
     s.nextNpcMs = 100;
-    const idle: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+    const idle: Input = { ...NO_INPUT };
     let count = 0;
     const seen = new Set<string>();
     const bad: string[] = [];
@@ -531,7 +541,7 @@ describe('npc determinism', () => {
   function run(seed: number): string {
     const s = createGame(seed, CITY_MAP, ['a', 'b'], { roundMs: 400000 });
     s.nextNpcMs = 100;
-    const idle: Input = { moveX: 0, moveY: 0, action: false, steal: false, buy: null };
+    const idle: Input = { ...NO_INPUT };
     for (let t = 0; t < 2000; t++) step(s, { a: idle, b: idle }, 100);
     return JSON.stringify(s.npcs);
   }

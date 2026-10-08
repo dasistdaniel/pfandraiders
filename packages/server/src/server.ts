@@ -224,7 +224,7 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
     case 'start': {
       if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
       if (!isCurrent()) return;
-      const r = session.room.start(session.member.id);
+      const r = session.room.start(session.member.id, msg.roundMs);
       if (!r.ok) reply(conn, r.code, r.message);
       return;
     }
@@ -248,6 +248,34 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
       session.room = null;
       session.member = null;
       sock.close(1000, 'left');
+      return;
+    }
+    case 'ready': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.setReady(session.member, msg.ready);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
+    case 'shopBuy': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.shopBuy(session.member, msg.category, msg.item, msg.qty);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
+    case 'setRoundMs': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.setRoundMs(session.member.id, msg.roundMs);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
+    case 'endSeries': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.endSeries(session.member.id);
+      if (!r.ok) reply(conn, r.code, r.message);
       return;
     }
   }

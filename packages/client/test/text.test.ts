@@ -25,7 +25,7 @@ describe('statusLines', () => {
     s.players.p1.money = 150;
     s.players.p1.bottles = { plastic: 2, glass: 1, crate: 0 };
     const lines = statusLines(s, s.players.p1);
-    expect(lines[0]).toContain('10:00');
+    expect(lines[0]).toContain('Zeit 5:00');
     expect(lines[0]).toContain('1,50 €');
     expect(lines[1]).toContain('Hände 3/3');
     expect(lines[1]).toContain('Pl2');
@@ -34,35 +34,9 @@ describe('statusLines', () => {
     expect(lines[2]).toBe('Leben 100/100');
   });
 
-  it('shows the item name when carrying one', () => {
-    const s = shopGame();
-    s.players.p1.item = 'bolt_cutters';
-    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 100/100   Item: Bolzenschneider');
-  });
 });
 
 describe('hintLines', () => {
-  it('offers upgrade and item at the shop', () => {
-    const s = shopGame();
-    const lines = hintLines(s, s.players.p1, KEYS);
-    expect(lines.some((l) => l.startsWith('[1] Tasche'))).toBe(true);
-    expect(lines.some((l) => l.startsWith('[2] Bolzenschneider'))).toBe(true);
-  });
-
-  it('says the item slot is taken instead of offering a second item', () => {
-    const s = shopGame();
-    s.players.p1.item = 'bolt_cutters';
-    const lines = hintLines(s, s.players.p1, KEYS);
-    expect(lines).toContain('Item-Slot belegt');
-    expect(lines.some((l) => l.startsWith('[2]'))).toBe(false);
-  });
-
-  it('says fully upgraded at the last level', () => {
-    const s = shopGame();
-    s.players.p1.containerLevel = CONFIG.containers.length - 1;
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('Voll ausgebaut');
-  });
-
   it('is empty away from everything', () => {
     const s = shopGame();
     expect(hintLines(s, s.players.p2, KEYS)).toEqual([]);
@@ -72,7 +46,7 @@ describe('hintLines', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
     expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Klauen');
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Bolzenschneider einsetzen');
   });
 
@@ -83,7 +57,7 @@ describe('hintLines', () => {
     const lines = hintLines(s, s.players.p1, KEYS);
     expect(lines).toContain('Klauen in 5 s');
     expect(lines.some((l) => l.includes('[Q]'))).toBe(false);
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     expect(hintLines(s, s.players.p1, KEYS)).toContain('Klauen in 5 s');
   });
 
@@ -152,10 +126,10 @@ describe('alertText', () => {
 });
 
 describe('resultLines', () => {
-  it('lists players by money with places', () => {
+  it('lists players by round earnings with places', () => {
     const s = shopGame();
-    s.players.p1.money = 500;
-    s.players.p2.money = 1230;
+    s.players.p1.earnedRound = 500;
+    s.players.p2.earnedRound = 1230;
     s.phase = 'ended';
     expect(resultLines(s, KEYS)).toEqual([
       'Runde vorbei!',
@@ -168,19 +142,11 @@ describe('resultLines', () => {
 });
 
 describe('labels for other devices', () => {
-  it('uses the given keys in shop hints', () => {
-    const s = shopGame();
-    const lines = hintLines(s, s.players.p1, KEYS2);
-    expect(lines.some((l) => l.startsWith('[,] Tasche'))).toBe(true);
-    expect(lines.some((l) => l.startsWith('[.] Bolzenschneider'))).toBe(true);
-    expect(lines.some((l) => l.startsWith('[1]') || l.startsWith('[2]'))).toBe(false);
-  });
-
   it('uses the steal key for stealing', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
     expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Klauen');
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     expect(hintLines(s, s.players.p1, KEYS2)).toContain('[/] Bolzenschneider einsetzen');
   });
 
@@ -193,7 +159,7 @@ describe('labels for other devices', () => {
   it('uses the given name resolver for the ranking', () => {
     const s = shopGame();
     s.phase = 'ended';
-    s.players.p1.money = 500;
+    s.players.p1.earnedRound = 500;
     expect(resultLines(s, KEYS2, (id) => (id === 'p1' ? 'Anna' : 'Bob'))[1]).toMatch(/^1\. Anna /);
     expect(resultLines(s, KEYS2)[1]).toMatch(/^1\. P1 /);
   });
@@ -206,22 +172,6 @@ describe('health and shop', () => {
     expect(statusLines(s, s.players.p1)[2]).toBe('Leben 88/100');
   });
 
-  it('offers food and the treat at the shop with the device keys', () => {
-    const s = shopGame();
-    const lines = hintLines(s, s.players.p1, KEYS);
-    expect(lines).toContain('[4] Essen +30 Leben 1,00 €');
-    expect(lines).toContain('[3] Leckerli 1,00 €');
-    expect(hintLines(s, s.players.p1, KEYS2)).toContain(`[${KEYS2.food}] Essen +30 Leben 1,00 €`);
-  });
-
-  it('hides the treat offer when the item slot is taken but still offers food', () => {
-    const s = shopGame();
-    s.players.p1.item = 'bolt_cutters';
-    const lines = hintLines(s, s.players.p1, KEYS);
-    expect(lines).toContain('Item-Slot belegt');
-    expect(lines.some((l) => l.startsWith('[3]'))).toBe(false);
-    expect(lines.some((l) => l.startsWith('[4]'))).toBe(true);
-  });
 });
 
 describe('more alerts', () => {
@@ -305,7 +255,8 @@ function moneyGame(amounts: number[]): GameState {
   const ids = amounts.map((_, i) => `p${i + 1}`);
   const s = createGame(1, parseMap(['#########', '#@......#', '#########']), ids);
   amounts.forEach((m, i) => {
-    s.players[ids[i]].money = m;
+    s.players[ids[i]].earnedRound = m;
+    s.players[ids[i]].earnedTotal = m * 2;
   });
   s.phase = 'ended';
   return s;
@@ -314,10 +265,10 @@ function moneyGame(amounts: number[]): GameState {
 describe('resultRows', () => {
   it('handles a single player', () => {
     const rows = resultRows(moneyGame([300]), 'p1');
-    expect(rows).toEqual([{ place: 1, id: 'p1', name: 'P1', money: 300, isWinner: true, isViewer: true }]);
+    expect(rows).toEqual([{ place: 1, id: 'p1', name: 'P1', round: 300, total: 600, isWinner: true, isViewer: true }]);
   });
 
-  it('orders two players by money', () => {
+  it('orders two players by round earnings', () => {
     const rows = resultRows(moneyGame([500, 1230]), 'p1');
     expect(rows.map((r) => [r.id, r.place, r.isWinner])).toEqual([
       ['p2', 1, true],
@@ -356,14 +307,14 @@ describe('resultRows', () => {
 });
 
 describe('resultFooter', () => {
-  it('shows restart and menu for local and host', () => {
-    const expected = ['Neue Runde: R oder E', 'Menü: Esc'];
-    expect(resultFooter('local', KEYS)).toEqual(expected);
-    expect(resultFooter('host', KEYS)).toEqual(expected);
+  it('shows restart and menu locally', () => {
+    expect(resultFooter('local', KEYS)).toEqual(['Neue Runde: R oder E', 'Menü: Esc']);
   });
 
-  it('tells guests to wait', () => {
-    expect(resultFooter('guest', KEYS)).toEqual(['Warte auf den Host…', 'Menü: Esc']);
+  it('asks everybody online to get ready for the next round', () => {
+    const expected = ['Bereit für die nächste Runde: R oder E', 'Menü: Esc'];
+    expect(resultFooter('host', KEYS)).toEqual(expected);
+    expect(resultFooter('guest', KEYS)).toEqual(expected);
   });
 });
 

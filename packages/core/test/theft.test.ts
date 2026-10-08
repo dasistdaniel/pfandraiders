@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
 import { CONFIG } from '../src/config';
+import { damage } from '../src/health';
+import { canBeLooted, canBeRobbed } from '../src/theft';
 import { input, newGame, runFor, runSteps, teleport, setSpot, THIEF_ROWS } from './helpers';
 
 const STEAL = { p1: input({ steal: true }) };
@@ -185,66 +187,150 @@ describe('bolt cutters', () => {
   it('steals everything at once on the press, is used up and starts the cooldown', () => {
     const s = setup();
     s.players.p1.containerLevel = 3;
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     runSteps(s, STEAL, 1);
     expect(s.players.p1.bottles.plastic).toBe(4);
     expect(s.players.p2.bottles.plastic).toBe(0);
-    expect(s.players.p1.item).toBeNull();
+    expect(s.players.p1.inventory.bolt_cutters).toBe(false);
     expect(s.players.p2.shieldMs).toBeGreaterThan(CONFIG.steal.shieldMs - 100); // p2 zählt im selben Tick schon herunter
     expect(s.players.p1.stealCooldownMs).toBe(CONFIG.steal.cooldownMs);
   });
 
   it('is limited by the free room of the thief', () => {
     const s = setup();
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     runSteps(s, STEAL, 1);
     expect(s.players.p1.bottles.plastic).toBe(3);
     expect(s.players.p2.bottles.plastic).toBe(1);
-    expect(s.players.p1.item).toBeNull();
+    expect(s.players.p1.inventory.bolt_cutters).toBe(false);
   });
 
   it('is kept when the victim has no bottles', () => {
     const s = setup();
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     s.players.p2.bottles = { plastic: 0, glass: 0, crate: 0 };
     runSteps(s, STEAL, 1);
-    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
   });
 
   it('is kept when the victim is shielded', () => {
     const s = setup();
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     s.players.p2.shieldMs = 5000;
     runSteps(s, STEAL, 1);
-    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
     expect(s.players.p2.bottles.plastic).toBe(4);
   });
 
   it('is kept and steals nothing during the cooldown', () => {
     const s = setup();
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     s.players.p1.stealCooldownMs = 3000;
     runSteps(s, STEAL, 1);
-    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
     expect(s.players.p2.bottles.plastic).toBe(4);
   });
 
   it('is not used when the key was already held before the victim came into reach', () => {
     const s = setup();
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     teleport(s, 'p2', { x: 120, y: 24 }); // weit weg
     runSteps(s, STEAL, 5); // Taste gedrückt, kein Opfer in Reichweite
     teleport(s, 'p2', { x: 40, y: 24 });
     runSteps(s, STEAL, 5);
-    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
     expect(s.players.p2.bottles.plastic).toBe(4);
   });
 
   it('is not triggered by the action key', () => {
     const s = setup();
-    s.players.p1.item = 'bolt_cutters';
+    s.players.p1.inventory.bolt_cutters = true;
     runSteps(s, { p1: input({ action: true }) }, 5);
-    expect(s.players.p1.item).toBe('bolt_cutters');
+    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
     expect(s.players.p2.bottles.plastic).toBe(4);
+  });
+});
+
+describe('robbing a knocked-out player', () => {
+  /** p2 (Tasche) trägt 4 Plastik und liegt ausgeknockt 16 px neben p1 */
+  function knockedSetup() {
+    const s = setup();
+    damage(s.players.p2, 1000);
+    return s;
+  }
+
+  it('takes half of the bottles once and marks the victim as robbed', () => {
+    const s = knockedSetup();
+    runSteps(s, STEAL, 1);
+    expect(s.players.p1.bottles.plastic).toBe(2);
+    expect(s.players.p2.bottles.plastic).toBe(2);
+    expect(s.players.p2.robbed).toBe(true);
+    runSteps(s, RELEASE, 1);
+    runSteps(s, STEAL, 1);
+    expect(s.players.p1.bottles.plastic).toBe(2);
+    expect(s.players.p2.bottles.plastic).toBe(2);
+  });
+
+  it('neither needs nor starts the steal cooldown and gives no shield', () => {
+    const s = knockedSetup();
+    s.players.p1.stealCooldownMs = 4000;
+    runSteps(s, STEAL, 1);
+    expect(s.players.p1.bottles.plastic).toBe(2);
+    expect(s.players.p1.stealCooldownMs).toBeLessThan(4000);
+    expect(s.players.p1.stealCooldownMs).toBeGreaterThan(3900);
+    expect(s.players.p2.shieldMs).toBe(0);
+  });
+
+  it('does not use the bolt cutters', () => {
+    const s = knockedSetup();
+    s.players.p1.containerLevel = 3;
+    s.players.p1.inventory.bolt_cutters = true;
+    runSteps(s, STEAL, 1);
+    expect(s.players.p1.bottles.plastic).toBe(2);
+    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
+  });
+
+  it('is limited by the room of the robber and does nothing with a full container', () => {
+    const s = knockedSetup();
+    s.players.p1.bottles = { plastic: 3, glass: 0, crate: 0 }; // Hände voll
+    runSteps(s, STEAL, 1);
+    expect(s.players.p2.bottles.plastic).toBe(4);
+    expect(s.players.p2.robbed).toBe(false);
+    s.players.p1.bottles = { plastic: 2, glass: 0, crate: 0 }; // ein Platz frei
+    runSteps(s, RELEASE, 1);
+    runSteps(s, STEAL, 1);
+    expect(s.players.p1.bottles.plastic).toBe(3);
+    expect(s.players.p2.bottles.plastic).toBe(3);
+    expect(s.players.p2.robbed).toBe(true);
+  });
+
+  it('is possible again after the next knockout', () => {
+    const s = knockedSetup();
+    runSteps(s, STEAL, 1);
+    expect(s.players.p2.robbed).toBe(true);
+    s.players.p2.unconsciousMs = 0;
+    s.players.p2.health = 50;
+    s.players.p2.robbed = false;
+    damage(s.players.p2, 1000);
+    expect(s.players.p2.robbed).toBe(false);
+    s.players.p1.bottles = { plastic: 0, glass: 0, crate: 0 };
+    runSteps(s, RELEASE, 1);
+    runSteps(s, STEAL, 1);
+    expect(s.players.p1.bottles.plastic).toBe(1);
+  });
+
+  it('never lets the normal theft hit an unconscious player', () => {
+    const s = knockedSetup();
+    s.players.p2.robbed = true;
+    expect(canBeRobbed(s.players.p1, s.players.p2)).toBe(false);
+    expect(canBeLooted(s.players.p1, s.players.p2)).toBe(false);
+    runSteps(s, STEAL, 1);
+    expect(s.players.p2.bottles.plastic).toBe(4);
+  });
+
+  it('is out of reach beyond the steal radius', () => {
+    const s = knockedSetup();
+    teleport(s, 'p2', { x: 24 + CONFIG.steal.radius + 1, y: 24 });
+    expect(canBeLooted(s.players.p1, s.players.p2)).toBe(false);
   });
 });

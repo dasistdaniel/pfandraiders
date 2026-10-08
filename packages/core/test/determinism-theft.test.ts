@@ -28,7 +28,7 @@ function normalTheft(seed: number): GameState {
 function cutters(seed: number): GameState {
   const s = base(seed);
   s.players.p1.containerLevel = 3;
-  s.players.p1.item = 'bolt_cutters';
+  s.players.p1.inventory.bolt_cutters = true;
   step(s, { p2: input({ action: true }) }, 20);
   for (let t = 0; t < 200; t++) {
     step(s, { p1: input({ steal: t === 0 }), p2: input({ action: true }) }, 20);
@@ -46,11 +46,11 @@ describe('determinism with theft', () => {
     expect(a.players.p1.stealCooldownMs).toBeGreaterThan(0);
   });
 
-  it('replays a bolt cutters theft identically and the item was used', () => {
+  it('replays a bolt cutters theft identically and the cutters were used', () => {
     const a = cutters(7);
     const b = cutters(7);
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
     expect(totalBottles(a.players.p1.bottles)).toBe(4);
-    expect(a.players.p1.item).toBeNull();
+    expect(a.players.p1.inventory.bolt_cutters).toBe(false);
   });
 });

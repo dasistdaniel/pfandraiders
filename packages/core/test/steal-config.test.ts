@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG, TILE } from '../src/config';
 
-describe('steal and item config', () => {
+describe('steal and shop config', () => {
   it('has sane theft values', () => {
     expect(CONFIG.steal.radius).toBeGreaterThan(0);
     expect(CONFIG.steal.radius).toBeLessThanOrEqual(2 * CONFIG.interactRadius); // Dieb und Opfer müssen sich sehen können
@@ -13,9 +13,10 @@ describe('steal and item config', () => {
     expect(CONFIG.steal.shieldMs).toBeGreaterThan(0);
   });
 
-  it('has a priced bolt cutters item', () => {
-    expect(CONFIG.items.bolt_cutters.price).toBeGreaterThan(0);
-    expect(CONFIG.items.bolt_cutters.name.length).toBeGreaterThan(0);
+  it('has priced bolt cutters in the attack category', () => {
+    expect(CONFIG.shop.items.bolt_cutters.prices[0]).toBeGreaterThan(0);
+    expect(CONFIG.shop.items.bolt_cutters.name).toBe('Bolzenschneider');
+    expect(CONFIG.shop.items.bolt_cutters.category).toBe('attack');
   });
 
   it('keeps the steal radius within a tile and a half so players must really be next to each other', () => {

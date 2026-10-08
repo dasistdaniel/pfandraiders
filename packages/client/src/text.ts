@@ -7,7 +7,6 @@ import {
   findStealTarget,
   isBeingChecked,
   isNear,
-  nextUpgrade,
   ranking,
   totalBottles,
 } from '@pfandraiders/core';
@@ -26,7 +25,7 @@ export function statusLines(state: GameState, p: Player): string[] {
       `   Pl${p.bottles.plastic} Gl${p.bottles.glass} Ka${p.bottles.crate}`,
   ];
   const health = `Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`;
-  lines.push(p.item !== null ? `${health}   Item: ${CONFIG.items[p.item].name}` : health);
+  lines.push(health);
   return lines;
 }
 
@@ -34,21 +33,7 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   if (state.phase === 'ended' || p.unconsciousMs > 0) return [];
   const lines: string[] = [];
 
-  if (isNear(state.map.shops, p)) {
-    const up = nextUpgrade(p);
-    lines.push(up ? `[${labels.upgrade}] ${up.name} (${up.capacity} Plätze) ${formatMoney(up.price)}` : 'Voll ausgebaut');
-    lines.push(
-      p.item === null
-        ? `[${labels.item}] ${CONFIG.items.bolt_cutters.name} ${formatMoney(CONFIG.items.bolt_cutters.price)}`
-        : 'Item-Slot belegt',
-    );
-    if (p.item === null) {
-      lines.push(`[${labels.treat}] ${CONFIG.items.dog_treat.name} ${formatMoney(CONFIG.items.dog_treat.price)}`);
-    }
-    lines.push(
-      `[${labels.food}] Essen +${CONFIG.health.food.heal} Leben ${formatMoney(CONFIG.health.food.price)}`,
-    );
-  } else if (isNear(state.map.dropoffs, p)) {
+  if (isNear(state.map.dropoffs, p)) {
     lines.push(
       totalBottles(p.bottles) > 0
         ? `[${labels.action} halten] Pfand abgeben (${formatMoney(bottlesValue(p.bottles))})`
@@ -62,7 +47,7 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   }
   if (!full && findStealTarget(state, p)) {
     if (p.stealCooldownMs > 0) lines.push(`Klauen in ${Math.ceil(p.stealCooldownMs / 1000)} s`);
-    else lines.push(p.item !== null ? `[${labels.steal}] Bolzenschneider einsetzen` : `[${labels.steal}] Klauen`);
+    else lines.push(p.inventory.bolt_cutters ? `[${labels.steal}] Bolzenschneider einsetzen` : `[${labels.steal}] Klauen`);
   }
   return lines;
 }
@@ -93,7 +78,7 @@ export function resultLines(
   nameOf: (id: string) => string = playerName,
 ): string[] {
   const places = ranking(state).map(
-    (r, i) => `${i + 1}. ${nameOf(r.id)}  ${formatMoney(r.money)}`,
+    (r, i) => `${i + 1}. ${nameOf(r.id)}  ${formatMoney(r.round)}`,
   );
   return ['Runde vorbei!', ...places, '', `Neue Runde: R oder ${labels.action}`];
 }
@@ -102,14 +87,17 @@ export interface ResultRow {
   place: number;
   id: string;
   name: string;
-  money: number;
+  /** Rundenverdienst (Cent) */
+  round: number;
+  /** Gesamtverdienst der Serie (Cent) */
+  total: number;
   isWinner: boolean;
   isViewer: boolean;
 }
 
 const MAX_NAME_LENGTH = 16;
 
-/** Ergebniszeilen in Ranglistenreihenfolge; gleiches Geld teilt sich den Platz (1, 1, 3). */
+/** Ergebniszeilen in Ranglistenreihenfolge; gleicher Rundenverdienst teilt sich den Platz (1, 1, 3). */
 export function resultRows(
   state: GameState,
   viewerId: string,
@@ -117,12 +105,13 @@ export function resultRows(
 ): ResultRow[] {
   const rows: ResultRow[] = [];
   ranking(state).forEach((r, i) => {
-    const place = i > 0 && rows[i - 1].money === r.money ? rows[i - 1].place : i + 1;
+    const place = i > 0 && rows[i - 1].round === r.round ? rows[i - 1].place : i + 1;
     rows.push({
       place,
       id: r.id,
       name: nameOf(r.id).slice(0, MAX_NAME_LENGTH),
-      money: r.money,
+      round: r.round,
+      total: r.total,
       isWinner: place === 1,
       isViewer: r.id === viewerId,
     });
@@ -131,6 +120,6 @@ export function resultRows(
 }
 
 export function resultFooter(role: 'local' | 'host' | 'guest', labels: KeyLabels): string[] {
-  const first = role === 'guest' ? 'Warte auf den Host…' : `Neue Runde: R oder ${labels.action}`;
+  const first = role === 'local' ? `Neue Runde: R oder ${labels.action}` : `Bereit für die nächste Runde: R oder ${labels.action}`;
   return [first, 'Menü: Esc'];
 }

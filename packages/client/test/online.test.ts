@@ -1,4 +1,4 @@
-import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, RETRO_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
+import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, RETRO_MAP, createGame, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
 import type { ClientMessage, Player, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
@@ -27,8 +27,8 @@ class FakeSocket implements SocketLike {
 
 function roster() {
   return [
-    { id: 'p1', name: 'Anna', color: ROOM_COLORS[0], connected: true },
-    { id: 'p2', name: 'Bob', color: ROOM_COLORS[1], connected: true },
+    { id: 'p1', name: 'Anna', color: ROOM_COLORS[0], connected: true, ready: false },
+    { id: 'p2', name: 'Bob', color: ROOM_COLORS[1], connected: true, ready: false },
   ];
 }
 
@@ -44,7 +44,7 @@ function startMessage(tickValue = 0, x2 = 40): ServerMessage {
   const s = createGame(1, CITY_MAP, ['p1', 'p2']);
   s.tick = tickValue;
   s.players.p2.x = x2;
-  return { t: 'start', mapId: DEFAULT_MAP_ID, map: CITY_MAP, you: 'p1', players: roster(), snap: projectSnapshot(s, 'p1') };
+  return { t: 'start', mapId: DEFAULT_MAP_ID, map: CITY_MAP, you: 'p1', players: roster(), snap: projectSnapshot(s, 'p1'), roundMs: DEFAULT_ROUND_MS };
 }
 
 function snapMessage(tickValue: number, x2: number): ServerMessage {
@@ -78,10 +78,10 @@ describe('OnlineConnection messages', () => {
     expect(conn.room).toBe('ABCD');
     expect(conn.you).toBe('p2');
     expect(conn.token).toBe('secret');
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby' });
+    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
     expect(conn.roster).toHaveLength(2);
     expect(conn.isHost()).toBe(false);
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'lobby' });
+    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
     expect(conn.isHost()).toBe(true);
   });
 
@@ -167,10 +167,10 @@ describe('OnlineConnection messages', () => {
   it('only the host sends start', () => {
     const { socket, conn } = setup();
     socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby' });
+    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
     conn.requestStart();
     expect(socket.sent.some((m) => m.t === 'start')).toBe(false);
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'lobby' });
+    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
     conn.requestStart();
     expect(socket.sent.filter((m) => m.t === 'start')).toHaveLength(1);
   });
@@ -215,22 +215,37 @@ describe('OnlineConnection input', () => {
     expect(socket.sent.filter((m) => m.t === 'input')).toHaveLength(2);
   });
 
-  it('sends a buy command exactly once, also when it arrives between frames', () => {
-    const { socket, conn } = setup();
-    socket.receive(startMessage());
-    conn.setInput('p1', { ...NO_INPUT, buy: 'upgrade' });
-    conn.setInput('p1', NO_INPUT); // nächster Frame meldet "nicht gedrückt"
-    conn.update(10);
-    conn.update(200);
-    const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
-    expect(inputs.filter((m) => m.input.buy === 'upgrade')).toHaveLength(1);
-  });
-
   it('does not send inputs before a game has started', () => {
     const { socket, conn } = setup();
     conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
     conn.update(200);
     expect(socket.sent.filter((m) => m.t === 'input')).toHaveLength(0);
+  });
+
+  it('sends a changed attack or eat key at once, not only with the heartbeat', () => {
+    const { socket, conn } = setup();
+    socket.receive(startMessage());
+    conn.update(10);
+    const before = socket.sent.filter((m) => m.t === 'input').length;
+    conn.setInput('p1', { ...NO_INPUT, attack: true });
+    conn.update(10);
+    conn.setInput('p1', { ...NO_INPUT, eat: true });
+    conn.update(10);
+    const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
+    expect(inputs.length).toBe(before + 2);
+    expect(inputs.at(-2)!.input.attack).toBe(true);
+    expect(inputs.at(-1)!.input.eat).toBe(true);
+  });
+
+  it('tracks the room phase and sends ready', () => {
+    const { socket, conn } = setup();
+    expect(conn.roomPhase).toBe('lobby');
+    socket.receive({ t: 'phase', phase: 'shop' });
+    expect(conn.roomPhase).toBe('shop');
+    conn.setReady(true);
+    expect(socket.sent.at(-1)).toEqual({ t: 'ready', ready: true });
+    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'playing', roundMs: DEFAULT_ROUND_MS });
+    expect(conn.roomPhase).toBe('playing');
   });
 });
 
@@ -455,19 +470,6 @@ describe('OnlineConnection reopen', () => {
     sockets[2].open();
     expect(sockets[2].sent).toEqual([{ t: 'join', room: 'ABCD', name: 'Anna', token: 'tok' }]);
     expect(sockets[1].sent).toEqual([]);
-  });
-
-  it('drops a buy command pressed during the outage', () => {
-    const { sockets, conn } = joinedSetup();
-    conn.update(10);
-    conn.setInput('p1', { ...NO_INPUT, buy: 'upgrade' });
-    conn.reopen();
-    sockets[1].open();
-    sockets[1].receive(startMessage(1, 40));
-    conn.update(10);
-    const inputs = sockets[1].sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
-    expect(inputs.length).toBeGreaterThan(0);
-    expect(inputs.every((m) => m.input.buy === null)).toBe(true);
   });
 
   it('throws without a prior joined', () => {

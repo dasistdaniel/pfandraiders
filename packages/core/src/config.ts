@@ -1,12 +1,32 @@
-import type { BottleKind, ItemId, SpotType } from './types';
+import type { BottleKind, ShopCategory, ShopItemId, SpotType } from './types';
 
 /** Kantenlänge einer Kachel in Pixeln */
 export const TILE = 16;
 
 export type Range = readonly [min: number, max: number];
 
+/** level: Stufen (Preis je nächste Stufe), once: höchstens einmal, stack: Stückzahl bis CONFIG.shop.maxStack */
+export type ShopKind = 'level' | 'once' | 'stack';
+
+export interface ShopItemDef {
+  category: ShopCategory;
+  /** Anzeigename im Shop */
+  name: string;
+  kind: ShopKind;
+  /** level: Preis in Cent von Stufe i auf i + 1; once/stack: [Preis je Stück] */
+  prices: readonly number[];
+  /** level: Wirkung je Stufe (Index = Stufe, Länge = prices.length + 1); sonst leer */
+  values: readonly number[];
+  /** false = wird grau mit "bald" angezeigt und ist nicht kaufbar */
+  available: boolean;
+}
+
+/** Preis in Cent, um von Taschenstufe i auf i + 1 zu kommen */
+const UPGRADE_PRICES: readonly number[] = [150, 400, 900];
+
 export const CONFIG = {
-  roundMs: 10 * 60 * 1000,
+  /** Standard-Rundenzeit (5 Minuten); der Host wählt in der Lobby 3, 5, 7 oder 10 Minuten */
+  roundMs: 5 * 60 * 1000,
   /** größter Zeitschritt, den ein einzelner step verarbeitet */
   maxStepMs: 100,
   /** Pixel pro Sekunde */
@@ -37,7 +57,7 @@ export const CONFIG = {
     { name: 'Einkaufswagen', capacity: 30, speedMult: 0.75 },
   ],
   /** Preis in Cent, um von Stufe i auf i+1 zu kommen */
-  upgradePrices: [150, 400, 900],
+  upgradePrices: UPGRADE_PRICES,
   /** Diebstahl */
   steal: {
     /** größter Abstand Dieb zu Opfer in Pixeln */
@@ -49,21 +69,52 @@ export const CONFIG = {
     /** so lange kann der Dieb nach einem Diebstahl nicht erneut klauen */
     cooldownMs: 6000,
   },
-  items: {
-    bolt_cutters: { name: 'Bolzenschneider', price: 600 },
-    dog_treat: { name: 'Leckerli', price: 100 },
-  } as Record<ItemId, { name: string; price: number }>,
+  /** Schlagen (Spec §4.1) */
+  fight: {
+    /** größter Abstand zum Opfer in Pixeln */
+    radius: 20,
+    /** so lange nach einem Schlag (auch ohne Treffer) kein neuer */
+    cooldownMs: 600,
+    /** Grundschaden; Schlag-Upgrade erhöht, Rüstung des Opfers senkt */
+    damage: 20,
+    /** Untergrenze des Schadens */
+    minDamage: 5,
+  },
+  /**
+   * Shop-Phase (Spec §3). Reihenfolge der Einträge = Reihenfolge im Shop. Preise und Wirkungen sind
+   * Startwerte für das spätere Balancing.
+   */
+  shop: {
+    /** Höchster Bestand eines Verbrauchsguts */
+    maxStack: 99,
+    items: {
+      bag: { category: 'bags', name: 'Größere Tasche', kind: 'level', prices: UPGRADE_PRICES, values: [], available: true },
+      /** values: Knockout-Dauer in ms */
+      knockout: { category: 'upgrades', name: 'Knockout kürzer', kind: 'level', prices: [200, 500, 1000], values: [20000, 15000, 10000, 5000], available: true },
+      /** values: Faktor auf die Laufgeschwindigkeit */
+      speed: { category: 'upgrades', name: 'Laufgeschwindigkeit', kind: 'level', prices: [200, 500, 1000], values: [1, 1.08, 1.16, 1.24], available: true },
+      /** values: Faktor auf die Suchzeit */
+      search: { category: 'upgrades', name: 'Schneller suchen', kind: 'level', prices: [200, 500, 1000], values: [1, 0.85, 0.7, 0.55], available: true },
+      /** values: zusätzlicher Schaden je Schlag */
+      punch: { category: 'attack', name: 'Stärkerer Schlag', kind: 'level', prices: [250, 600, 1200], values: [0, 5, 10, 15], available: true },
+      bolt_cutters: { category: 'attack', name: 'Bolzenschneider', kind: 'once', prices: [600], values: [], available: true },
+      sling: { category: 'attack', name: 'Steinschleuder', kind: 'once', prices: [800], values: [], available: false },
+      pistol: { category: 'attack', name: 'Pistole', kind: 'once', prices: [2000], values: [], available: false },
+      dog_treat: { category: 'defense', name: 'Leckerli', kind: 'stack', prices: [100], values: [], available: true },
+      food: { category: 'defense', name: 'Essen', kind: 'stack', prices: [100], values: [], available: true },
+      /** values: weniger Schaden je Schlag */
+      armor: { category: 'defense', name: 'Rüstung', kind: 'level', prices: [250, 600, 1200], values: [0, 4, 8, 12], available: true },
+    } as Record<ShopItemId, ShopItemDef>,
+  },
   health: {
     max: 100,
     /** alle so viele ms verliert ein Spieler 1 Leben durch Hunger */
     hungerEveryMs: 8000,
-    food: { price: 100, heal: 30 },
-    unconsciousMs: 10000,
-    /** Leben nach dem Respawn */
+    /** Eine Portion Essen aus dem Inventar heilt so viel */
+    food: { heal: 30 },
+    /** Leben nach dem Aufstehen */
     reviveHealth: 60,
-    /** Anteil des Geldes, der beim Umfallen verloren geht (abgerundet) */
-    moneyLossFraction: 0.25,
-    /** Schutz gegen Diebstahl nach dem Respawn */
+    /** Schutz nach dem Aufstehen */
     spawnShieldMs: 3000,
   },
   npc: {
