@@ -26,8 +26,15 @@ export const TWO_PLAYER_ROWS = ['#########', '#@b@.D..#', '#########'];
 /** p1 (x=24) steht 16 px neben p2 (x=40). Der Spot (x=56) liegt nur bei p2 in Reichweite. */
 export const THIEF_ROWS = ['#########', '#@@b.D..#', '#########'];
 
+/** Spiel ohne Countdown: die Runde läuft ab dem ersten step (das Countdown-Verhalten prüft countdown.test.ts). */
 export function newGame(rows: string[], ids: string[] = ['p1']): GameState {
-  return createGame(1, parseMap(rows), ids);
+  return skipCountdown(createGame(1, parseMap(rows), ids));
+}
+
+/** Überspringt den Countdown vor der Runde (für Tests, die das Spiel ab dem ersten step brauchen). */
+export function skipCountdown(state: GameState): GameState {
+  state.countdownMs = 0;
+  return state;
 }
 
 export function input(partial: Partial<Input>): Input {

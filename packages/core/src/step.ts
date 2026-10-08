@@ -23,6 +23,14 @@ export function step(
   const dt = Number.isFinite(dtMs) ? Math.min(Math.max(dtMs, 0), CONFIG.maxStepMs) : 0;
   state.tick++;
 
+  // Countdown vor der Runde: nur er läuft (tick zählt weiter, damit Snapshots geordnet bleiben).
+  // Keine Bewegung, keine Eingaben, keine Rundenzeit, keine NPCs, Zonen, Hunger oder Nachfüllungen.
+  // Erreicht er 0, verfällt der Rest dieses Schritts; die Runde beginnt mit dem nächsten step.
+  if (state.countdownMs > 0) {
+    state.countdownMs = Math.max(0, state.countdownMs - dt);
+    return state;
+  }
+
   for (const id of Object.keys(state.players)) {
     updatePlayer(state, state.players[id], inputs[id] ?? NO_INPUT, dt);
   }

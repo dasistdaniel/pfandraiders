@@ -19,7 +19,7 @@ function scripted(tick: number, shift: number): Input {
 }
 
 function play(seed: number): GameState {
-  const s = createGame(seed, CITY_MAP, ['a', 'b']);
+  const s = createGame(seed, CITY_MAP, ['a', 'b'], { countdownMs: 0 });
   for (let t = 0; t < 3000; t++) {
     step(s, { a: scripted(t, 0), b: t % 2 === 0 ? scripted(t, 1) : NO_INPUT }, 16);
   }
@@ -39,7 +39,7 @@ function comprehensive(seed: number): {
   bottlesAfterDeposit: number;
 } {
   // Short round: 90 seconds = 900 steps of 100ms
-  const s = createGame(seed, CITY_MAP, ['a'], { roundMs: 90 * 1000 });
+  const s = createGame(seed, CITY_MAP, ['a'], { roundMs: 90 * 1000, countdownMs: 0 });
   const player = s.players['a'];
   const firstSpot = s.spots[0];
   const dropoff = s.map.dropoffs[0];

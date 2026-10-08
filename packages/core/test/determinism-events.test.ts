@@ -29,7 +29,7 @@ interface Stats {
 }
 
 function play(seed: number): { state: GameState; stats: Stats } {
-  const s = createGame(seed, CITY_MAP, ['a', 'b', 'c'], { roundMs: 400000 });
+  const s = createGame(seed, CITY_MAP, ['a', 'b', 'c'], { roundMs: 400000, countdownMs: 0 });
   const stats: Stats = {
     maxNpcs: 0,
     sawDog: false,
@@ -76,7 +76,7 @@ describe('determinism with events', () => {
   });
 
   it('applies hunger inside the full step pipeline', () => {
-    const s = createGame(5, CITY_MAP, ['a', 'b'], { roundMs: 400000 });
+    const s = createGame(5, CITY_MAP, ['a', 'b'], { roundMs: 400000, countdownMs: 0 });
     s.nextNpcMs = 1e9;
     s.zones.forEach((z) => {
       z.timerMs = 1e9;

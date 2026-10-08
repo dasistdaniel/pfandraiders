@@ -9,7 +9,7 @@ import { input, THIEF_ROWS } from './helpers';
 
 /** p2 trägt 4 Plastik und liegt ausgeknockt neben p1 */
 function base(seed: number): GameState {
-  const s = createGame(seed, parseMap(THIEF_ROWS), ['p1', 'p2'], { roundMs: 60000 });
+  const s = createGame(seed, parseMap(THIEF_ROWS), ['p1', 'p2'], { roundMs: 60000, countdownMs: 0 });
   s.spots[0].contents = { plastic: 1, glass: 0, crate: 0 };
   s.spots[0].refillInMs = 0;
   s.players.p2.containerLevel = 1;

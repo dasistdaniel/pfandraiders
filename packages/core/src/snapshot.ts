@@ -67,6 +67,7 @@ export function projectSnapshot(state: GameState, viewerId: string): Snapshot {
 
   const snap: Snapshot = {
     tick: src.tick,
+    countdownMs: src.countdownMs,
     timeLeftMs: src.timeLeftMs,
     phase: src.phase,
     rngState: 0,
