@@ -3,7 +3,7 @@ import type { GameState } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
 import { formatMoney } from '../src/format';
-import { alertText, hintLines, playerName, resultFooter, resultLines, resultRows, seizeText, statusLines } from '../src/text';
+import { alertText, hintLines, playerName, resultFooter, resultHeader, resultLines, resultRows, seizeText, statusLines } from '../src/text';
 
 const KEYS: KeyLabels = { action: 'E', steal: 'Q', attack: 'F', eat: 'C' };
 const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.', eat: ',' };
@@ -136,7 +136,7 @@ describe('resultLines', () => {
       '1. P2  12,30 €',
       '2. P1  5,00 €',
       '',
-      'Neue Runde: R oder E',
+      'Weiter zum Shop: R oder E',
     ]);
   });
 });
@@ -153,7 +153,7 @@ describe('labels for other devices', () => {
   it('names the action key in the last results line', () => {
     const s = shopGame();
     s.phase = 'ended';
-    expect(resultLines(s, KEYS2).at(-1)).toBe('Neue Runde: R oder Enter');
+    expect(resultLines(s, KEYS2).at(-1)).toBe('Weiter zum Shop: R oder Enter');
   });
 
   it('uses the given name resolver for the ranking', () => {
@@ -307,14 +307,10 @@ describe('resultRows', () => {
 });
 
 describe('resultFooter', () => {
-  it('shows restart and menu locally', () => {
-    expect(resultFooter('local', KEYS)).toEqual(['Neue Runde: R oder E', 'Menü: Esc']);
-  });
-
-  it('asks everybody online to get ready for the next round', () => {
-    const expected = ['Bereit für die nächste Runde: R oder E', 'Menü: Esc'];
-    expect(resultFooter('host', KEYS)).toEqual(expected);
-    expect(resultFooter('guest', KEYS)).toEqual(expected);
+  it('leads to the shop for every role', () => {
+    for (const role of ['local', 'host', 'guest'] as const) {
+      expect(resultFooter(role, KEYS)).toEqual(['Weiter zum Shop: R oder E', 'Menü: Esc']);
+    }
   });
 });
 
@@ -336,5 +332,62 @@ describe('seizure notice', () => {
     const s = shopGame();
     s.phase = 'ended';
     expect(alertText(s, s.players.p1, ['3 Flaschen beschlagnahmt!'])).toBe('');
+  });
+});
+
+describe('inventory and fight hints', () => {
+  function duo(): GameState {
+    return createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
+  }
+
+  it('shows the inventory after the health', () => {
+    const s = duo();
+    s.players.p1.inventory = { dog_treat: 2, food: 3, bolt_cutters: true };
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 100/100   Essen 3   Leckerli 2   Bolzenschneider');
+  });
+
+  it('shows only the health without inventory', () => {
+    const s = duo();
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 100/100');
+  });
+
+  it('offers punching an awake player in reach, but not during the cooldown', () => {
+    const s = duo();
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[F] Schlagen');
+    s.players.p1.attackCooldownMs = 300;
+    expect(hintLines(s, s.players.p1, KEYS)).not.toContain('[F] Schlagen');
+  });
+
+  it('offers robbing a knocked-out player who was not robbed yet', () => {
+    const s = duo();
+    s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
+    s.players.p2.unconsciousMs = 5000;
+    s.players.p2.health = 0;
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[Q] Ausrauben');
+    expect(hintLines(s, s.players.p1, KEYS)).not.toContain('[F] Schlagen');
+    s.players.p2.robbed = true;
+    expect(hintLines(s, s.players.p1, KEYS)).not.toContain('[Q] Ausrauben');
+  });
+
+  it('offers eating when food is there and a portion would not be wasted', () => {
+    const s = duo();
+    s.players.p1.inventory.food = 2;
+    s.players.p1.health = 100 - CONFIG.health.food.heal;
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[C] Essen (+30 Leben, noch 2)');
+    s.players.p1.health = 100 - CONFIG.health.food.heal + 1;
+    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Essen'))).toBe(false);
+  });
+
+  it('tells an unconscious player that he was robbed', () => {
+    const s = duo();
+    s.players.p1.unconsciousMs = 4200;
+    s.players.p1.robbed = true;
+    expect(alertText(s, s.players.p1).split('\n')[0]).toBe('Bewusstlos! Noch 5 s (ausgeraubt)');
+  });
+});
+
+describe('series ranking texts', () => {
+  it('has a header with round and total earnings', () => {
+    expect(resultHeader()).toBe('Platz  Name              Runde     Gesamt');
   });
 });
