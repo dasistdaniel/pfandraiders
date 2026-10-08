@@ -135,7 +135,7 @@ describe('buildInput', () => {
 ```
 
 In `packages/client/test/sources.test.ts`:
-- Import auf `import { padToHeld, PAD_LABELS, STICK_DEADZONE } from '../src/sources';` und `import type { PadSnapshot } from '../src/sources';` ändern;
+- die beiden Importzeilen (`import { EdgeTracker, padBLeaves, padToHeld, STICK_DEADZONE } from '../src/sources';` und `import type { HeldKeys, PadSnapshot } from '../src/sources';`) ersetzen durch `import { padBLeaves, padToHeld, PAD_LABELS, STICK_DEADZONE } from '../src/sources';` und `import type { PadSnapshot } from '../src/sources';` (`padBLeaves` bleibt, seine Tests aus PR #32 bleiben unverändert);
 - die Tests `'maps buttons: A action, X upgrade, Y item'` und `'maps the shoulder buttons: RB treat, LB food'` ersetzen durch:
 
 ```ts
