@@ -118,7 +118,7 @@ describe('start', () => {
     expect(sb.mapId).toBe(DEFAULT_MAP_ID);
     expect(sa.players).toHaveLength(2);
     expect(Object.keys(sa.snap.players)).toEqual(['p1', 'p2']);
-    expect(room.phase).toBe('running');
+    expect(room.phase).toBe('playing');
   });
 });
 
@@ -165,21 +165,6 @@ describe('ticking', () => {
     expect(a.last('snap').ack).toBe(2);
   });
 
-  it('applies a buy command exactly once, also if a newer input without it arrives first', () => {
-    const { room, ma } = twoPlayers();
-    room.start('p1');
-    const shop = room.state!.map.shops[0];
-    room.state!.players.p1.x = shop.x;
-    room.state!.players.p1.y = shop.y;
-    room.state!.players.p1.money = 10_000;
-    room.setInput(ma, 1, { ...NO_INPUT, buy: 'upgrade' });
-    room.setInput(ma, 2, NO_INPUT); // überschreibt vor dem Tick, der Kauf darf nicht verloren gehen
-    room.tick();
-    room.tick();
-    room.tick();
-    expect(room.state!.players.p1.containerLevel).toBe(1);
-  });
-
   it('ignores input from members that are not connected and uses no input for them', () => {
     const { room, ma } = twoPlayers();
     room.start('p1');
@@ -198,8 +183,8 @@ describe('ticking', () => {
     room.state!.players.p2.money = 321;
     room.tick();
     room.tick();
-    expect(room.phase).toBe('ended');
-    expect(a.last('lobby').phase).toBe('ended');
+    expect(room.phase).toBe('shop');
+    expect(a.last('lobby').phase).toBe('shop');
     expect(a.last('snap').snap.phase).toBe('ended');
     expect(a.last('snap').snap.players.p2.money).toBe(321);
     const ticks = a.of('snap').length;
@@ -208,14 +193,16 @@ describe('ticking', () => {
     expect(b.of('snap').length).toBe(ticks);
   });
 
-  it('can start another round after the end with the same members', () => {
-    const { room, a } = twoPlayers({ roundMs: 100 });
+  it('starts the next round when everybody is ready after the end, with the same members', () => {
+    const { room, a, ma, mb } = twoPlayers({ roundMs: 100 });
     room.start('p1');
     room.tick();
     room.tick();
-    expect(room.phase).toBe('ended');
-    expect(room.start('p1').ok).toBe(true);
-    expect(room.phase).toBe('running');
+    expect(room.phase).toBe('shop');
+    expect(room.start('p1')).toMatchObject({ ok: false, code: 'already_started' });
+    room.setReady(ma, true);
+    room.setReady(mb, true);
+    expect(room.phase).toBe('playing');
     expect(a.of('start')).toHaveLength(2);
     expect(room.state!.tick).toBe(0);
   });
@@ -315,7 +302,7 @@ describe('review fixes', () => {
     advance(SERVER_CONFIG.graceMs + 1000);
     room.tick();
     room.tick();
-    expect(room.phase).toBe('ended');
+    expect(room.phase).toBe('shop');
     const r = room.join('Anna', new FakeConn());
     expect(r.ok).toBe(true);
     expect(room.members.filter((m) => m.name === 'Anna')).toHaveLength(1);
@@ -328,7 +315,7 @@ describe('review fixes', () => {
     room.leave(ma.conn!);
     room.tick();
     room.tick();
-    expect(room.phase).toBe('ended');
+    expect(room.phase).toBe('shop');
     advance(SERVER_CONFIG.graceMs + 1000);
     room.tick();
     expect(room.members.map((m) => m.id)).toEqual(['p2']);
@@ -366,7 +353,7 @@ describe('review fixes', () => {
     expect(room.start('')).toMatchObject({ ok: false, code: 'not_host' });
     room.tick();
     room.tick();
-    expect(room.phase).toBe('ended');
+    expect(room.phase).toBe('shop');
     expect(room.start('')).toMatchObject({ ok: false, code: 'not_host' });
   });
 
@@ -401,16 +388,18 @@ describe('review fixes', () => {
     expect(ma.expired).toBe(false);
   });
 
-  it('F6d: a new round drops disconnected members and keeps the other ids stable', () => {
-    const { room, mb } = threePlayers({ roundMs: 100 });
+  it('F6d: a disconnected member in the grace period plays the next round as a standing figure', () => {
+    const { room, ma, mb, mc } = threePlayers({ roundMs: 100 });
     room.start('p1');
     room.leave(mb.conn!);
     room.tick();
     room.tick();
-    expect(room.phase).toBe('ended');
-    expect(room.start('p1').ok).toBe(true);
-    expect(room.members.map((m) => m.id)).toEqual(['p1', 'p3']);
-    expect(Object.keys(room.state!.players)).toEqual(['p1', 'p3']);
+    expect(room.phase).toBe('shop');
+    room.setReady(ma, true);
+    room.setReady(mc, true);
+    expect(room.phase).toBe('playing');
+    expect(room.members.map((m) => m.id)).toEqual(['p1', 'p2', 'p3']);
+    expect(Object.keys(room.state!.players)).toEqual(['p1', 'p2', 'p3']);
   });
 
   it('F6e: leave of an unknown or already left connection is a no-op', () => {
@@ -485,11 +474,11 @@ describe('leaving for good', () => {
     const { room, advance, ma } = twoPlayers({ roundMs: 1000 });
     room.start('p1');
     room.leaveForGood(ma.conn!);
-    for (let i = 0; i < 200 && room.phase === 'running'; i++) {
+    for (let i = 0; i < 200 && room.phase === 'playing'; i++) {
       advance(SERVER_CONFIG.stepMs);
       room.tick();
     }
-    expect(room.phase).toBe('ended');
+    expect(room.phase).toBe('shop');
     room.tick(); // nach Rundenende räumt der nächste Schritt den freigegebenen Platz ab
     expect(room.members.map((m) => m.id)).toEqual(['p2']);
     const r = room.join('Anna', new FakeConn(), ma.token);

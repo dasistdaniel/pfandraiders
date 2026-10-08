@@ -2,11 +2,16 @@ import {
   CHAT_HISTORY_SIZE,
   createGame,
   DEFAULT_MAP_ID,
+  DEFAULT_ROUND_MS,
+  freshProgress,
+  isRoundMs,
   MAP_DEFS,
   MAX_ROOM_PLAYERS,
   MIN_START_PLAYERS,
   NO_INPUT,
+  progressOf,
   projectSnapshot,
+  ranking,
   ROOM_COLORS,
   step,
 } from '@pfandraiders/core';
@@ -17,6 +22,8 @@ import type {
   Input,
   MapData,
   MapId,
+  Progress,
+  RankEntry,
   RoomPhase,
   RosterEntry,
   ServerBuild,
@@ -42,9 +49,11 @@ export interface Member {
   disconnectedAt: number | null;
   /** Token ist nach der Frist ungültig */
   expired: boolean;
-  /** Zuletzt gesendete Eingabe (der Kaufbefehl bleibt bis zum nächsten Tick erhalten) */
+  /** Zuletzt gesendete Eingabe */
   input: Input;
   ackSeq: number;
+  /** Shop-Phase: hat "Bereit" gedrückt */
+  ready: boolean;
 }
 
 export interface RoomOptions {
@@ -55,6 +64,7 @@ export interface RoomOptions {
   stepMs?: number;
   graceMs?: number;
   emptyMs?: number;
+  /** Feste Rundenlänge (Umgebung ROUND_MS, für Tests); hat Vorrang vor der Wahl des Hosts. */
   roundMs?: number;
   now?: () => number;
   random?: () => number;
@@ -68,10 +78,14 @@ function fail<T>(code: ErrorCode, message: string): Result<T> {
   return { ok: false, code, message };
 }
 
+const OK: Result<void> = { ok: true, value: undefined };
+
 export class Room {
   phase: RoomPhase = 'lobby';
   members: Member[] = [];
   state: GameState | null = null;
+  /** Fortschritt der Serie je Spieler-id (Geld, Tasche, Upgrades, Inventar, Gesamtverdienst); leer in der Lobby */
+  readonly progress = new Map<string, Progress>();
   private nextId = 1;
   private lastActive: number;
   private readonly mapId: MapId;
@@ -79,7 +93,11 @@ export class Room {
   private readonly stepMs: number;
   private readonly graceMs: number;
   private readonly emptyMs: number;
-  private readonly roundMs: number | undefined;
+  private readonly fixedRoundMs: number | undefined;
+  /** Vom Host gewählte Rundenzeit */
+  private chosenRoundMs: number = DEFAULT_ROUND_MS;
+  /** Rangliste der letzten Runde, für Nachzügler in der Shop-Phase */
+  private lastRanking: RankEntry[] = [];
   private readonly now: () => number;
   private readonly random: () => number;
   private readonly build: ServerBuild;
@@ -98,11 +116,16 @@ export class Room {
     this.graceMs = opts.graceMs ?? SERVER_CONFIG.graceMs;
     // Ein leerer Raum darf nie vor Ablauf der Rückkehrfrist verschwinden
     this.emptyMs = Math.max(opts.emptyMs ?? SERVER_CONFIG.emptyRoomMs, this.graceMs + 15_000);
-    this.roundMs = opts.roundMs;
+    this.fixedRoundMs = opts.roundMs;
     this.now = opts.now ?? (() => Date.now());
     this.random = opts.random ?? Math.random;
     this.build = opts.build ?? currentBuild();
     this.lastActive = this.now();
+  }
+
+  /** Rundenzeit der nächsten Runde: ROUND_MS (falls gesetzt), sonst die Wahl des Hosts. */
+  roundMs(): number {
+    return this.fixedRoundMs ?? this.chosenRoundMs;
   }
 
   /** Host = erster verbundener Spieler in Beitrittsreihenfolge. */
@@ -111,11 +134,24 @@ export class Room {
   }
 
   roster(): RosterEntry[] {
-    return this.members.map((m) => ({ id: m.id, name: m.name, color: m.color, connected: m.conn !== null }));
+    return this.members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      connected: m.conn !== null,
+      ready: m.ready,
+    }));
   }
 
   lobbyMessage(): ServerMessage {
-    return { t: 'lobby', room: this.code, host: this.hostId(), players: this.roster(), phase: this.phase };
+    return {
+      t: 'lobby',
+      room: this.code,
+      host: this.hostId(),
+      players: this.roster(),
+      phase: this.phase,
+      roundMs: this.roundMs(),
+    };
   }
 
   private broadcastLobby(): void {
@@ -123,18 +159,36 @@ export class Room {
     for (const m of this.members) m.conn?.send(msg);
   }
 
+  private broadcast(msg: ServerMessage): void {
+    for (const m of this.members) m.conn?.send(msg);
+  }
+
   private connected(): Member[] {
     return this.members.filter((m) => m.conn !== null);
   }
 
-  /** Markiert Mitglieder nach der Frist als abgelaufen; ausserhalb der Runde fliegen sie raus. */
+  /** Entfernt ein Mitglied samt Fortschritt (nur außerhalb der laufenden Runde). */
+  private drop(m: Member): void {
+    this.members = this.members.filter((x) => x !== m);
+    this.progress.delete(m.id);
+  }
+
+  /**
+   * Markiert Mitglieder nach der Frist als abgelaufen; außerhalb der Runde fliegen sie raus
+   * (ihr Fortschritt verfällt). In der Shop-Phase kann das die nächste Runde auslösen.
+   */
   private expireMembers(): void {
     const now = this.now();
     for (const m of this.members) {
       if (m.disconnectedAt !== null && now - m.disconnectedAt > this.graceMs) m.expired = true;
     }
-    if (this.phase !== 'running') {
-      this.members = this.members.filter((m) => !(m.conn === null && m.expired));
+    if (this.phase === 'playing') return;
+    const gone = this.members.filter((m) => m.conn === null && m.expired);
+    if (gone.length === 0) return;
+    for (const m of gone) this.drop(m);
+    if (this.phase === 'shop') {
+      this.broadcastLobby();
+      this.checkAllReady();
     }
   }
 
@@ -148,15 +202,17 @@ export class Room {
       if (back) {
         back.conn = conn;
         back.disconnectedAt = null;
+        back.ready = false; // wer wieder verbindet, ist nicht bereit
         conn.send({ t: 'joined', room: this.code, you: back.id, token: back.token, build: this.build });
         this.sendChatHistory(conn);
-        if (this.phase === 'running' && this.state) this.sendStart(back);
+        if (this.phase === 'playing' && this.state) this.sendStart(back);
+        if (this.phase === 'shop') this.sendShop(back);
         this.broadcastLobby();
         return { ok: true, value: back };
       }
     }
 
-    if (this.phase === 'running') return fail('already_started', 'Die Runde läuft bereits.');
+    if (this.phase === 'playing') return fail('already_started', 'Die Runde läuft bereits.');
     if (this.members.length >= MAX_ROOM_PLAYERS) return fail('room_full', 'Der Raum ist voll.');
     if (this.members.some((m) => m.name.toLowerCase() === name.toLowerCase())) {
       return fail('name_taken', 'Der Name ist schon vergeben.');
@@ -174,10 +230,16 @@ export class Room {
       expired: false,
       input: { ...NO_INPUT },
       ackSeq: 0,
+      ready: false,
     };
     this.members.push(member);
     conn.send({ t: 'joined', room: this.code, you: member.id, token: member.token, build: this.build });
     this.sendChatHistory(conn);
+    if (this.phase === 'shop') {
+      // Beitritt zwischen zwei Runden: leerer Fortschritt, spielt ab der nächsten Runde mit
+      this.progress.set(member.id, freshProgress());
+      this.sendShop(member);
+    }
     this.broadcastLobby();
     return { ok: true, value: member };
   }
@@ -218,10 +280,13 @@ export class Room {
       this.chatHistory.splice(0, this.chatHistory.length - CHAT_HISTORY_SIZE);
     }
     for (const m of this.members) m.conn?.send({ t: 'chat', ...msg });
-    return { ok: true, value: undefined };
+    return OK;
   }
 
-  /** Verbindung weg. In der Lobby verschwindet der Spieler, im Spiel steht seine Figur still weiter. */
+  /**
+   * Verbindung weg. In der Lobby verschwindet der Spieler; im Spiel steht seine Figur still weiter;
+   * in der Shop-Phase behält er seinen Fortschritt bis zum Ende der Frist und zählt nicht mehr für "alle bereit".
+   */
   leave(conn: Conn): void {
     const member = this.members.find((m) => m.conn === conn);
     if (!member) return;
@@ -229,17 +294,17 @@ export class Room {
     member.conn = null;
     member.disconnectedAt = this.now();
     member.input = { ...NO_INPUT };
-    if (this.phase !== 'running') {
-      this.members = this.members.filter((m) => m !== member);
-    }
+    member.ready = false;
+    if (this.phase === 'lobby') this.drop(member);
     this.forgetChatIfEmpty();
     this.broadcastLobby();
+    this.checkAllReady();
   }
 
   /**
    * Absichtliches Verlassen: der Platz wird sofort frei, das Token gilt nicht mehr (keine Frist).
-   * In der Lobby und nach Rundenende verschwindet der Spieler; während der Runde bleibt die Figur
-   * als Statist stehen (ihr Geld zählt für die Rangliste) und fällt wie ein abgelaufener Platz heraus.
+   * In der Lobby und in der Shop-Phase verschwindet der Spieler samt Fortschritt; während der Runde
+   * bleibt die Figur als Statist stehen (ihr Verdienst zählt für die Rangliste) und fällt am Rundenende heraus.
    */
   leaveForGood(conn: Conn): void {
     const member = this.members.find((m) => m.conn === conn);
@@ -249,36 +314,51 @@ export class Room {
     member.disconnectedAt = this.now();
     member.expired = true;
     member.input = { ...NO_INPUT };
-    if (this.phase !== 'running') {
-      this.members = this.members.filter((m) => m !== member);
-    }
+    member.ready = false;
+    if (this.phase !== 'playing') this.drop(member);
     this.forgetChatIfEmpty();
     this.broadcastLobby();
+    this.checkAllReady();
   }
 
-  start(byId: string): Result<void> {
+  /**
+   * Startet die Serie (nur Host, nur in der Lobby, mindestens MIN_START_PLAYERS verbunden).
+   * `roundMs`: gültiger Wert setzt die Rundenzeit, ungültige Zahl den Standard, fehlend = unverändert.
+   */
+  start(byId: string, roundMs?: number): Result<void> {
     this.lastActive = this.now();
     if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann starten.');
-    if (this.phase === 'running') return fail('already_started', 'Die Runde läuft schon.');
+    if (this.phase !== 'lobby') return fail('already_started', 'Die Serie läuft schon.');
     if (this.connected().length < MIN_START_PLAYERS) {
       return fail('need_players', 'Mindestens zwei Spieler nötig.');
     }
-    // Getrennte Spieler fallen zwischen den Runden heraus
+    if (roundMs !== undefined) this.chosenRoundMs = isRoundMs(roundMs) ? roundMs : DEFAULT_ROUND_MS;
+    // Getrennte Spieler der Lobby sind schon entfernt; neue Serie, leerer Fortschritt
     this.members = this.connected();
+    this.progress.clear();
+    for (const m of this.members) this.progress.set(m.id, freshProgress());
+    this.startRound();
+    return OK;
+  }
+
+  /** Neue Runde mit allen Mitgliedern (auch getrennten in der Frist) und ihrem Fortschritt. */
+  private startRound(): void {
     const seed = Math.floor(this.random() * 0x100000000) >>> 0;
-    this.state = createGame(seed, this.map, this.members.map((m) => m.id), {
-      roundMs: this.roundMs,
-    });
+    const ids = this.members.map((m) => m.id);
+    const progress: Record<string, Progress> = {};
+    for (const id of ids) progress[id] = this.progress.get(id) ?? freshProgress();
+    this.state = createGame(seed, this.map, ids, { roundMs: this.roundMs(), progress });
     for (const m of this.members) {
       m.input = { ...NO_INPUT };
       m.ackSeq = 0;
+      m.ready = false;
     }
-    this.phase = 'running';
+    this.phase = 'playing';
     // Chat ist nur in der Lobby offen; die Zähler werden nicht mehr gebraucht
     this.chatTimes.clear();
+    this.broadcast({ t: 'phase', phase: 'playing' });
     for (const m of this.members) this.sendStart(m);
     this.broadcastLobby();
-    return { ok: true, value: undefined };
   }
 
   private sendStart(m: Member): void {
@@ -290,37 +370,85 @@ export class Room {
       you: m.id,
       players: this.roster(),
       snap: projectSnapshot(this.state, m.id),
+      roundMs: this.roundMs(),
     });
   }
 
-  /** Letzte Eingabe merken. Ein noch nicht verbrauchter Kaufbefehl bleibt erhalten. */
+  /** Alles, was ein Spieler in der Shop-Phase braucht: Phase, Rangliste der letzten Runde, eigener Stand. */
+  private sendShop(m: Member): void {
+    if (!m.conn) return;
+    m.conn.send({ t: 'phase', phase: 'shop' });
+    m.conn.send({ t: 'ranking', entries: this.lastRanking.map((e) => ({ ...e })) });
+    this.sendShopState(m);
+  }
+
+  /** Eigener Stand, nur an diesen Spieler (fremder Fortschritt bleibt privat). */
+  private sendShopState(m: Member): void {
+    if (!m.conn) return;
+    const own = this.progress.get(m.id) ?? freshProgress();
+    m.conn.send({ t: 'shopState', you: progressOf(own), ready: m.ready });
+  }
+
+  /** Bereit / nicht bereit in der Shop-Phase. Sind danach alle Verbundenen bereit, beginnt die nächste Runde. */
+  setReady(m: Member, ready: boolean): Result<void> {
+    if (this.phase !== 'shop') return fail('wrong_phase', 'Bereit gibt es nur im Shop.');
+    if (m.conn === null) return OK;
+    this.lastActive = this.now();
+    m.ready = ready;
+    this.sendShopState(m);
+    this.broadcastLobby();
+    this.checkAllReady();
+    return OK;
+  }
+
+  /** Shop-Phase: alle verbundenen Spieler bereit (und mindestens einer verbunden) -> nächste Runde. */
+  private checkAllReady(): void {
+    if (this.phase !== 'shop') return;
+    const live = this.connected();
+    if (live.length === 0 || !live.every((m) => m.ready)) return;
+    this.startRound();
+  }
+
+  /** Runde vorbei: Fortschritt sichern, Rangliste senden, Shop-Phase. */
+  private endRound(): void {
+    const state = this.state;
+    if (!state) return;
+    for (const m of this.members) {
+      const p = state.players[m.id];
+      if (p) this.progress.set(m.id, progressOf(p));
+    }
+    this.lastRanking = ranking(state);
+    this.phase = 'shop';
+    for (const m of this.members) m.ready = false;
+    // Wer die Runde endgültig verlassen hat (oder dessen Frist ablief), fällt jetzt heraus
+    for (const m of this.members.filter((x) => x.conn === null && x.expired)) this.drop(m);
+    for (const m of this.members) this.sendShop(m);
+    this.broadcastLobby();
+  }
+
+  /** Letzte Eingabe merken. */
   setInput(m: Member, seq: number, input: Input): void {
     if (m.conn === null) return;
     this.lastActive = this.now();
     if (Number.isSafeInteger(seq) && seq >= 0) m.ackSeq = Math.max(m.ackSeq, seq);
-    m.input = { ...input, buy: input.buy ?? m.input.buy };
+    m.input = { ...input };
   }
 
   /** Ein Serverschritt: Eingaben anwenden, `step`, Snapshots senden. */
   tick(): void {
     const now = this.now();
     this.expireMembers();
-    if (this.phase !== 'running' || !this.state) return;
+    if (this.phase !== 'playing' || !this.state) return;
     if (this.connected().length > 0) this.lastActive = now;
 
     const inputs: Record<string, Input> = {};
     for (const m of this.members) inputs[m.id] = m.conn ? m.input : NO_INPUT;
     step(this.state, inputs, this.stepMs);
-    // Einmalige Befehle sind verbraucht
-    for (const m of this.members) m.input = { ...m.input, buy: null };
 
     for (const m of this.members) {
       m.conn?.send({ t: 'snap', snap: projectSnapshot(this.state, m.id), ack: m.ackSeq });
     }
-    if (this.state.phase === 'ended') {
-      this.phase = 'ended';
-      this.broadcastLobby();
-    }
+    if (this.state.phase === 'ended') this.endRound();
   }
 
   /** Leerer Raum, der lange genug leer war. */
