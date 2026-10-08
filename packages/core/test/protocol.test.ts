@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { RETRO_MAP } from '../src/maps/retro';
 import type { ServerMessage, Snapshot } from '../src/protocol';
 import {
+  DEFAULT_ROUND_MS,
+  isRoundMs,
   MAX_BUILD_FIELD_LENGTH,
   MAX_NAME_LENGTH,
   parseClientMessage,
   parseServerBuild,
   ROOM_CODE_CHARS,
   ROOM_CODE_LENGTH,
+  ROUND_MS_CHOICES,
 } from '../src/protocol';
+import { CONFIG } from '../src/config';
 
 describe('parseClientMessage', () => {
   it('accepts create with a trimmed name', () => {
@@ -82,7 +86,7 @@ describe('parseClientMessage', () => {
 
 describe('ServerMessage start', () => {
   it('carries the map id', () => {
-    const msg: ServerMessage = { t: 'start', mapId: 'retro', map: RETRO_MAP, you: 'p1', players: [], snap: {} as Snapshot };
+    const msg: ServerMessage = { t: 'start', mapId: 'retro', map: RETRO_MAP, you: 'p1', players: [], snap: {} as Snapshot, roundMs: 300_000 };
     expect(msg.t === 'start' && msg.mapId).toBe('retro');
   });
 });
@@ -111,5 +115,54 @@ describe('parseServerBuild', () => {
     }
     expect(parseServerBuild({ number: 'x'.repeat(MAX_BUILD_FIELD_LENGTH + 1), sha: 'a' })).toBeNull();
     expect(parseServerBuild({ number: '1', sha: 'y'.repeat(MAX_BUILD_FIELD_LENGTH + 1) })).toBeNull();
+  });
+});
+
+describe('series messages', () => {
+  it('allows 3, 5, 7 and 10 minutes, default 5', () => {
+    expect(ROUND_MS_CHOICES).toEqual([180_000, 300_000, 420_000, 600_000]);
+    expect(DEFAULT_ROUND_MS).toBe(300_000);
+    expect(CONFIG.roundMs).toBe(DEFAULT_ROUND_MS);
+    expect(isRoundMs(420_000)).toBe(true);
+    expect(isRoundMs(400_000)).toBe(false);
+    expect(isRoundMs('300000')).toBe(false);
+  });
+
+  it('accepts start with and without a round time and keeps only finite numbers', () => {
+    expect(parseClientMessage({ t: 'start' })).toEqual({ t: 'start' });
+    expect(parseClientMessage({ t: 'start', roundMs: 420_000 })).toEqual({ t: 'start', roundMs: 420_000 });
+    expect(parseClientMessage({ t: 'start', roundMs: 123 })).toEqual({ t: 'start', roundMs: 123 });
+    expect(parseClientMessage({ t: 'start', roundMs: 'x' })).toEqual({ t: 'start' });
+    expect(parseClientMessage({ t: 'start', roundMs: Number.POSITIVE_INFINITY })).toEqual({ t: 'start' });
+  });
+
+  it('accepts ready only with a boolean', () => {
+    expect(parseClientMessage({ t: 'ready', ready: true })).toEqual({ t: 'ready', ready: true });
+    expect(parseClientMessage({ t: 'ready', ready: false })).toEqual({ t: 'ready', ready: false });
+    expect(parseClientMessage({ t: 'ready', ready: 1 })).toBeNull();
+    expect(parseClientMessage({ t: 'ready' })).toBeNull();
+  });
+
+  it('accepts shopBuy with known category and item and a quantity from 1 to 99', () => {
+    expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: 'food', qty: 99 })).toEqual({
+      t: 'shopBuy',
+      category: 'defense',
+      item: 'food',
+      qty: 99,
+    });
+    for (const qty of [0, 100, 1.5, -3, '2', null]) {
+      expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: 'food', qty })).toBeNull();
+    }
+    expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: '__proto__', qty: 1 })).toBeNull();
+    expect(parseClientMessage({ t: 'shopBuy', category: 'toString', item: 'food', qty: 1 })).toBeNull();
+  });
+
+  it('accepts setRoundMs only with an allowed value', () => {
+    expect(parseClientMessage({ t: 'setRoundMs', roundMs: 180_000 })).toEqual({ t: 'setRoundMs', roundMs: 180_000 });
+    expect(parseClientMessage({ t: 'setRoundMs', roundMs: 200_000 })).toBeNull();
+  });
+
+  it('accepts endSeries and drops extra fields', () => {
+    expect(parseClientMessage({ t: 'endSeries', junk: 1 })).toEqual({ t: 'endSeries' });
   });
 });
