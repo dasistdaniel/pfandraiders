@@ -34,6 +34,9 @@ function addNpc(s: GameState, kind: NpcKind, x: number, y: number): Npc {
     cooldownMs: 0,
     distractedMs: 0,
     checkMs: 0,
+    pathX: x,
+    pathY: y,
+    pathMs: 0,
   };
   s.npcs.push(npc);
   return npc;
@@ -535,5 +538,97 @@ describe('npc determinism', () => {
 
   it('same seed gives the same npcs and positions', () => {
     expect(run(9)).toBe(run(9));
+  });
+});
+
+/**
+ * Wand in Spalte 8 von Zeile 2 bis 8, Lücke nur oben in Zeile 1. Spieler bei Kachel (5,5) = (88,88),
+ * NPC rechts der Wand bei (184,88): auf derselben Zeile, der direkte Weg führt gegen die Wand.
+ */
+const WALLED = [
+  '####################',
+  '#..................#',
+  '#.......#..........#',
+  '#.......#..........#',
+  '#.......#..........#',
+  '#....@..#..........#',
+  '#.......#..........#',
+  '#.......#..........#',
+  '#.......#..........#',
+  '####################',
+];
+const BEHIND_WALL = { x: 184, y: 88 };
+
+describe('pathfinding around walls', () => {
+  function walled(): GameState {
+    const s = quiet(newGame(WALLED));
+    s.players.p1.containerLevel = 1;
+    s.players.p1.bottles = { plastic: 4, glass: 0, crate: 0 };
+    return s;
+  }
+
+  it('the direct line between npc and player is blocked by the wall', () => {
+    const s = walled();
+    expect(s.players.p1.x).toBe(88);
+    expect(s.players.p1.y).toBe(88);
+    expect(boxBlocked(s.map, 136, 88, CONFIG.playerHalf)).toBe(true);
+    expect(dist(s.players.p1, BEHIND_WALL)).toBeLessThan(CONFIG.npc.police.senseRadius);
+  });
+
+  it('police walks around the wall, reaches the control radius and confiscates', () => {
+    const s = walled();
+    const cop = addNpc(s, 'police', BEHIND_WALL.x, BEHIND_WALL.y);
+    let closest = Infinity;
+    for (let t = 0; t < 400 && totalBottles(s.players.p1.bottles) === 4; t++) {
+      step(s, {}, 20);
+      closest = Math.min(closest, dist(cop, s.players.p1));
+    }
+    expect(closest).toBeLessThanOrEqual(CONFIG.npc.police.controlRadius);
+    expect(totalBottles(s.players.p1.bottles)).toBe(2);
+    expect(cop.restId).toBe('p1');
+  });
+
+  it('a dog walks around the wall and bites', () => {
+    const s = quiet(newGame(WALLED));
+    addNpc(s, 'dog', BEHIND_WALL.x, BEHIND_WALL.y);
+    runFor(s, {}, 6000);
+    expect(s.players.p1.health).toBeLessThanOrEqual(CONFIG.health.max - CONFIG.npc.dog.biteDamage + 1);
+  });
+
+  it('never walks through walls while pathing', () => {
+    const s = walled();
+    const cop = addNpc(s, 'police', BEHIND_WALL.x, BEHIND_WALL.y);
+    for (let t = 0; t < 300; t++) {
+      step(s, {}, 20);
+      expect(boxBlocked(s.map, cop.x, cop.y, CONFIG.playerHalf)).toBe(false);
+    }
+  });
+
+  it('roaming npcs only pick wander goals they can walk to and never get stuck at the wall', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const s = quiet(createGame(seed, parseMap(WALLED), ['p1']));
+      const cop = roaming(addNpc(s, 'police', 152, 88));
+      let wasPaused = true;
+      for (let t = 0; t < 1500; t++) {
+        step(s, {}, 20);
+        const paused = cop.pauseMs > 0;
+        if (paused && !wasPaused) {
+          // Pause beginnt nur bei Ankunft, nie weil er an der Wand hängt
+          expect(dist(cop, { x: cop.wanderX, y: cop.wanderY })).toBeLessThanOrEqual(CONFIG.npc.wanderArriveRadius);
+        }
+        wasPaused = paused;
+      }
+    }
+  });
+
+  it('pathing is deterministic', () => {
+    const run = (): string => {
+      const s = walled();
+      addNpc(s, 'police', BEHIND_WALL.x, BEHIND_WALL.y);
+      addNpc(s, 'dog', 280, 40);
+      runFor(s, {}, 3000);
+      return JSON.stringify(s.npcs);
+    };
+    expect(run()).toBe(run());
   });
 });

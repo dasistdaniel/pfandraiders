@@ -169,12 +169,12 @@ describe('snapshot key sets', () => {
 
   it('pins the keys of spots and npcs', () => {
     const s = game();
-    s.npcs.push({ id: 1, kind: 'dog', x: 1, y: 1, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 0 });
+    s.npcs.push({ id: 1, kind: 'dog', x: 1, y: 1, lifeMs: 1000, mood: 'active', moodMs: 0, targetId: null, restId: null, restMs: 0, pauseMs: 0, wanderX: 0, wanderY: 0, wanderRef: 0, cooldownMs: 0, distractedMs: 0, checkMs: 0, pathX: 0, pathY: 0, pathMs: 0 });
     const snap = projectSnapshot(s, 'p1');
     expect(Object.keys(snap.spots[0]).sort()).toEqual(['contents', 'id', 'refillInMs', 'type', 'x', 'y']);
     expect(Object.keys(snap.npcs[0]).sort()).toEqual(
       [
-        'checkMs', 'cooldownMs', 'distractedMs', 'id', 'kind', 'lifeMs', 'mood', 'moodMs', 'pauseMs', 'restId', 'restMs',
+        'checkMs', 'cooldownMs', 'distractedMs', 'id', 'kind', 'lifeMs', 'mood', 'moodMs', 'pathMs', 'pathX', 'pathY', 'pauseMs', 'restId', 'restMs',
         'targetId', 'wanderRef', 'wanderX', 'wanderY', 'x', 'y',
       ],
     );
