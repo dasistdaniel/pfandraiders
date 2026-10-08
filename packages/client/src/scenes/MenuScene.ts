@@ -418,7 +418,7 @@ export class MenuScene extends Phaser.Scene {
     showOnlineMenu(url).then(
       (conn) => {
         done();
-        if (conn) this.scene.start('game', { online: conn });
+        if (conn) this.scene.start(conn.roomPhase === 'shop' && conn.shop ? 'shop' : 'game', { online: conn });
       },
       () => done(),
     );

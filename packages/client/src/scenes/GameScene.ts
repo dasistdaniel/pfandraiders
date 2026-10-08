@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import { createGame, DEFAULT_MAP_ID, isMapId, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
-import type { GameState, MapData, MapId, Npc, ZoneState } from '@pfandraiders/core';
+import type { GameState, MapData, MapId, Npc, Progress, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
+import { isSwinging } from '../fightView';
+import { LocalShop } from '../localShop';
 import type { PlayerSlot } from '../devices';
 import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
 import type { PoseState } from '../pose';
@@ -26,7 +28,7 @@ import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
 import { padBLeaves } from '../sources';
 import type { InputSource } from '../sources';
-import { autoSwitchTarget, deviceLabel, loadAutoSwitch, loadOnlineDevice, saveOnlineDevice } from '../settings';
+import { autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
 import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 
@@ -74,6 +76,9 @@ interface PauseUi {
 
 export class GameScene extends Phaser.Scene {
   private slots: PlayerSlot[] = [];
+  /** Lokale Serie: Fortschritt aus der Shop-Phase (leer in der ersten Runde) und Rundenzeit der Serie. */
+  private progress: Record<string, Progress> | undefined;
+  private roundMs: number | undefined;
   private conn!: GameConnection;
   /** Kennung der gespielten Karte (online vom Server, lokal aus ?map=). */
   private mapId: MapId = DEFAULT_MAP_ID;
@@ -138,9 +143,11 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
-  init(data?: { slots?: PlayerSlot[]; online?: OnlineConnection }): void {
+  init(data?: { slots?: PlayerSlot[]; online?: OnlineConnection; progress?: Record<string, Progress>; roundMs?: number }): void {
     this.online = data?.online ?? null;
     this.slots = data?.slots ?? [];
+    this.progress = data?.progress;
+    this.roundMs = data?.roundMs;
   }
 
   create(): void {
@@ -200,9 +207,10 @@ export class GameScene extends Phaser.Scene {
       const mapParam = params.get('map');
       this.mapId = isMapId(mapParam) ? mapParam : DEFAULT_MAP_ID;
       const ids = this.slots.map((s) => s.id);
-      state = createGame(seed, MAP_DEFS[this.mapId].map, ids, {
-        roundMs: roundSec > 0 ? roundSec * 1000 : undefined,
-      });
+      // ?round= (Testhilfe) hat Vorrang, sonst die Wahl aus der Lobby, sonst die gespeicherte
+      if (roundSec > 0) this.roundMs = roundSec * 1000;
+      this.roundMs ??= loadLocalRoundMs();
+      state = createGame(seed, MAP_DEFS[this.mapId].map, ids, { roundMs: this.roundMs, progress: this.progress });
       this.conn = new LocalConnection(state, ids);
       for (const s of this.slots) this.playerColors.set(s.id, s.color);
     }
@@ -408,12 +416,16 @@ export class GameScene extends Phaser.Scene {
     }
     if (state.phase === 'ended' && this.endedForMs >= RESTART_DELAY_MS && !this.plan && (restartPressed || confirmPressed)) {
       if (this.online) {
-        // Zwischen den Runden: alle melden "bereit", der Server startet die nächste Runde der Serie
-        this.online.setReady(true);
+        const online = this.online;
+        online.onClosed = null;
+        online.onError = null;
+        online.onJoined = null;
+        this.scene.start('shop', { online });
       } else {
-        this.scene.restart({ slots: this.slots });
-        return;
+        const ids = this.slots.map((s) => s.id);
+        this.scene.start('shop', { slots: this.slots, progress: LocalShop.fromState(state, ids), roundMs: this.roundMs });
       }
+      return;
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.muteKey)) {
@@ -459,6 +471,7 @@ export class GameScene extends Phaser.Scene {
         body.setTexture(playerTexture(color, pose.frame)).setFlipX(pose.flipX);
       }
       body.setAlpha(unconscious ? 0.6 : 1);
+      body.setScale(isSwinging(p) ? 1.15 : 1);
       this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
     }
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id], this.notices.lines(slot.id)));
@@ -664,6 +677,15 @@ export class GameScene extends Phaser.Scene {
     }
     if (Phaser.Input.Keyboard.JustDown(this.enterKey) && plan.phase === 'asking') plan.continueTrying();
     if (online.status !== 'open') this.joinedWatch = null;
+    // Zurück, aber die Runde ist schon vorbei und der Raum im Shop: dorthin
+    if (this.joinedSeen && online.roomPhase === 'shop' && online.shop) {
+      this.plan = null;
+      online.onClosed = null;
+      online.onError = null;
+      online.onJoined = null;
+      this.scene.start('shop', { online });
+      return true;
+    }
     if (this.joinedWatch?.update(delta)) {
       // Platz ist wieder da, aber es kam kein start: die Runde ist vorbei
       this.leaveToMenu('Die Runde ist inzwischen vorbei.');
