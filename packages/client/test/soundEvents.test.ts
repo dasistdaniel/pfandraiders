@@ -252,7 +252,7 @@ describe('detectSeizures', () => {
     expect(detectSounds(p, n, ['b'])).toEqual([]);
   });
 
-  it('ignores bottle losses without a police npc (theft, deposit) and a dog resting on the player', () => {
+  it('ignores bottle losses without a police npc (robbery, deposit) and a dog resting on the player', () => {
     const p = next(fresh(), (s) => {
       s.players.a.bottles = { plastic: 3, glass: 0, crate: 0 };
       s.npcs = [npc({ kind: 'dog', targetId: 'a' })];

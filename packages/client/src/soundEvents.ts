@@ -134,7 +134,7 @@ export interface Seizure {
 /**
  * Beschlagnahmen zwischen zwei Zuständen. Rein und nur aus Zustandsunterschieden, damit es lokal und
  * online gleich funktioniert. Erkennungszeichen: Am Ende einer Kontrolle lässt der Polizist den
- * Spieler in Ruhe (restId wechselt auf ihn) und dessen Flaschen werden weniger. Diebstahl und Abgabe
+ * Spieler in Ruhe (restId wechselt auf ihn) und dessen Flaschen werden weniger. Ausrauben und Abgabe
  * senken die Flaschen auch, setzen aber keinen Polizisten in Ruhe.
  */
 export function detectSeizures(prev: GameState | null, next: GameState, ownIds: string[] | 'all'): Seizure[] {
