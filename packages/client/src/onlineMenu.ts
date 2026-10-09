@@ -6,6 +6,7 @@ import { nextTab, parseTab, sanitizeRoomCode } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
 import { roundMsLabel } from './roundTime';
+import { buildJoinLink, copyText } from './shareLink';
 import type { SocketFactory } from './online';
 
 const TOKEN_KEY = (room: string) => `pfandraiders.token.${room}`;
@@ -85,10 +86,12 @@ function el<K extends keyof HTMLElementTagNameMap>(
 /**
  * Zeigt ein Overlay zum Erstellen oder Betreten eines Raums und die Spielerliste.
  * Löst mit der Verbindung auf, sobald der Server die Runde startet. Löst mit null auf, wenn abgebrochen wird.
+ * `joinCode` (aus einem Teilen-Link): Dialog öffnet auf "Beitreten" mit diesem Raumcode, den Namen tippt man selbst.
  */
 export function showOnlineMenu(
   url: string,
   socketFactory: SocketFactory = (u) => new WebSocket(u) as unknown as ReturnType<SocketFactory>,
+  opts: { joinCode?: string } = {},
 ): Promise<OnlineConnection | null> {
   return new Promise((resolve) => {
     const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
@@ -134,6 +137,11 @@ export function showOnlineMenu(
     const form = { name: safeGet(NAME_KEY) ?? '', code: '', tab: parseTab(localGet(TAB_KEY)) };
     const lastRoom = sanitizeRoomCode(localGet(LAST_ROOM_KEY) ?? '');
     if (lastRoom.length === ROOM_CODE_LENGTH && safeGet(TOKEN_KEY(lastRoom))) form.code = lastRoom;
+    const linkCode = sanitizeRoomCode(opts.joinCode ?? '');
+    if (linkCode.length === ROOM_CODE_LENGTH) {
+      form.tab = 'join'; // nur für diesen Aufruf, der gespeicherte Tab bleibt
+      form.code = linkCode;
+    }
 
     const need = () => {
       if (form.name.trim().length === 0) {
@@ -250,7 +258,24 @@ export function showOnlineMenu(
     const renderLobby = () => {
       box.replaceChildren();
       box.appendChild(el('div', { textContent: `Raum ${conn.room}` }, 'font-size:26px;letter-spacing:4px;margin-bottom:4px'));
-      box.appendChild(el('div', { textContent: 'Code weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:14px;margin-bottom:4px'));
+      box.appendChild(el('div', { textContent: 'Code oder Link weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:14px;margin-bottom:4px'));
+      // Teilen-Link: <Adresse>?join=CODE (ein ?server= bleibt erhalten); "Kopiert!" verschwindet nach kurzer Zeit
+      const shareRow = el('div', {}, 'margin-bottom:6px;font-size:14px');
+      const copyButton = el('button', { textContent: 'Link kopieren' }, 'font:inherit;margin-right:8px');
+      const copyStatus = el('span', { textContent: '' }, 'color:#a5d6a7;overflow-wrap:anywhere');
+      let copyTimer: ReturnType<typeof setTimeout> | null = null;
+      copyButton.onclick = () => {
+        const link = buildJoinLink(window.location.href, conn.room);
+        void copyText(link).then((ok) => {
+          if (copyTimer !== null) clearTimeout(copyTimer);
+          copyStatus.style.color = ok ? '#a5d6a7' : '#ffa726';
+          // Klappt das Kopieren nicht, steht der Link zum Abschreiben da (bleibt stehen)
+          copyStatus.textContent = ok ? 'Kopiert!' : `Kopieren ging nicht: ${link}`;
+          copyTimer = ok ? setTimeout(() => (copyStatus.textContent = ''), 2000) : null;
+        });
+      };
+      shareRow.append(copyButton, copyStatus);
+      box.appendChild(shareRow);
       if (conn.serverBuild) {
         box.appendChild(el('div', { textContent: `Server: ${buildLabel(conn.serverBuild)}` }, 'color:#888;font-size:12px;margin-bottom:4px'));
       }

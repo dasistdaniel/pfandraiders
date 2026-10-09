@@ -7,6 +7,7 @@ import { addLogo } from '../logoTexture';
 import { arrowAt, controlLines, MenuModel } from '../menuModel';
 import type { MenuItem } from '../menuModel';
 import { showOnlineMenu } from '../onlineMenu';
+import { parseJoinParam, withoutJoinParam } from '../shareLink';
 import { audioToggles, music, setAudioToggles, sfx } from '../sfx';
 import { resolveServerUrl } from '../serverUrl';
 import { PAD_LABELS } from '../sources';
@@ -79,6 +80,24 @@ const ROW_H_SUB = 32;
 const CREDITS_LAST_Y = 470;
 const CREDITS_ROW_H = Math.min(56, Math.floor((CREDITS_LAST_Y - CREDITS_TOP) / Math.max(1, CREDIT_ITEMS.length - 1)));
 const CREDITS_WRAP = GAME_W - 64;
+
+/** Ein Teilen-Link (?join=CODE) öffnet den Online-Dialog nur einmal pro Seitenaufruf. */
+let joinLinkChecked = false;
+
+/** Raumcode aus dem Teilen-Link, höchstens einmal; entfernt ?join= aus der Adresszeile. */
+function takeJoinCode(): string | null {
+  if (joinLinkChecked) return null;
+  joinLinkChecked = true;
+  const code = parseJoinParam(window.location.search);
+  if (code) {
+    try {
+      window.history.replaceState(window.history.state, '', withoutJoinParam(window.location.href));
+    } catch {
+      // Adresszeile bleibt dann eben, wie sie ist
+    }
+  }
+  return code;
+}
 
 export class MenuScene extends Phaser.Scene {
   private notice = '';
@@ -173,6 +192,9 @@ export class MenuScene extends Phaser.Scene {
       esc: kb.addKey('ESC'),
     };
     this.rebuild();
+    // Geöffneter Teilen-Link: gleich in den Online-Dialog, Tab "Beitreten" mit dem Raumcode
+    const joinCode = takeJoinCode();
+    if (joinCode) this.openOnline(joinCode);
   }
 
   update(): void {
@@ -419,7 +441,7 @@ export class MenuScene extends Phaser.Scene {
     this.render();
   }
 
-  private openOnline(): void {
+  private openOnline(joinCode?: string): void {
     const url = resolveServerUrl(window.location.search, import.meta.env.VITE_SERVER_URL as string | undefined);
     this.busy = true;
     this.input.keyboard!.enabled = false; // Tasten gehören dem Eingabefeld
@@ -430,7 +452,7 @@ export class MenuScene extends Phaser.Scene {
         this.input.keyboard.enabled = true;
       }
     };
-    showOnlineMenu(url).then(
+    showOnlineMenu(url, undefined, { joinCode }).then(
       (conn) => {
         done();
         if (conn) this.scene.start(conn.roomPhase === 'shop' && conn.shop ? 'shop' : 'game', { online: conn });
