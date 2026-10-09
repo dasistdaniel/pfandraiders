@@ -1,11 +1,25 @@
-import type { ChatMessage, ErrorCode, RosterEntry } from '@pfandraiders/core';
+import type { ChatMessage, ErrorCode, RosterEntry, RoomVisibility } from '@pfandraiders/core';
+import {
+  defaultRoomName,
+  MAX_CHAT_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  MAX_ROOM_NAME_LENGTH,
+  ROOM_CODE_LENGTH,
+  ROUND_MS_CHOICES,
+  ROUNDS_CHOICES,
+} from '@pfandraiders/core';
+import { AVATAR_COLUMNS, avatarCells, stepAvatar, takenByOthers } from './avatarGrid';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
-import { MAX_CHAT_LENGTH, ROOM_CODE_LENGTH, ROUND_MS_CHOICES } from '@pfandraiders/core';
+import { CHARACTER_URLS } from './characterAssets';
 import { chatColorHex, rosterDiff } from './chatLogic';
-import { nextTab, parseTab, sanitizeRoomCode } from './onlineMenuLogic';
+import { createRequest, nextTab, parseTab, sanitizeRoomCode, shouldReportClose, TAB_LABELS, TABS } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
-import { roundMsLabel } from './roundTime';
+import { ALL_CHARACTERS, CHAR_FRAME_H, CHAR_FRAME_W } from './playerChars';
+import { EMPTY_ROOM_LIST_TEXT, firstSelectable, listAction, moveSelection, refreshAllowed, ROOM_LIST_HEADER, roomRows } from './roomList';
+import { roundMsLabel, roundsLabel } from './roundTime';
+import { loadAvatarWish, saveAvatarWish } from './settings';
 import { buildJoinLink, copyText } from './shareLink';
 import type { SocketFactory } from './online';
 
@@ -86,14 +100,32 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 /**
- * Zeigt ein Overlay zum Erstellen oder Betreten eines Raums und die Spielerliste.
- * Löst mit der Verbindung auf, sobald der Server die Runde startet. Löst mit null auf, wenn abgebrochen wird.
- * `joinCode` (aus einem Teilen-Link): Dialog öffnet auf "Beitreten" mit diesem Raumcode, den Namen tippt man selbst.
+ * Erstes Bild eines Figurenbogens (vorn, Stand: Spalte 0, Zeile 0) als Pixelgrafik.
+ * Bögen haben 4 x 3 Bilder zu CHAR_FRAME_W x CHAR_FRAME_H px.
+ */
+function avatarSprite(index: number, scale: number): HTMLDivElement {
+  const key = ALL_CHARACTERS[index] ?? ALL_CHARACTERS[0];
+  const d = el(
+    'div',
+    {},
+    `width:${CHAR_FRAME_W * scale}px;height:${CHAR_FRAME_H * scale}px;flex:none;background-repeat:no-repeat;background-position:0 0;background-size:${CHAR_FRAME_W * 4 * scale}px ${CHAR_FRAME_H * 3 * scale}px;image-rendering:pixelated`,
+  );
+  const src = CHARACTER_URLS[key];
+  if (src) d.style.backgroundImage = `url("${src}")`;
+  return d;
+}
+
+/**
+ * Zeigt ein Overlay zum Erstellen, Betreten oder Auswählen eines Raums und die Lobby.
+ * Löst mit der Verbindung auf, sobald der Server die Runde startet, ein Rückkehrer im Shop landet oder die
+ * Endwertung läuft. Löst mit null auf, wenn abgebrochen wird.
+ * `joinCode` (aus einem Teilen-Link): Dialog öffnet auf "Beitreten" mit diesem Raumcode.
+ * `resume`: bestehende Verbindung (nach der Endwertung zurück in der Lobby); zeigt direkt die Lobby.
  */
 export function showOnlineMenu(
   url: string,
   socketFactory: SocketFactory = (u) => new WebSocket(u) as unknown as ReturnType<SocketFactory>,
-  opts: { joinCode?: string } = {},
+  opts: { joinCode?: string; resume?: OnlineConnection } = {},
 ): Promise<OnlineConnection | null> {
   return new Promise((resolve) => {
     const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
@@ -103,7 +135,7 @@ export function showOnlineMenu(
     for (const type of ['keydown', 'keyup', 'keypress']) root.addEventListener(type, (e) => e.stopPropagation());
     document.body.appendChild(root);
 
-    const conn = new OnlineConnection(url, socketFactory);
+    const conn = opts.resume ?? new OnlineConnection(url, socketFactory);
     let finished = false;
     const finish = (result: OnlineConnection | null) => {
       if (finished) return;
@@ -116,6 +148,7 @@ export function showOnlineMenu(
       conn.onChat = null;
       conn.onShopState = null;
       conn.onPhase = null;
+      conn.onRooms = null;
       root.remove();
       if (result === null) conn.close();
       resolve(result);
@@ -125,18 +158,38 @@ export function showOnlineMenu(
     const showError = (text: string) => {
       message.textContent = text;
     };
-    conn.onError = (code, text) => showError(ERRORS[code] ?? text);
+    /** Selbst gewählte Figur, bis die Lobby sie bestätigt (dann wird sie als Wunsch gemerkt) */
+    let pendingWish: number | null = null;
+    conn.onError = (code, text) => {
+      if (code === 'avatar_taken') pendingWish = null;
+      showError(ERRORS[code] ?? text);
+    };
     conn.onClosed = () => {
-      showError('Verbindung zum Server verloren.');
+      // Ohne Raum schließt der Server ein ungenutztes Socket nach 30 s; die nächste Aktion verbindet neu
+      if (shouldReportClose(conn.room)) showError('Verbindung zum Server verloren.');
     };
     conn.onStart = () => finish(conn);
     // Rückkehr oder Beitritt zwischen zwei Runden: direkt in den Shop
     conn.onShopState = () => {
       if (conn.roomPhase === 'shop') finish(conn);
     };
+    // Beitritt oder Rückkehr während der Endwertung: zur Endwertung
+    conn.onPhase = () => {
+      if (conn.roomPhase === 'final') finish(conn);
+    };
 
     // Name und Code bleiben beim Tabwechsel erhalten
-    const form = { name: safeGet(NAME_KEY) ?? '', code: '', tab: parseTab(localGet(TAB_KEY)) };
+    const form = {
+      name: safeGet(NAME_KEY) ?? '',
+      code: '',
+      tab: parseTab(localGet(TAB_KEY)),
+      roomName: '',
+      visibility: 'public' as RoomVisibility,
+      createPassword: '',
+      joinPassword: '',
+    };
+    /** Raumliste: gewählte Zeile, letzte Anfrage, schon eine Antwort da, offene Passwortabfrage */
+    const list = { selected: -1, lastRefresh: -Infinity, loaded: false, prompt: null as { code: string; name: string } | null, password: '' };
     const lastRoom = sanitizeRoomCode(localGet(LAST_ROOM_KEY) ?? '');
     if (lastRoom.length === ROOM_CODE_LENGTH && safeGet(TOKEN_KEY(lastRoom))) form.code = lastRoom;
     const linkCode = sanitizeRoomCode(opts.joinCode ?? '');
@@ -145,12 +198,8 @@ export function showOnlineMenu(
       form.code = linkCode;
     }
 
-    const need = () => {
-      if (form.name.trim().length === 0) {
-        showError('Bitte einen Namen eingeben.');
-        return false;
-      }
-      safeSet(NAME_KEY, form.name.trim(), true);
+    /** Verbindung aufbauen, falls keine offen ist (auch nach dem Leerlauf-Schließen ohne Raum). */
+    const connectIfNeeded = (): boolean => {
       if (conn.status === 'idle' || conn.status === 'closed') {
         showError('');
         try {
@@ -161,6 +210,14 @@ export function showOnlineMenu(
         }
       }
       return true;
+    };
+    const need = () => {
+      if (form.name.trim().length === 0) {
+        showError('Bitte einen Namen eingeben.');
+        return false;
+      }
+      safeSet(NAME_KEY, form.name.trim(), true);
+      return connectIfNeeded();
     };
     const whenOpen = (fn: () => void) => {
       const t0 = Date.now();
@@ -173,20 +230,53 @@ export function showOnlineMenu(
       wait();
     };
 
+    const doCreate = () => {
+      const req = createRequest({ roomName: form.roomName, visibility: form.visibility, password: form.createPassword });
+      if (!req.ok) return showError(req.error);
+      if (need()) whenOpen(() => conn.create(form.name.trim(), { ...req.value, avatar: loadAvatarWish() }));
+    };
+    const doJoin = (rawCode: string, password: string) => {
+      const room = sanitizeRoomCode(rawCode);
+      if (room.length !== ROOM_CODE_LENGTH) return showError('Bitte einen Raumcode eingeben.');
+      if (!need()) return;
+      const token = safeGet(TOKEN_KEY(room)) ?? undefined;
+      whenOpen(() => conn.join(room, form.name.trim(), token, { password: password.trim() || undefined, avatar: loadAvatarWish() }));
+    };
+    /** Liste neu laden (höchstens einmal pro Sekunde); die Antwort zeichnet drawList. */
+    let drawList: (() => void) | null = null;
+    const refreshList = () => {
+      const now = Date.now();
+      if (!refreshAllowed(list.lastRefresh, now)) return;
+      list.lastRefresh = now;
+      if (!connectIfNeeded()) return;
+      whenOpen(() => conn.listRooms());
+    };
+    conn.onRooms = () => {
+      list.loaded = true;
+      drawList?.();
+    };
+
+    const fieldStyle = 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit';
+    const labelStyle = 'color:#aaa;font-size:14px;margin-bottom:4px';
     const renderEntry = (focusTab = false) => {
+      drawList = null;
       box.replaceChildren();
       box.appendChild(el('div', { textContent: 'Online spielen' }, 'font-size:22px;margin-bottom:8px'));
       box.appendChild(el('div', { textContent: `Server: ${url}` }, 'color:#aaa;font-size:14px;margin-bottom:10px'));
 
+      // Name gilt für alle Tabs (auch für die Raumliste)
+      const name = el('input', { placeholder: 'Dein Name', maxLength: MAX_NAME_LENGTH, value: form.name }, fieldStyle);
+      name.setAttribute('aria-label', 'Dein Name');
+      box.append(el('div', { textContent: 'Dein Name' }, labelStyle), name);
+
       const tabBar = el('div', { role: 'tablist' }, 'display:flex;margin-bottom:12px;border-bottom:1px solid #555');
       const tabButtons = new Map<MenuTab, HTMLButtonElement>();
-      const tabLabels: Record<MenuTab, string> = { host: 'Raum erstellen', join: 'Beitreten' };
-      for (const id of ['host', 'join'] as MenuTab[]) {
+      for (const id of TABS) {
         const active = form.tab === id;
         const b = el(
           'button',
-          { textContent: tabLabels[id], role: 'tab', tabIndex: active ? 0 : -1 },
-          `flex:1 1 0;min-width:0;font:inherit;color:${active ? '#fff' : '#999'};background:${active ? '#333' : '#1a1a1a'};border:0;border-bottom:3px solid ${active ? '#ffca28' : 'transparent'};padding:8px 12px;cursor:pointer`,
+          { textContent: TAB_LABELS[id], role: 'tab', tabIndex: active ? 0 : -1 },
+          `flex:1 1 0;min-width:0;font:inherit;color:${active ? '#fff' : '#999'};background:${active ? '#333' : '#1a1a1a'};border:0;border-bottom:3px solid ${active ? '#ffca28' : 'transparent'};padding:8px 6px;cursor:pointer`,
         );
         b.setAttribute('aria-selected', String(active));
         b.onclick = () => switchTab(id, false);
@@ -201,52 +291,214 @@ export function showOnlineMenu(
       }
       box.appendChild(tabBar);
 
-      const name = el('input', { placeholder: 'Dein Name', maxLength: 16, value: form.name }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit');
-      name.setAttribute('aria-label', 'Dein Name');
-      name.oninput = () => {
-        form.name = name.value;
-      };
       const cancel = el('button', { textContent: 'Abbrechen' }, 'font:inherit');
       cancel.onclick = () => finish(null);
-      const nameLabel = el('div', { textContent: 'Dein Name' }, 'color:#aaa;font-size:14px;margin-bottom:4px');
 
       if (form.tab === 'host') {
+        const roomName = el('input', { maxLength: MAX_ROOM_NAME_LENGTH, value: form.roomName }, fieldStyle);
+        roomName.setAttribute('aria-label', 'Raumname');
+        const placeholder = () => (roomName.placeholder = form.name.trim() ? defaultRoomName(form.name.trim()) : 'Raumname (optional)');
+        placeholder();
+        roomName.oninput = () => {
+          form.roomName = roomName.value;
+        };
+        const visButton = el('button', {}, 'font:inherit;margin-right:8px');
+        const visHint = el('span', {}, 'color:#aaa;font-size:14px');
+        const drawVis = () => {
+          visButton.textContent = form.visibility === 'public' ? 'Öffentlich' : 'Privat';
+          visButton.setAttribute('aria-pressed', String(form.visibility === 'private'));
+          visHint.textContent = form.visibility === 'public' ? 'In der Raumliste sichtbar.' : 'Nur mit Code oder Link.';
+        };
+        drawVis();
+        visButton.onclick = () => {
+          form.visibility = form.visibility === 'public' ? 'private' : 'public';
+          drawVis();
+        };
+        const password = el('input', { type: 'password', placeholder: 'Passwort (optional)', maxLength: MAX_PASSWORD_LENGTH, value: form.createPassword }, fieldStyle);
+        password.setAttribute('aria-label', 'Passwort');
+        password.autocomplete = 'off';
+        password.oninput = () => {
+          form.createPassword = password.value;
+        };
         const create = el('button', { textContent: 'Raum erstellen' }, 'font:inherit;margin-right:8px');
-        create.onclick = () => {
-          if (need()) whenOpen(() => conn.create(form.name.trim()));
+        create.onclick = doCreate;
+        name.oninput = () => {
+          form.name = name.value;
+          placeholder();
         };
-        name.onkeydown = (e) => {
-          if (e.key === 'Enter') create.click();
-        };
-        box.append(el('div', { textContent: 'Du wirst Host und bekommst einen Raumcode.' }, 'color:#aaa;font-size:14px;margin-bottom:10px'), nameLabel, name, create, cancel, message);
+        for (const input of [name, roomName, password]) {
+          input.onkeydown = (e) => {
+            if (e.key === 'Enter') create.click();
+          };
+        }
+        const visRow = el('div', {}, 'margin-bottom:8px');
+        visRow.append(visButton, visHint);
+        box.append(
+          el('div', { textContent: 'Du wirst Host und bekommst einen Raumcode.' }, 'color:#aaa;font-size:14px;margin-bottom:8px'),
+          el('div', { textContent: 'Raumname' }, labelStyle),
+          roomName,
+          el('div', { textContent: 'Sichtbarkeit' }, labelStyle),
+          visRow,
+          el('div', { textContent: 'Passwort' }, labelStyle),
+          password,
+          create,
+          cancel,
+          message,
+        );
         if (focusTab) tabButtons.get('host')?.focus();
-        else name.focus();
+        else (name.value.trim() === '' ? name : roomName).focus();
         return;
       }
 
-      const code = el('input', { placeholder: 'Raumcode', maxLength: ROOM_CODE_LENGTH, value: form.code }, 'width:100%;box-sizing:border-box;margin-bottom:8px;font:inherit;text-transform:uppercase');
-      code.setAttribute('aria-label', 'Raumcode');
-      code.oninput = () => {
-        code.value = sanitizeRoomCode(code.value);
-        form.code = code.value;
+      name.oninput = () => {
+        form.name = name.value;
       };
-      const join = el('button', { textContent: 'Beitreten' }, 'font:inherit;margin-right:8px');
-      join.onclick = () => {
-        if (!need()) return;
-        const room = sanitizeRoomCode(form.code);
-        whenOpen(() => conn.join(room, form.name.trim(), safeGet(TOKEN_KEY(room)) ?? undefined));
+
+      if (form.tab === 'join') {
+        const code = el('input', { placeholder: 'Raumcode', maxLength: ROOM_CODE_LENGTH, value: form.code }, `${fieldStyle};text-transform:uppercase`);
+        code.setAttribute('aria-label', 'Raumcode');
+        code.oninput = () => {
+          code.value = sanitizeRoomCode(code.value);
+          form.code = code.value;
+        };
+        const password = el('input', { type: 'password', placeholder: 'Passwort (optional)', maxLength: MAX_PASSWORD_LENGTH, value: form.joinPassword }, fieldStyle);
+        password.setAttribute('aria-label', 'Passwort');
+        password.autocomplete = 'off';
+        password.oninput = () => {
+          form.joinPassword = password.value;
+        };
+        const join = el('button', { textContent: 'Beitreten' }, 'font:inherit;margin-right:8px');
+        join.onclick = () => doJoin(form.code, form.joinPassword);
+        name.onkeydown = (e) => {
+          if (e.key !== 'Enter') return;
+          if (sanitizeRoomCode(code.value).length === 0) code.focus();
+          else join.click();
+        };
+        for (const input of [code, password]) {
+          input.onkeydown = (e) => {
+            if (e.key === 'Enter') join.click();
+          };
+        }
+        box.append(
+          el('div', { textContent: 'Raumcode' }, labelStyle),
+          code,
+          el('div', { textContent: 'Passwort (leer lassen, wenn der Raum keins hat)' }, labelStyle),
+          password,
+          join,
+          cancel,
+          message,
+        );
+        if (focusTab) tabButtons.get('join')?.focus();
+        else (name.value.trim() === '' ? name : code).focus();
+        return;
+      }
+
+      // Raumliste
+      const cols = 'grid-template-columns:minmax(0,2fr) minmax(0,1.3fr) 4em 4.5em';
+      const header = el('div', {}, `display:grid;${cols};gap:6px;padding:2px 4px;color:#aaa;font-size:14px;border-bottom:1px solid #555`);
+      for (const text of ROOM_LIST_HEADER) header.appendChild(el('span', { textContent: text }));
+      const listBox = el('div', { tabIndex: 0 }, 'height:180px;max-height:30vh;overflow-y:auto;background:#111;border:1px solid #555;margin-bottom:8px;outline:none;font-size:14px');
+      listBox.setAttribute('role', 'listbox');
+      listBox.setAttribute('aria-label', 'Öffentliche Räume');
+      const promptArea = el('div', {}, 'margin-bottom:8px');
+      const refresh = el('button', { textContent: 'Aktualisieren (R)' }, 'font:inherit;margin-right:8px');
+      refresh.onclick = refreshList;
+
+      const rows = () => roomRows(conn.rooms);
+      const choose = (i: number) => {
+        const action = listAction(rows()[i]);
+        if (!action) return;
+        if (action.kind === 'join') {
+          list.prompt = null;
+          doJoin(action.code, '');
+          return;
+        }
+        list.prompt = { code: action.code, name: action.name };
+        list.password = '';
+        drawList?.();
       };
-      name.onkeydown = (e) => {
-        if (e.key !== 'Enter') return;
-        if (sanitizeRoomCode(code.value).length === 0) code.focus();
-        else join.click();
+      drawList = () => {
+        const all = rows();
+        if (list.selected >= all.length || (list.selected >= 0 && !all[list.selected].joinable) || list.selected < 0) {
+          list.selected = firstSelectable(all);
+        }
+        listBox.replaceChildren();
+        if (all.length === 0) {
+          listBox.appendChild(el('div', { textContent: list.loaded ? EMPTY_ROOM_LIST_TEXT : 'Lade…' }, 'color:#888;padding:4px'));
+        }
+        all.forEach((r, i) => {
+          const sel = i === list.selected;
+          const line = el(
+            'div',
+            {},
+            `display:grid;${cols};gap:6px;padding:3px 4px;color:${r.joinable ? '#fff' : '#666'};background:${sel ? '#333' : 'transparent'};cursor:${r.joinable ? 'pointer' : 'default'}`,
+          );
+          line.setAttribute('role', 'option');
+          line.setAttribute('aria-selected', String(sel));
+          line.setAttribute('aria-disabled', String(!r.joinable));
+          for (const text of [`${r.locked ? '🔒 ' : ''}${r.name}`, r.host, r.players, r.status]) {
+            line.appendChild(el('span', { textContent: text }, 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap'));
+          }
+          if (r.joinable) {
+            line.onclick = () => {
+              list.selected = i;
+              choose(i);
+            };
+          }
+          listBox.appendChild(line);
+        });
+        promptArea.replaceChildren();
+        const prompt = list.prompt;
+        if (prompt) {
+          const pw = el('input', { type: 'password', placeholder: 'Passwort', maxLength: MAX_PASSWORD_LENGTH, value: list.password }, fieldStyle);
+          pw.setAttribute('aria-label', `Passwort für ${prompt.name}`);
+          pw.autocomplete = 'off';
+          pw.oninput = () => {
+            list.password = pw.value;
+          };
+          const go = el('button', { textContent: 'Beitreten' }, 'font:inherit;margin-right:8px');
+          go.onclick = () => doJoin(prompt.code, list.password);
+          const back = el('button', { textContent: 'Zurück' }, 'font:inherit');
+          back.onclick = () => {
+            list.prompt = null;
+            drawList?.();
+            listBox.focus();
+          };
+          pw.onkeydown = (e) => {
+            if (e.key === 'Enter') go.click();
+            if (e.key === 'Escape') back.click();
+          };
+          promptArea.append(el('div', { textContent: `Passwort für „${prompt.name}“` }, labelStyle), pw, go, back);
+          pw.focus();
+        }
       };
-      code.onkeydown = (e) => {
-        if (e.key === 'Enter') join.click();
+      listBox.onkeydown = (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          list.selected = moveSelection(rows(), list.selected, e.key === 'ArrowDown' ? 1 : -1);
+          drawList?.();
+          listBox.children[list.selected]?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          choose(list.selected);
+        } else if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          refreshList();
+        }
       };
-      box.append(nameLabel, name, el('div', { textContent: 'Raumcode' }, 'color:#aaa;font-size:14px;margin-bottom:4px'), code, join, cancel, message);
-      if (focusTab) tabButtons.get('join')?.focus();
-      else (name.value.trim() === '' ? name : code).focus();
+      box.append(
+        el('div', { textContent: 'Öffentliche Räume. Graue Räume laufen schon oder sind voll.' }, 'color:#aaa;font-size:14px;margin-bottom:6px'),
+        header,
+        listBox,
+        promptArea,
+        refresh,
+        cancel,
+        message,
+      );
+      drawList?.();
+      refreshList();
+      if (focusTab) tabButtons.get('list')?.focus();
+      else listBox.focus();
     };
 
     const switchTab = (tab: MenuTab, viaKeyboard: boolean) => {
@@ -258,10 +510,14 @@ export function showOnlineMenu(
     };
 
     const renderLobby = () => {
+      // Eine späte Antwort auf die Raumliste soll die Lobby nicht mehr anfassen
+      drawList = null;
       box.replaceChildren();
-      box.appendChild(el('div', { textContent: `Raum ${conn.room}` }, 'font-size:26px;letter-spacing:4px;margin-bottom:4px'));
+      const title = el('div', {}, 'font-size:24px;margin-bottom:2px;overflow-wrap:anywhere');
+      const codeLine = el('div', {}, 'color:#ccc;font-size:15px;margin-bottom:4px');
+      box.append(title, codeLine);
       box.appendChild(el('div', { textContent: 'Code oder Link weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:14px;margin-bottom:4px'));
-      // Teilen-Link: <Adresse>?join=CODE (ein ?server= bleibt erhalten); "Kopiert!" verschwindet nach kurzer Zeit
+      // Teilen-Link: <Adresse>?join=CODE (ein ?server= bleibt erhalten, ein Passwort nie); "Kopiert!" verschwindet nach kurzer Zeit
       const shareRow = el('div', {}, 'margin-bottom:6px;font-size:14px');
       const copyButton = el('button', { textContent: 'Link kopieren' }, 'font:inherit;margin-right:8px');
       const copyStatus = el('span', { textContent: '' }, 'color:#a5d6a7;overflow-wrap:anywhere');
@@ -271,7 +527,6 @@ export function showOnlineMenu(
         void copyText(link).then((ok) => {
           if (copyTimer !== null) clearTimeout(copyTimer);
           copyStatus.style.color = ok ? '#a5d6a7' : '#ffa726';
-          // Klappt das Kopieren nicht, steht der Link zum Abschreiben da (bleibt stehen)
           copyStatus.textContent = ok ? 'Kopiert!' : `Kopieren ging nicht: ${link}`;
           copyTimer = ok ? setTimeout(() => (copyStatus.textContent = ''), 2000) : null;
         });
@@ -290,21 +545,57 @@ export function showOnlineMenu(
           ),
         );
       }
-      box.appendChild(el('div', {}, 'margin-bottom:6px'));
-      const list = el('div', {}, 'margin-bottom:10px');
-      const draw = (players: RosterEntry[]) => {
-        list.replaceChildren();
-        for (const p of players) {
-          const row = el('div', { textContent: `${p.name}${p.id === conn.host ? ' (Host)' : ''}${p.connected ? '' : ' (getrennt)'}` });
-          row.style.color = chatColorHex(p.color);
-          list.appendChild(row);
+
+      // Spielerliste mit Figur, Farbe und Host-Markierung
+      const players = el('div', {}, 'margin:6px 0 10px');
+      const drawPlayers = (list: RosterEntry[]) => {
+        players.replaceChildren();
+        for (const p of list) {
+          const row = el('div', {}, 'display:flex;align-items:center;gap:6px;margin-bottom:2px');
+          row.appendChild(avatarSprite(p.avatar, 1));
+          const label = el('span', { textContent: `${p.name}${p.id === conn.host ? ' (Host)' : ''}${p.connected ? '' : ' (getrennt)'}` });
+          label.style.color = chatColorHex(p.color);
+          if (p.id === conn.you) label.style.fontWeight = 'bold';
+          row.appendChild(label);
+          players.appendChild(row);
         }
       };
-      draw(conn.roster);
 
-      // Chat: Nachrichten vom Server und Systemzeilen (Beitritt/Abgang aus dem Vergleich der Spielerlisten).
-      // Alles nur per textContent/Textknoten, nie als HTML.
-      const chatLog = el('div', { role: 'log' }, 'height:140px;max-height:22vh;overflow-y:auto;background:#111;border:1px solid #555;padding:4px 6px;font-size:14px;margin-bottom:6px;overflow-wrap:anywhere');
+      // Figurauswahl: Raster 8 x 3, vergebene halbdurchsichtig, eigene gelb umrandet; Pfeile oder Klick
+      const CELL = CHAR_FRAME_W * 2 + 6;
+      const grid = el('div', { tabIndex: 0 }, `display:grid;grid-template-columns:repeat(${AVATAR_COLUMNS}, ${CELL}px);gap:4px;margin-bottom:10px;outline:none`);
+      grid.setAttribute('role', 'listbox');
+      grid.setAttribute('aria-label', 'Figur wählen (Pfeiltasten oder Klick)');
+      const choose = (avatar: number) => {
+        pendingWish = avatar;
+        conn.setAvatar(avatar);
+      };
+      const drawGrid = () => {
+        grid.replaceChildren();
+        for (const cell of avatarCells(conn.roster, conn.you)) {
+          const b = el(
+            'div',
+            { title: cell.takenBy ? `vergeben an ${cell.takenBy}` : cell.own ? 'deine Figur' : 'frei' },
+            `height:${CHAR_FRAME_H * 2 + 6}px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:2px solid ${cell.own ? '#ffca28' : '#333'};background:${cell.own ? '#3a3320' : '#1a1a1a'};opacity:${cell.taken ? 0.3 : 1};cursor:${cell.taken || cell.own ? 'default' : 'pointer'}`,
+          );
+          b.setAttribute('role', 'option');
+          b.setAttribute('aria-selected', String(cell.own));
+          b.setAttribute('aria-disabled', String(cell.taken));
+          b.appendChild(avatarSprite(cell.index, 2));
+          if (!cell.taken && !cell.own) b.onclick = () => choose(cell.index);
+          grid.appendChild(b);
+        }
+      };
+      grid.onkeydown = (e) => {
+        const own = conn.ownAvatar();
+        if (own === null) return;
+        const next = stepAvatar(own, e.key, takenByOthers(conn.roster, conn.you));
+        if (e.key.startsWith('Arrow')) e.preventDefault();
+        if (next !== own) choose(next);
+      };
+
+      // Chat: unverändert (Nachrichten vom Server und Systemzeilen; nur Textknoten, nie HTML)
+      const chatLog = el('div', { role: 'log' }, 'height:120px;max-height:20vh;overflow-y:auto;background:#111;border:1px solid #555;padding:4px 6px;font-size:14px;margin-bottom:6px;overflow-wrap:anywhere');
       chatLog.setAttribute('aria-label', 'Chat');
       const chatInput = el('input', { placeholder: 'Nachricht…', maxLength: MAX_CHAT_LENGTH }, 'width:100%;box-sizing:border-box;margin-bottom:10px;font:inherit');
       chatInput.setAttribute('aria-label', 'Chatnachricht');
@@ -343,30 +634,50 @@ export function showOnlineMenu(
       };
       conn.onChat = showChat;
 
-      const roundRow = el('div', {}, 'margin-bottom:10px');
+      // Host: Rundenzeit und Rundenzahl; Gäste sehen die Werte
+      const roundRow = el('div', {}, 'margin-bottom:6px');
       const roundText = el('span', { textContent: '' });
       const roundSelect = el('select', {}, 'font:inherit;margin-left:6px');
       for (const ms of ROUND_MS_CHOICES) roundSelect.appendChild(el('option', { value: String(ms), textContent: roundMsLabel(ms) }));
       roundSelect.onchange = () => conn.setRoundMs(Number(roundSelect.value));
       roundRow.append(el('span', { textContent: 'Rundenzeit:' }), roundSelect, roundText);
+      const roundsRow = el('div', {}, 'margin-bottom:10px');
+      const roundsText = el('span', { textContent: '' });
+      const roundsSelect = el('select', {}, 'font:inherit;margin-left:6px');
+      for (const n of ROUNDS_CHOICES) roundsSelect.appendChild(el('option', { value: String(n), textContent: roundsLabel(n) }));
+      roundsSelect.onchange = () => conn.setRounds(Number(roundsSelect.value));
+      roundsRow.append(el('span', { textContent: 'Runden:' }), roundsSelect, roundsText);
 
       const start = el('button', { textContent: 'Spiel starten' }, 'font:inherit;margin-right:8px');
       const hint = el('div', { textContent: 'Warte auf den Host…' }, 'color:#aaa');
       const leave = el('button', { textContent: 'Verlassen' }, 'font:inherit');
       const refresh = () => {
-        draw(conn.roster);
-        start.style.display = conn.isHost() ? 'inline-block' : 'none';
-        hint.style.display = conn.isHost() ? 'none' : 'block';
+        title.textContent = conn.roomName || `Raum ${conn.room}`;
+        codeLine.textContent = `Code ${conn.room}${conn.locked ? '   🔒 Passwort' : ''}${conn.visibility === 'private' ? '   privat' : ''}`;
+        drawPlayers(conn.roster);
+        drawGrid();
+        const host = conn.isHost();
+        start.style.display = host ? 'inline-block' : 'none';
+        hint.style.display = host ? 'none' : 'block';
         start.disabled = conn.roster.filter((p) => p.connected).length < 2;
-        roundSelect.style.display = conn.isHost() ? 'inline-block' : 'none';
+        roundSelect.style.display = host ? 'inline-block' : 'none';
         roundSelect.value = String(conn.roundMs);
-        roundText.textContent = conn.isHost() ? '' : ` ${roundMsLabel(conn.roundMs)}`;
+        roundText.textContent = host ? '' : ` ${roundMsLabel(conn.roundMs)}`;
+        roundsSelect.style.display = host ? 'inline-block' : 'none';
+        roundsSelect.value = String(conn.rounds);
+        roundsText.textContent = host ? '' : ` ${roundsLabel(conn.rounds)}`;
       };
       // Die erste Spielerliste nach dem Beitritt wird nicht gemeldet
       let prevRoster: RosterEntry[] | null = null;
       const onLobby = () => {
         for (const text of rosterDiff(prevRoster, conn.roster)) append(systemLine(text));
         prevRoster = [...conn.roster];
+        // Selbst gewählte Figur bestätigt: als Wunsch für das nächste Mal merken
+        const own = conn.ownAvatar();
+        if (pendingWish !== null && own === pendingWish) {
+          saveAvatarWish(own);
+          pendingWish = null;
+        }
         refresh();
       };
       start.onclick = () => conn.requestStart();
@@ -374,7 +685,19 @@ export function showOnlineMenu(
         safeRemove(TOKEN_KEY(conn.room));
         finish(null);
       };
-      box.append(list, chatLog, chatInput, roundRow, start, hint, leave, message);
+      box.append(
+        players,
+        el('div', { textContent: 'Deine Figur' }, 'color:#aaa;font-size:14px;margin-bottom:4px'),
+        grid,
+        chatLog,
+        chatInput,
+        roundRow,
+        roundsRow,
+        start,
+        hint,
+        leave,
+        message,
+      );
       conn.onLobby = onLobby;
       refresh();
     };
@@ -386,6 +709,8 @@ export function showOnlineMenu(
       renderLobby();
     };
 
-    renderEntry();
+    // Zurück aus der Endwertung: dieselbe Verbindung, gleich die Lobby (der Chat liegt schon in conn.chat)
+    if (opts.resume) renderLobby();
+    else renderEntry();
   });
 }

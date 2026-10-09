@@ -313,6 +313,11 @@ describe('resultFooter', () => {
       expect(resultFooter(role, KEYS)).toEqual(['Weiter zum Shop: R oder E', 'Menü: Esc']);
     }
   });
+
+  it('points to the final ranking after the last round', () => {
+    expect(resultFooter('guest', KEYS, true)).toEqual(['Weiter zur Endwertung: R oder E', 'Menü: Esc']);
+    expect(resultFooter('host', KEYS, false)).toEqual(['Weiter zum Shop: R oder E', 'Menü: Esc']);
+  });
 });
 
 describe('seizure notice', () => {

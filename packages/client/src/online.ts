@@ -1,4 +1,4 @@
-import { DEFAULT_MAP_ID, DEFAULT_ROUND_MS, isMapId, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, DEFAULT_ROUND_MS, DEFAULT_ROUNDS, isMapId, isRounds, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
 import type {
   ChatMessage,
   ClientMessage,
@@ -9,6 +9,8 @@ import type {
   MapId,
   Progress,
   RankEntry,
+  RoomInfo,
+  RoomVisibility,
   RoomPhase,
   RosterEntry,
   ServerBuild,
@@ -23,6 +25,7 @@ import { countdownLeft } from './countdown';
 import type { GameConnection } from './connection';
 import { interpolateSnapshot } from './interpolate';
 import { Predictor } from './prediction';
+import { parseRoomList } from './roomList';
 import { parseProgress, parseRanking } from './shopGuard';
 import { isValidSnapshot } from './snapshotGuard';
 
@@ -62,6 +65,21 @@ function sameInput(a: Input, b: Input): boolean {
   );
 }
 
+/** Angaben beim Anlegen eines Raums (leere Felder werden nicht gesendet) */
+export interface CreateOptions {
+  roomName?: string;
+  visibility?: RoomVisibility;
+  password?: string;
+  /** Wunschfigur */
+  avatar?: number;
+}
+
+/** Angaben beim Beitritt (leeres Passwort wird nicht gesendet) */
+export interface JoinOptions {
+  password?: string;
+  avatar?: number;
+}
+
 export class OnlineConnection implements GameConnection {
   localPlayerIds: string[] = [];
   status: ConnStatus = 'idle';
@@ -86,6 +104,17 @@ export class OnlineConnection implements GameConnection {
   shopReady = false;
   /** Rangliste der letzten Runde */
   ranking: RankEntry[] = [];
+  /** Raumname, Sichtbarkeit und Passwortschutz laut Lobby-Nachricht */
+  roomName = '';
+  visibility: RoomVisibility = 'public';
+  locked = false;
+  /** Rundenzahl der Serie (0 = offen) und laufende Runde ab 1 (0 = noch keine) */
+  rounds: number = DEFAULT_ROUNDS;
+  round = 0;
+  /** Letzte Raumliste vom Server */
+  rooms: RoomInfo[] = [];
+  /** Neue Raumliste in `rooms`. */
+  onRooms: (() => void) | null = null;
   /** Phase des Raums hat gewechselt (phase-Nachricht). */
   onPhase: (() => void) | null = null;
   /** Neuer eigener Shop-Stand. */
@@ -190,14 +219,24 @@ export class OnlineConnection implements GameConnection {
     this.socket?.send(JSON.stringify(msg));
   }
 
-  create(name: string): void {
+  create(name: string, opts: CreateOptions = {}): void {
     this.lastName = name;
-    this.sendMsg({ t: 'create', name });
+    const msg: Extract<ClientMessage, { t: 'create' }> = { t: 'create', name };
+    if (opts.roomName) msg.roomName = opts.roomName;
+    if (opts.visibility) msg.visibility = opts.visibility;
+    if (opts.password) msg.password = opts.password;
+    if (opts.avatar !== undefined) msg.avatar = opts.avatar;
+    this.sendMsg(msg);
   }
 
-  join(room: string, name: string, token?: string): void {
+  /** Beitritt; ein Passwort wird nur gesendet, nie gespeichert (die Wiederverbindung nutzt das Token). */
+  join(room: string, name: string, token?: string, opts: JoinOptions = {}): void {
     this.lastName = name;
-    this.sendMsg(token ? { t: 'join', room, name, token } : { t: 'join', room, name });
+    const msg: Extract<ClientMessage, { t: 'join' }> = { t: 'join', room, name };
+    if (token) msg.token = token;
+    if (opts.password) msg.password = opts.password;
+    if (opts.avatar !== undefined) msg.avatar = opts.avatar;
+    this.sendMsg(msg);
   }
 
   isHost(): boolean {
@@ -231,6 +270,35 @@ export class OnlineConnection implements GameConnection {
   endSeries(): void {
     if (this.status !== 'open' || !this.isHost()) return;
     this.sendMsg({ t: 'endSeries' });
+  }
+
+  /** Öffentliche Räume abfragen (auch ohne Raum; der Server antwortet höchstens einmal pro Sekunde). */
+  listRooms(): void {
+    if (this.status !== 'open') return;
+    this.sendMsg({ t: 'listRooms' });
+  }
+
+  /** Eigene Figur wählen (nur Lobby; der Server prüft Phase und Belegung). */
+  setAvatar(avatar: number): void {
+    if (this.status !== 'open') return;
+    this.sendMsg({ t: 'setAvatar', avatar });
+  }
+
+  /** Rundenzahl setzen (nur Host; der Server prüft zusätzlich). */
+  setRounds(rounds: number): void {
+    if (this.status !== 'open' || !this.isHost()) return;
+    this.sendMsg({ t: 'setRounds', rounds });
+  }
+
+  /** Nach der Endwertung alle zurück in die Lobby (nur Host; der Server prüft zusätzlich). */
+  toLobby(): void {
+    if (this.status !== 'open' || !this.isHost()) return;
+    this.sendMsg({ t: 'toLobby' });
+  }
+
+  /** Eigene Figur laut Raumliste; null = noch unbekannt. */
+  ownAvatar(): number | null {
+    return this.roster.find((r) => r.id === this.you)?.avatar ?? null;
   }
 
   /** Raum absichtlich verlassen: der Server gibt den Platz sofort frei. Schließt die Verbindung nicht selbst. */
@@ -275,6 +343,10 @@ export class OnlineConnection implements GameConnection {
         this.roster = msg.players;
         this.roomPhase = msg.phase;
         if (typeof msg.roundMs === 'number' && Number.isFinite(msg.roundMs) && msg.roundMs > 0) this.roundMs = msg.roundMs;
+        if (typeof msg.roomName === 'string') this.roomName = msg.roomName;
+        if (msg.visibility === 'public' || msg.visibility === 'private') this.visibility = msg.visibility;
+        if (typeof msg.locked === 'boolean') this.locked = msg.locked;
+        if (isRounds(msg.rounds)) this.rounds = msg.rounds;
         this.onLobby?.();
         break;
       case 'start':
@@ -291,6 +363,8 @@ export class OnlineConnection implements GameConnection {
         this.seq = 0;
         this.lastSent = null;
         if (typeof msg.roundMs === 'number' && Number.isFinite(msg.roundMs) && msg.roundMs > 0) this.roundMs = msg.roundMs;
+        if (isRounds(msg.rounds)) this.rounds = msg.rounds;
+        if (typeof msg.round === 'number' && Number.isInteger(msg.round) && msg.round >= 1) this.round = msg.round;
         this.roomPhase = 'playing';
         this.onStart?.();
         break;
@@ -340,6 +414,13 @@ export class OnlineConnection implements GameConnection {
       case 'ranking': {
         const entries = parseRanking(msg.entries);
         if (entries) this.ranking = entries;
+        break;
+      }
+      case 'rooms': {
+        const rooms = parseRoomList(msg.rooms);
+        if (!rooms) break;
+        this.rooms = rooms;
+        this.onRooms?.();
         break;
       }
       case 'error':

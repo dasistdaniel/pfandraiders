@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildJoinLink, copyText, parseJoinParam, withoutJoinParam } from '../src/shareLink';
 
 describe('buildJoinLink', () => {
+  it('never carries a password, even if one is in the current address', () => {
+    const link = buildJoinLink('https://example.org/spiel/?password=geheim&join=WXYZ&pw=geheim#x', 'abcd');
+    expect(link).toBe('https://example.org/spiel/?join=ABCD');
+    expect(link).not.toContain('geheim');
+  });
+
   it('uses origin and path of the client plus ?join=CODE', () => {
     expect(buildJoinLink('https://example.org/pfand/index.html', 'ABCD')).toBe('https://example.org/pfand/index.html?join=ABCD');
     expect(buildJoinLink('http://localhost:5173/', 'XY23')).toBe('http://localhost:5173/?join=XY23');

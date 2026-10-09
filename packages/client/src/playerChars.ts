@@ -1,3 +1,4 @@
+import { isAvatar } from '@pfandraiders/core';
 import type { Facing } from './pose';
 
 /**
@@ -40,6 +41,14 @@ export function characterIndex(id: string, rosterIds: readonly string[], playerI
   if (r >= 0) return r;
   const p = playerIds.indexOf(id);
   return p >= 0 ? p : 0;
+}
+
+/**
+ * Figur eines Online-Spielers: Bogen zum Avatar aus der Raumliste (Index in ALL_CHARACTERS).
+ * Fehlt der Avatar oder ist er ungültig (älterer Server), wie bisher nach Position (characterFor).
+ */
+export function characterOfAvatar(avatar: unknown, fallbackIndex: number): string {
+  return isAvatar(avatar) ? ALL_CHARACTERS[avatar] : characterFor(fallbackIndex);
 }
 
 export type CharDir = 'down' | 'right' | 'up' | 'left';

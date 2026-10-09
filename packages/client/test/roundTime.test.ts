@@ -1,6 +1,6 @@
 import { DEFAULT_ROUND_MS } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
-import { roundMsLabel, stepRoundMs } from '../src/roundTime';
+import { roundMsLabel, roundsLabel, stepRoundMs } from '../src/roundTime';
 
 describe('roundMsLabel', () => {
   it('shows whole minutes and other values in seconds', () => {
@@ -23,5 +23,14 @@ describe('stepRoundMs', () => {
     expect(stepRoundMs(12_345, 1)).toBe(420_000);
     expect(stepRoundMs(Number.NaN, -1)).toBe(180_000);
     expect(DEFAULT_ROUND_MS).toBe(300_000);
+  });
+});
+
+describe('roundsLabel', () => {
+  it('names the round count in German', () => {
+    expect(roundsLabel(0)).toBe('offen');
+    expect(roundsLabel(1)).toBe('1 Runde');
+    expect(roundsLabel(3)).toBe('3 Runden');
+    expect(roundsLabel(5)).toBe('5 Runden');
   });
 });

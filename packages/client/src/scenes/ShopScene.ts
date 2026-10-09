@@ -101,9 +101,9 @@ export class ShopScene extends Phaser.Scene {
       };
       online.onStart = () => this.goTo('game', { online });
       online.onPhase = () => {
-        // Endwertung und Rückkehr in die Lobby zeigt erst Plan 2; bis dahin zurück ins Menü
-        if (online.roomPhase === 'final') this.leaveOnline('Die Serie ist vorbei.');
-        else if (online.roomPhase === 'lobby') this.leaveOnline('Der Host hat die Serie beendet.');
+        // Host beendet die Serie: Endwertung; nach der Endwertung zurück in die Lobby
+        if (online.roomPhase === 'final') this.goTo('final', { online });
+        else if (online.roomPhase === 'lobby') this.goTo('menu', { resumeOnline: online });
       };
       online.onError = (_code, message) => this.say(this.panels[0], message);
       online.onClosed = () => this.leaveOnline('Verbindung zum Server verloren.');
@@ -112,8 +112,8 @@ export class ShopScene extends Phaser.Scene {
       this.panels[0].model.setReady(online.shopReady);
       if (online.status === 'closed') this.leaveOnline('Verbindung zum Server verloren.');
       // Serie ist zu Ende (letzte Runde oder vom Host beendet), während dieser Spieler noch auf der Rangliste stand
-      else if (online.roomPhase === 'final') this.leaveOnline('Die Serie ist vorbei.');
-      else if (online.roomPhase === 'lobby') this.leaveOnline('Der Host hat die Serie beendet.');
+      else if (online.roomPhase === 'final') this.goTo('final', { online });
+      else if (online.roomPhase === 'lobby') this.goTo('menu', { resumeOnline: online });
     } else {
       const views = viewportsFor(this.slots.length);
       this.slots.forEach((s, i) => {
@@ -270,7 +270,7 @@ export class ShopScene extends Phaser.Scene {
     return ready ? 'Warte auf die anderen…' : '';
   }
 
-  private goTo(scene: 'game' | 'menu', data: object): void {
+  private goTo(scene: 'game' | 'menu' | 'final', data: object): void {
     if (this.leaving) return;
     this.leaving = true;
     if (this.online) {

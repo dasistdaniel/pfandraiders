@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import { CREDITS, creditDetail, creditLine } from '../credits';
 import { KEYBOARD_LAYOUTS } from '../devices';
+import { sceneForPhase } from '../finalView';
 import { GAME_H, GAME_W } from '../layout';
 import { buildLabel, currentBuild } from '../buildInfo';
 import { addLogo } from '../logoTexture';
 import { arrowAt, controlLines, MenuModel } from '../menuModel';
 import type { MenuItem } from '../menuModel';
+import type { OnlineConnection } from '../online';
 import { showOnlineMenu } from '../onlineMenu';
 import { parseJoinParam, withoutJoinParam } from '../shareLink';
 import { audioToggles, music, setAudioToggles, sfx } from '../sfx';
@@ -101,6 +103,8 @@ function takeJoinCode(): string | null {
 
 export class MenuScene extends Phaser.Scene {
   private notice = '';
+  /** Verbindung, deren Raum nach der Endwertung wieder in der Lobby ist (Online-Dialog fortsetzen) */
+  private resumeOnline: OnlineConnection | null = null;
   private page: Page = 'main';
   private model = new MenuModel(MAIN_ITEMS);
   private showControls = false;
@@ -122,8 +126,12 @@ export class MenuScene extends Phaser.Scene {
     super('menu');
   }
 
-  init(data?: { notice?: string }): void {
+  init(data?: { notice?: string; resumeOnline?: OnlineConnection }): void {
     this.notice = data?.notice ?? '';
+    this.resumeOnline = data?.resumeOnline ?? null;
+    // Phaser behält die Startdaten, wenn ein späteres scene.start('menu') keine mitgibt; sonst würde eine längst
+    // geschlossene Verbindung erneut "fortgesetzt" (oder ein alter Hinweis erneut gezeigt)
+    this.sys.settings.data = {};
   }
 
   create(): void {
@@ -192,6 +200,15 @@ export class MenuScene extends Phaser.Scene {
       esc: kb.addKey('ESC'),
     };
     this.rebuild();
+    // Zurück aus der Endwertung: gleich wieder in die Lobby derselben Verbindung
+    if (this.resumeOnline) {
+      const conn = this.resumeOnline;
+      this.resumeOnline = null;
+      if (conn.status === 'open') {
+        this.openOnline(undefined, conn);
+        return;
+      }
+    }
     // Geöffneter Teilen-Link: gleich in den Online-Dialog, Tab "Beitreten" mit dem Raumcode
     const joinCode = takeJoinCode();
     if (joinCode) this.openOnline(joinCode);
@@ -441,7 +458,7 @@ export class MenuScene extends Phaser.Scene {
     this.render();
   }
 
-  private openOnline(joinCode?: string): void {
+  private openOnline(joinCode?: string, resume?: OnlineConnection): void {
     const url = resolveServerUrl(window.location.search, import.meta.env.VITE_SERVER_URL as string | undefined);
     this.busy = true;
     this.input.keyboard!.enabled = false; // Tasten gehören dem Eingabefeld
@@ -452,10 +469,10 @@ export class MenuScene extends Phaser.Scene {
         this.input.keyboard.enabled = true;
       }
     };
-    showOnlineMenu(url, undefined, { joinCode }).then(
+    showOnlineMenu(url, undefined, { joinCode, resume }).then(
       (conn) => {
         done();
-        if (conn) this.scene.start(conn.roomPhase === 'shop' && conn.shop ? 'shop' : 'game', { online: conn });
+        if (conn) this.scene.start(sceneForPhase(conn.roomPhase, conn.shop !== null), { online: conn });
       },
       () => done(),
     );
