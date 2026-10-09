@@ -249,6 +249,10 @@ describe('series messages', () => {
     expect(room.phase).toBe('shop');
     send(sa, a, { t: 'shopBuy', category: 'defense', item: 'dog_treat', qty: 2 });
     expect(room.progress.get('p1')!.items.dog_treat).toBe(2);
+    send(sa, a, { t: 'shopBuy', category: 'weapons', item: 'glove', qty: 1 });
+    expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'cannot_buy', message: 'Nicht genug Geld.' });
+    send(sa, a, { t: 'shopBuy', category: 'weapons', item: 'punch', qty: 1 });
+    expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'bad_message' });
     send(sa, a, { t: 'shopBuy', category: 'defense', item: 'dog_treat', qty: 100 });
     expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'bad_message' });
     send(sa, a, { t: 'ready', ready: true });
