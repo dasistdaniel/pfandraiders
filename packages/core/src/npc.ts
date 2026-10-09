@@ -49,8 +49,8 @@ function senseRadius(npc: Npc): number {
  * targetId auf ihn hat, hält ihn fest, alle anderen Hunde lassen ihn in Ruhe. Erheben zwei Hunde
  * zugleich Anspruch (etwa aus einem älteren Zustand), behält ihn der zuerst verarbeitete (kleinerer
  * Index in state.npcs), damit es deterministisch bleibt. Der Anspruch endet, sobald der Hund sich
- * setzt (nach dem Biss oder wenn er aufgibt) oder streunt, denn dann ist targetId null. Ein Hund, den
- * ein Leckerli ablenkt, bleibt aktiv und behält targetId: Er hält den Spieler also auch während der
+ * setzt (nach dem Biss oder wenn er aufgibt), sein Ziel verliert (steht) oder streunt, denn dann ist
+ * targetId null. Ein Hund, den ein Leckerli ablenkt, bleibt aktiv und behält targetId: Er hält den Spieler also auch während der
  * Ablenkung fest und jagt ihn danach weiter, solange er ihn noch will.
  */
 function claimedByOtherDog(state: GameState, npc: Npc, p: Player): boolean {
@@ -78,9 +78,8 @@ function wants(state: GameState, npc: Npc, p: Player): boolean {
   return p.shieldMs === 0 && !claimedByOtherDog(state, npc, p);
 }
 
-/** Nächster passender Spieler im Umkreis (bei Gleichstand der erste), ohne etwas zu verändern. */
-function nearestTarget(state: GameState, npc: Npc): Player | null {
-  const radius = senseRadius(npc);
+/** Nächster passender Spieler im Umkreis radius (bei Gleichstand der erste), ohne etwas zu verändern. */
+function nearestTarget(state: GameState, npc: Npc, radius: number): Player | null {
   let best: Player | null = null;
   let bestDist = Infinity;
   for (const p of Object.values(state.players)) {
@@ -98,7 +97,7 @@ function nearestTarget(state: GameState, npc: Npc): Player | null {
 function pickTarget(state: GameState, npc: Npc): Player | null {
   const current = npc.targetId === null ? undefined : state.players[npc.targetId];
   if (current && wants(state, npc, current) && distance(npc, current) <= senseRadius(npc)) return current;
-  const best = nearestTarget(state, npc);
+  const best = nearestTarget(state, npc, senseRadius(npc));
   const id = best ? best.id : null;
   if (id !== npc.targetId) npc.pathMs = 0; // neues Ziel: alten Wegpunkt verwerfen
   npc.targetId = id;
@@ -155,13 +154,32 @@ function startRoaming(state: GameState, npc: Npc): void {
   pickWander(state, npc);
 }
 
+/**
+ * Ziel verloren (zu weit weg oder nicht mehr passend): bleibt lostTrackIdleMs lang stehen, statt beim Spieler
+ * herumzustreunen. Kein Zufall wird gezogen, das Wegstück sucht er sich erst danach (startRoaming).
+ */
+function loseTrack(npc: Npc): void {
+  npc.mood = 'alert';
+  npc.moodMs = CONFIG.npc.lostTrackIdleMs;
+  npc.targetId = null;
+  npc.checkMs = 0;
+  npc.pauseMs = 0;
+  npc.pathMs = 0;
+}
+
+/** Ohne Ziel: Hatte er eben noch eines, bleibt er stehen, sonst (etwa frisch erschienen) streunt er gleich los. */
+function noTarget(state: GameState, npc: Npc, previous: string | null): void {
+  if (previous !== null) loseTrack(npc);
+  else startRoaming(state, npc);
+}
+
 function staminaMs(kind: NpcKind): number {
   return kind === 'dog' ? CONFIG.npc.dog.lifeMs : CONFIG.npc.police.lifeMs;
 }
 
-/** Sieht ein streunender NPC einen passenden Spieler, jagt er wieder (mit voller Ausdauer). */
-function tryEngage(state: GameState, npc: Npc): boolean {
-  const target = nearestTarget(state, npc);
+/** Ist ein passender Spieler im Umkreis radius, jagt der NPC wieder (mit voller Ausdauer). */
+function tryEngage(state: GameState, npc: Npc, radius: number): boolean {
+  const target = nearestTarget(state, npc, radius);
   if (!target) return false;
   npc.mood = 'active';
   npc.lifeMs = staminaMs(npc.kind);
@@ -201,9 +219,10 @@ function updateRoaming(state: GameState, npc: Npc, dtMs: number): void {
 function updateDog(state: GameState, npc: Npc, dtMs: number): void {
   const cfg = CONFIG.npc.dog;
   if (npc.distractedMs > 0) return; // beschäftigt mit dem Leckerli
+  const previous = npc.targetId;
   const target = pickTarget(state, npc);
   if (!target) {
-    startRoaming(state, npc);
+    noTarget(state, npc, previous);
     return;
   }
   if (distance(npc, target) > cfg.biteRadius) {
@@ -227,7 +246,7 @@ function updatePolice(state: GameState, npc: Npc, dtMs: number): void {
   const previous = npc.targetId;
   const target = pickTarget(state, npc);
   if (!target) {
-    startRoaming(state, npc);
+    noTarget(state, npc, previous);
     return;
   }
   if (target.id !== previous) npc.checkMs = 0;
@@ -302,7 +321,13 @@ export function updateNpcs(state: GameState, dtMs: number): void {
       if (npc.moodMs <= 0) startRoaming(state, npc);
       continue;
     }
-    if (npc.mood === 'roaming' && !tryEngage(state, npc)) {
+    if (npc.mood === 'alert' && !tryEngage(state, npc, CONFIG.npc.idleEngageRadius)) {
+      // steht nach dem Verlust des Ziels: nur ein ganz naher passender Spieler weckt ihn
+      npc.moodMs -= dtMs;
+      if (npc.moodMs <= 0) startRoaming(state, npc);
+      continue;
+    }
+    if (npc.mood === 'roaming' && !tryEngage(state, npc, senseRadius(npc))) {
       updateRoaming(state, npc, dtMs);
       continue;
     }

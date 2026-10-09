@@ -146,6 +146,11 @@ describe('dogAnim', () => {
   it('the bite still wins over roaming', () => {
     expect(dogAnim(npc({ mood: 'roaming', cooldownMs: BITE }), true)).toBe(DOG_ANIMS.attack);
   });
+
+  it('sits and looks around (no tail wagging) after losing its target, even with interpolation jitter', () => {
+    expect(dogAnim(npc({ mood: 'alert', moodMs: 5000 }), false)).toBe(DOG_ANIMS.idle);
+    expect(dogAnim(npc({ mood: 'alert', moodMs: 5000 }), true)).toBe(DOG_ANIMS.idle);
+  });
 });
 
 describe('policeAnim', () => {
@@ -163,6 +168,11 @@ describe('policeAnim', () => {
     expect(policeAnim(cop({ mood: 'roaming' }), false)).toBe(OFFICER_ANIMS.walk);
     expect(policeAnim(cop({ mood: 'roaming', pauseMs: 1000 }), true)).toBe(OFFICER_ANIMS.idle);
     expect(policeAnim(cop({ mood: 'roaming', pauseMs: 1000 }), false)).toBe(OFFICER_ANIMS.idle);
+  });
+
+  it('stands after losing its target, even with interpolation jitter', () => {
+    expect(policeAnim(cop({ mood: 'alert', moodMs: 5000 }), false)).toBe(OFFICER_ANIMS.idle);
+    expect(policeAnim(cop({ mood: 'alert', moodMs: 5000 }), true)).toBe(OFFICER_ANIMS.idle);
   });
 
   it('swings the baton during a check', () => {

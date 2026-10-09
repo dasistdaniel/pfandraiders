@@ -120,7 +120,7 @@ export const CONFIG = {
     /** alle so viele ms verliert ein Spieler 1 Leben durch Hunger */
     hungerEveryMs: 8000,
     /** Dauer eines Knockouts */
-    knockoutMs: 20000,
+    knockoutMs: 10000,
     /** Essensfund beim Suchen (Spec §5): heilt so viel, Chance je abgeschlossener Suche nach Spot-Art */
     food: {
       heal: 30,
@@ -132,9 +132,9 @@ export const CONFIG = {
     spawnShieldMs: 3000,
   },
   npc: {
-    /** Neue NPCs erscheinen nur, solange weniger als so viele jagen (sitzende und streunende zählen nicht) */
+    /** Neue NPCs erscheinen nur, solange weniger als so viele jagen (sitzende, stehende und streunende zählen nicht) */
     maxCount: 3,
-    /** Harte Obergrenze aller NPCs inklusive sitzender und streunender (NPCs verschwinden nie) */
+    /** Harte Obergrenze aller NPCs inklusive sitzender, stehender und streunender (NPCs verschwinden nie) */
     maxTotal: 6,
     /** Nach einem Biss, einer Kontrolle oder dem Aufgeben lässt der NPC diesen Spieler so lange in Ruhe */
     restMs: 20000,
@@ -153,6 +153,13 @@ export const CONFIG = {
     pathEveryMs: 300,
     /** So nah am Wegpunkt gilt er als erreicht, dann wird sofort der nächste gesucht (px) */
     pathArrivePx: 1.5,
+    /**
+     * Verliert ein jagender NPC sein Ziel (zu weit weg oder nicht mehr passend), bleibt er so lange stehen
+     * (Hund sitzt und schaut sich um), statt gleich in der Nähe des Spielers herumzustreunen; danach streunt er.
+     */
+    lostTrackIdleMs: 8000,
+    /** Während dieses Stehens jagt er nur wieder los, wenn ein passender Spieler so nah kommt (px) */
+    idleEngageRadius: 60,
     firstSpawnMs: 15000,
     spawnEveryMs: [20000, 40000] as Range,
     dogChance: 0.6,
