@@ -7,15 +7,19 @@ import {
   MAX_ROOM_NAME_LENGTH,
   ROOM_CODE_LENGTH,
   ROUND_MS_CHOICES,
+  ROUNDS_CHOICES,
 } from '@pfandraiders/core';
+import { AVATAR_COLUMNS, avatarCells, stepAvatar, takenByOthers } from './avatarGrid';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
+import { CHARACTER_URLS } from './characterAssets';
 import { chatColorHex, rosterDiff } from './chatLogic';
 import { createRequest, nextTab, parseTab, sanitizeRoomCode, shouldReportClose, TAB_LABELS, TABS } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
+import { ALL_CHARACTERS, CHAR_FRAME_H, CHAR_FRAME_W } from './playerChars';
 import { EMPTY_ROOM_LIST_TEXT, firstSelectable, listAction, moveSelection, refreshAllowed, ROOM_LIST_HEADER, roomRows } from './roomList';
-import { roundMsLabel } from './roundTime';
-import { loadAvatarWish } from './settings';
+import { roundMsLabel, roundsLabel } from './roundTime';
+import { loadAvatarWish, saveAvatarWish } from './settings';
 import { buildJoinLink, copyText } from './shareLink';
 import type { SocketFactory } from './online';
 
@@ -93,6 +97,22 @@ function el<K extends keyof HTMLElementTagNameMap>(
   Object.assign(e, props);
   if (style) e.setAttribute('style', style);
   return e;
+}
+
+/**
+ * Erstes Bild eines Figurenbogens (vorn, Stand: Spalte 0, Zeile 0) als Pixelgrafik.
+ * Bögen haben 4 x 3 Bilder zu CHAR_FRAME_W x CHAR_FRAME_H px.
+ */
+function avatarSprite(index: number, scale: number): HTMLDivElement {
+  const key = ALL_CHARACTERS[index] ?? ALL_CHARACTERS[0];
+  const d = el(
+    'div',
+    {},
+    `width:${CHAR_FRAME_W * scale}px;height:${CHAR_FRAME_H * scale}px;flex:none;background-repeat:no-repeat;background-position:0 0;background-size:${CHAR_FRAME_W * 4 * scale}px ${CHAR_FRAME_H * 3 * scale}px;image-rendering:pixelated`,
+  );
+  const src = CHARACTER_URLS[key];
+  if (src) d.style.backgroundImage = `url("${src}")`;
+  return d;
 }
 
 /**
@@ -490,10 +510,14 @@ export function showOnlineMenu(
     };
 
     const renderLobby = () => {
+      // Eine späte Antwort auf die Raumliste soll die Lobby nicht mehr anfassen
+      drawList = null;
       box.replaceChildren();
-      box.appendChild(el('div', { textContent: `Raum ${conn.room}` }, 'font-size:26px;letter-spacing:4px;margin-bottom:4px'));
+      const title = el('div', {}, 'font-size:24px;margin-bottom:2px;overflow-wrap:anywhere');
+      const codeLine = el('div', {}, 'color:#ccc;font-size:15px;margin-bottom:4px');
+      box.append(title, codeLine);
       box.appendChild(el('div', { textContent: 'Code oder Link weitergeben, damit Freunde beitreten.' }, 'color:#aaa;font-size:14px;margin-bottom:4px'));
-      // Teilen-Link: <Adresse>?join=CODE (ein ?server= bleibt erhalten); "Kopiert!" verschwindet nach kurzer Zeit
+      // Teilen-Link: <Adresse>?join=CODE (ein ?server= bleibt erhalten, ein Passwort nie); "Kopiert!" verschwindet nach kurzer Zeit
       const shareRow = el('div', {}, 'margin-bottom:6px;font-size:14px');
       const copyButton = el('button', { textContent: 'Link kopieren' }, 'font:inherit;margin-right:8px');
       const copyStatus = el('span', { textContent: '' }, 'color:#a5d6a7;overflow-wrap:anywhere');
@@ -503,7 +527,6 @@ export function showOnlineMenu(
         void copyText(link).then((ok) => {
           if (copyTimer !== null) clearTimeout(copyTimer);
           copyStatus.style.color = ok ? '#a5d6a7' : '#ffa726';
-          // Klappt das Kopieren nicht, steht der Link zum Abschreiben da (bleibt stehen)
           copyStatus.textContent = ok ? 'Kopiert!' : `Kopieren ging nicht: ${link}`;
           copyTimer = ok ? setTimeout(() => (copyStatus.textContent = ''), 2000) : null;
         });
@@ -522,21 +545,57 @@ export function showOnlineMenu(
           ),
         );
       }
-      box.appendChild(el('div', {}, 'margin-bottom:6px'));
-      const list = el('div', {}, 'margin-bottom:10px');
-      const draw = (players: RosterEntry[]) => {
-        list.replaceChildren();
-        for (const p of players) {
-          const row = el('div', { textContent: `${p.name}${p.id === conn.host ? ' (Host)' : ''}${p.connected ? '' : ' (getrennt)'}` });
-          row.style.color = chatColorHex(p.color);
-          list.appendChild(row);
+
+      // Spielerliste mit Figur, Farbe und Host-Markierung
+      const players = el('div', {}, 'margin:6px 0 10px');
+      const drawPlayers = (list: RosterEntry[]) => {
+        players.replaceChildren();
+        for (const p of list) {
+          const row = el('div', {}, 'display:flex;align-items:center;gap:6px;margin-bottom:2px');
+          row.appendChild(avatarSprite(p.avatar, 1));
+          const label = el('span', { textContent: `${p.name}${p.id === conn.host ? ' (Host)' : ''}${p.connected ? '' : ' (getrennt)'}` });
+          label.style.color = chatColorHex(p.color);
+          if (p.id === conn.you) label.style.fontWeight = 'bold';
+          row.appendChild(label);
+          players.appendChild(row);
         }
       };
-      draw(conn.roster);
 
-      // Chat: Nachrichten vom Server und Systemzeilen (Beitritt/Abgang aus dem Vergleich der Spielerlisten).
-      // Alles nur per textContent/Textknoten, nie als HTML.
-      const chatLog = el('div', { role: 'log' }, 'height:140px;max-height:22vh;overflow-y:auto;background:#111;border:1px solid #555;padding:4px 6px;font-size:14px;margin-bottom:6px;overflow-wrap:anywhere');
+      // Figurauswahl: Raster 8 x 3, vergebene halbdurchsichtig, eigene gelb umrandet; Pfeile oder Klick
+      const CELL = CHAR_FRAME_W * 2 + 6;
+      const grid = el('div', { tabIndex: 0 }, `display:grid;grid-template-columns:repeat(${AVATAR_COLUMNS}, ${CELL}px);gap:4px;margin-bottom:10px;outline:none`);
+      grid.setAttribute('role', 'listbox');
+      grid.setAttribute('aria-label', 'Figur wählen (Pfeiltasten oder Klick)');
+      const choose = (avatar: number) => {
+        pendingWish = avatar;
+        conn.setAvatar(avatar);
+      };
+      const drawGrid = () => {
+        grid.replaceChildren();
+        for (const cell of avatarCells(conn.roster, conn.you)) {
+          const b = el(
+            'div',
+            { title: cell.takenBy ? `vergeben an ${cell.takenBy}` : cell.own ? 'deine Figur' : 'frei' },
+            `height:${CHAR_FRAME_H * 2 + 6}px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border:2px solid ${cell.own ? '#ffca28' : '#333'};background:${cell.own ? '#3a3320' : '#1a1a1a'};opacity:${cell.taken ? 0.3 : 1};cursor:${cell.taken || cell.own ? 'default' : 'pointer'}`,
+          );
+          b.setAttribute('role', 'option');
+          b.setAttribute('aria-selected', String(cell.own));
+          b.setAttribute('aria-disabled', String(cell.taken));
+          b.appendChild(avatarSprite(cell.index, 2));
+          if (!cell.taken && !cell.own) b.onclick = () => choose(cell.index);
+          grid.appendChild(b);
+        }
+      };
+      grid.onkeydown = (e) => {
+        const own = conn.ownAvatar();
+        if (own === null) return;
+        const next = stepAvatar(own, e.key, takenByOthers(conn.roster, conn.you));
+        if (e.key.startsWith('Arrow')) e.preventDefault();
+        if (next !== own) choose(next);
+      };
+
+      // Chat: unverändert (Nachrichten vom Server und Systemzeilen; nur Textknoten, nie HTML)
+      const chatLog = el('div', { role: 'log' }, 'height:120px;max-height:20vh;overflow-y:auto;background:#111;border:1px solid #555;padding:4px 6px;font-size:14px;margin-bottom:6px;overflow-wrap:anywhere');
       chatLog.setAttribute('aria-label', 'Chat');
       const chatInput = el('input', { placeholder: 'Nachricht…', maxLength: MAX_CHAT_LENGTH }, 'width:100%;box-sizing:border-box;margin-bottom:10px;font:inherit');
       chatInput.setAttribute('aria-label', 'Chatnachricht');
@@ -575,30 +634,50 @@ export function showOnlineMenu(
       };
       conn.onChat = showChat;
 
-      const roundRow = el('div', {}, 'margin-bottom:10px');
+      // Host: Rundenzeit und Rundenzahl; Gäste sehen die Werte
+      const roundRow = el('div', {}, 'margin-bottom:6px');
       const roundText = el('span', { textContent: '' });
       const roundSelect = el('select', {}, 'font:inherit;margin-left:6px');
       for (const ms of ROUND_MS_CHOICES) roundSelect.appendChild(el('option', { value: String(ms), textContent: roundMsLabel(ms) }));
       roundSelect.onchange = () => conn.setRoundMs(Number(roundSelect.value));
       roundRow.append(el('span', { textContent: 'Rundenzeit:' }), roundSelect, roundText);
+      const roundsRow = el('div', {}, 'margin-bottom:10px');
+      const roundsText = el('span', { textContent: '' });
+      const roundsSelect = el('select', {}, 'font:inherit;margin-left:6px');
+      for (const n of ROUNDS_CHOICES) roundsSelect.appendChild(el('option', { value: String(n), textContent: roundsLabel(n) }));
+      roundsSelect.onchange = () => conn.setRounds(Number(roundsSelect.value));
+      roundsRow.append(el('span', { textContent: 'Runden:' }), roundsSelect, roundsText);
 
       const start = el('button', { textContent: 'Spiel starten' }, 'font:inherit;margin-right:8px');
       const hint = el('div', { textContent: 'Warte auf den Host…' }, 'color:#aaa');
       const leave = el('button', { textContent: 'Verlassen' }, 'font:inherit');
       const refresh = () => {
-        draw(conn.roster);
-        start.style.display = conn.isHost() ? 'inline-block' : 'none';
-        hint.style.display = conn.isHost() ? 'none' : 'block';
+        title.textContent = conn.roomName || `Raum ${conn.room}`;
+        codeLine.textContent = `Code ${conn.room}${conn.locked ? '   🔒 Passwort' : ''}${conn.visibility === 'private' ? '   privat' : ''}`;
+        drawPlayers(conn.roster);
+        drawGrid();
+        const host = conn.isHost();
+        start.style.display = host ? 'inline-block' : 'none';
+        hint.style.display = host ? 'none' : 'block';
         start.disabled = conn.roster.filter((p) => p.connected).length < 2;
-        roundSelect.style.display = conn.isHost() ? 'inline-block' : 'none';
+        roundSelect.style.display = host ? 'inline-block' : 'none';
         roundSelect.value = String(conn.roundMs);
-        roundText.textContent = conn.isHost() ? '' : ` ${roundMsLabel(conn.roundMs)}`;
+        roundText.textContent = host ? '' : ` ${roundMsLabel(conn.roundMs)}`;
+        roundsSelect.style.display = host ? 'inline-block' : 'none';
+        roundsSelect.value = String(conn.rounds);
+        roundsText.textContent = host ? '' : ` ${roundsLabel(conn.rounds)}`;
       };
       // Die erste Spielerliste nach dem Beitritt wird nicht gemeldet
       let prevRoster: RosterEntry[] | null = null;
       const onLobby = () => {
         for (const text of rosterDiff(prevRoster, conn.roster)) append(systemLine(text));
         prevRoster = [...conn.roster];
+        // Selbst gewählte Figur bestätigt: als Wunsch für das nächste Mal merken
+        const own = conn.ownAvatar();
+        if (pendingWish !== null && own === pendingWish) {
+          saveAvatarWish(own);
+          pendingWish = null;
+        }
         refresh();
       };
       start.onclick = () => conn.requestStart();
@@ -606,7 +685,19 @@ export function showOnlineMenu(
         safeRemove(TOKEN_KEY(conn.room));
         finish(null);
       };
-      box.append(list, chatLog, chatInput, roundRow, start, hint, leave, message);
+      box.append(
+        players,
+        el('div', { textContent: 'Deine Figur' }, 'color:#aaa;font-size:14px;margin-bottom:4px'),
+        grid,
+        chatLog,
+        chatInput,
+        roundRow,
+        roundsRow,
+        start,
+        hint,
+        leave,
+        message,
+      );
       conn.onLobby = onLobby;
       refresh();
     };
