@@ -1,7 +1,7 @@
 import { CITY_MAP, CONFIG, createGame, parseMap, projectSnapshot, stateFromSnapshot, step } from '@pfandraiders/core';
 import type { GameState, Npc } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
-import { detectSeizures, detectSounds, PLING_MAX_STEP, PLING_RESET_MS, plingStep, snapshotForSound } from '../src/soundEvents';
+import { detectFoodFinds, detectSeizures, detectSounds, PLING_MAX_STEP, PLING_RESET_MS, plingStep, snapshotForSound } from '../src/soundEvents';
 
 function fresh(): GameState {
   return createGame(1, CITY_MAP, ['a', 'b'], { countdownMs: 0 });
@@ -76,12 +76,9 @@ describe('detectSounds', () => {
     expect(detectSounds(p, robbed, ['a'])).not.toContain('pling');
   });
 
-  it('plays buy for a container upgrade and for spending', () => {
+  it('plays buy for spending', () => {
     const p = next(fresh(), (s) => { s.players.a.money = 1000; });
-    expect(detectSounds(p, next(p, (s) => { s.players.a.containerLevel++; s.players.a.money -= 300; }), 'all')).toEqual(['buy']);
-    const hungry = next(p, (s) => { s.players.a.health = 40; });
-    const fed = next(hungry, (s) => { s.players.a.money -= 100; s.players.a.health += CONFIG.health.food.heal; });
-    expect(detectSounds(hungry, fed, 'all')).toEqual(['buy']);
+    expect(detectSounds(p, next(p, (s) => { s.players.a.money -= 300; }), 'all')).toEqual(['buy']);
   });
 
   it('does not play buy when the player loses money by being knocked out', () => {
@@ -113,12 +110,15 @@ describe('detectSounds', () => {
     expect(detectSounds(p, n, ['a'])).toEqual(['pickup']);
   });
 
-  it('copies the inventory deeply so a used bolt cutter is seen in the local game', () => {
+  it('copies items and the food find so the local game sees changes', () => {
     const s = fresh();
-    s.players.a.inventory.bolt_cutters = true;
+    s.players.a.items.dog_treat = 2;
+    s.players.a.lastFood = { n: 1, spot: 'bin', text: 0, full: false };
     const copy = snapshotForSound(s);
-    s.players.a.inventory.bolt_cutters = false;
-    expect(copy.players.a.inventory.bolt_cutters).toBe(true);
+    s.players.a.items.dog_treat = 1;
+    s.players.a.lastFood.n = 2;
+    expect(copy.players.a.items.dog_treat).toBe(2);
+    expect(copy.players.a.lastFood!.n).toBe(1);
   });
 
   it('plays bite on a large health drop but not on hunger', () => {
@@ -288,7 +288,7 @@ describe('detectSeizures', () => {
     const map = parseMap(['##########', '#@.......#', '##########']);
     const s = createGame(1, map, ['a'], { countdownMs: 0 });
     s.nextNpcMs = 1e9;
-    s.players.a.containerLevel = 1;
+    s.players.a.items.bag = 3;
     s.players.a.bottles = { plastic: 4, glass: 0, crate: 0 };
     s.npcs.push(npc({ id: 1, kind: 'police', x: 40, y: 24, lifeMs: 30000 }));
     let prevLocal = snapshotForSound(s);
@@ -346,18 +346,16 @@ describe('fight sounds', () => {
     expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
   });
 
-  it('plays stealSuccess for a robbery with bolt cutters that takes everything', () => {
+  it('plays stealSuccess for a robbery that takes everything', () => {
     const p = next(fresh(), (s) => {
       s.players.b.bottles.glass = 3;
       s.players.b.unconsciousMs = 10000;
       s.players.b.health = 0;
-      s.players.a.inventory.bolt_cutters = true;
     });
     const n = next(p, (s) => {
       s.players.b.bottles.glass = 0;
       s.players.b.robbed = true;
       s.players.a.bottles.glass = 3;
-      s.players.a.inventory.bolt_cutters = false;
     });
     expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
     expect(detectSounds(p, n, ['x'])).toEqual([]);
@@ -375,5 +373,40 @@ describe('fight sounds', () => {
       s.players.a.bottles.plastic = 3;
     });
     expect(detectSounds(p, n, ['a'])).toEqual(['stealSuccess']);
+  });
+});
+
+describe('detectFoodFinds', () => {
+  const find = (n: number, full = false) => ({ n, spot: 'bin' as const, text: 1, full });
+
+  it('shows the text once when the own counter goes up', () => {
+    const p = fresh();
+    const n = next(p, (s) => { s.players.a.lastFood = find(1); });
+    expect(detectFoodFinds(p, n, ['a'])).toEqual([{ id: 'a', text: 'Halber Döner aus der Tonne. Schmeckt erstaunlich okay.' }]);
+    expect(detectFoodFinds(n, snapshotForSound(n), ['a'])).toEqual([]);
+  });
+
+  it('shows the latest find when two happen between two states, with the full suffix', () => {
+    const p = next(fresh(), (s) => { s.players.a.lastFood = find(1); });
+    const n = next(p, (s) => { s.players.a.lastFood = find(3, true); });
+    expect(detectFoodFinds(p, n, 'all')).toEqual([
+      { id: 'a', text: 'Halber Döner aus der Tonne. Schmeckt erstaunlich okay. Aber du bist schon satt.' },
+    ]);
+  });
+
+  it('never shows a foreign find and nothing without a previous state', () => {
+    const p = fresh();
+    const n = next(p, (s) => { s.players.b.lastFood = find(1); });
+    expect(detectFoodFinds(p, n, ['a'])).toEqual([]);
+    expect(detectFoodFinds(null, n, 'all')).toEqual([]);
+  });
+
+  it('works through the online projection only for the finder', () => {
+    const s = createGame(1, CITY_MAP, ['a', 'b'], { countdownMs: 0 });
+    const before = stateFromSnapshot(CITY_MAP, projectSnapshot(s, 'a'));
+    s.players.a.lastFood = find(1);
+    s.players.b.lastFood = find(1);
+    const after = stateFromSnapshot(CITY_MAP, projectSnapshot(s, 'a'));
+    expect(detectFoodFinds(before, after, ['a']).map((f) => f.id)).toEqual(['a']);
   });
 });

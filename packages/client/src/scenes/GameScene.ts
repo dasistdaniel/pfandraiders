@@ -21,7 +21,7 @@ import { PlayerHud } from '../hud';
 import { HEALTH_COLORS, healthBar } from '../healthBar';
 import { audioToggles, cycleAudio, music, sfx, unlockAudio } from '../sfx';
 import { PLING_GAP_SEC } from '../sound';
-import { detectSeizures, detectSounds, snapshotForSound } from '../soundEvents';
+import { detectFoodFinds, detectSeizures, detectSounds, snapshotForSound } from '../soundEvents';
 import { Notices } from '../notices';
 import { buildInput } from '../input';
 import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
@@ -462,6 +462,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.notices.tick(viewDelta);
     for (const z of detectSeizures(this.prevSoundState, state, this.ownSoundIds)) this.notices.show(z.id, seizeText(z.count));
+    for (const f of detectFoodFinds(this.prevSoundState, state, this.ownSoundIds)) this.notices.show(f.id, f.text);
     this.prevSoundState = snapshotForSound(state);
 
     state.spots.forEach((spot, i) => {

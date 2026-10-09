@@ -1,4 +1,4 @@
-import { CONFIG, isBeingChecked, totalBottles } from '@pfandraiders/core';
+import { CONFIG, foodText, isBeingChecked, totalBottles } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
 import { countdownLeft } from './countdown';
 
@@ -63,8 +63,8 @@ export function detectSounds(
   let plings = 0;
   const audible = (id: string): boolean => ownIds === 'all' || ownIds.includes(id);
 
-  // Ausrauben: bei einem Ausgeknockten springt "robbed" auf true; Räuber ist, wer dabei Flaschen gewann
-  // (mit oder ohne Bolzenschneider). Online sieht der Client vom Opfer nur, ob es Flaschen hat, daher zählt
+  // Ausrauben: bei einem Ausgeknockten springt "robbed" auf true; Räuber ist, wer dabei Flaschen gewann.
+  // Online sieht der Client vom Opfer nur, ob es Flaschen hat, daher zählt
   // dessen Flaschenzahl nicht. Für den Räuber gibt es stealSuccess statt pickup.
   const thieves = new Set<string>();
   for (const v of Object.values(next.players)) {
@@ -94,9 +94,7 @@ export function detectSounds(
 
     // Geld sinkt bei Bewusstsein nur durch Käufe
     const spent = p.money < q.money && q.unconsciousMs === 0 && p.unconsciousMs === 0;
-    if (p.containerLevel > q.containerLevel || spent) {
-      out.add('buy');
-    }
+    if (spent) out.add('buy');
 
     const knockedOut = q.unconsciousMs === 0 && p.unconsciousMs > 0;
     if (knockedOut) out.add('knockout');
@@ -104,7 +102,7 @@ export function detectSounds(
     if (q.unconsciousMs === 0) {
       const drop = q.health - p.health;
       const punched = punchedNear(prev, next, q);
-      if (punched && drop >= CONFIG.fight.minDamage - 1) out.add('hit');
+      if (punched && drop >= CONFIG.fight.damage - 1) out.add('hit');
       // Ein Biss, der zum Umfallen führt, setzt Leben auf 0 und hat einen Hund in Reichweite.
       else if (drop >= BITE_MIN_DROP || (knockedOut && dogNear(prev, q))) out.add('bite');
     }
@@ -165,6 +163,29 @@ export function detectSeizures(prev: GameState | null, next: GameState, ownIds: 
   return out;
 }
 
+export interface FoodNotice {
+  /** Finder */
+  id: string;
+  text: string;
+}
+
+/**
+ * Essensfunde zwischen zwei Zuständen, nur für eigene Spieler: Der Zähler lastFood.n stieg. Fallen mehrere Funde
+ * dazwischen, zählt der letzte. Rein und nur aus Zustandsunterschieden (lokal und online gleich; fremde Spieler
+ * haben online lastFood = null).
+ */
+export function detectFoodFinds(prev: GameState | null, next: GameState, ownIds: string[] | 'all'): FoodNotice[] {
+  if (prev === null) return [];
+  const out: FoodNotice[] = [];
+  for (const p of Object.values(next.players)) {
+    if (ownIds !== 'all' && !ownIds.includes(p.id)) continue;
+    const q = prev.players[p.id];
+    if (!q || p.lastFood === null || p.lastFood.n <= (q.lastFood?.n ?? 0)) continue;
+    out.push({ id: p.id, text: foodText(p.lastFood) });
+  }
+  return out;
+}
+
 /** Hat ein anderer Spieler in Schlagweite von `p` in diesem Schritt geschlagen (Abklingzeit sprang hoch)? */
 function punchedNear(prev: GameState, next: GameState, p: Player): boolean {
   return Object.values(next.players).some((o) => {
@@ -189,7 +210,13 @@ function dogNear(state: GameState, p: Player): boolean {
 export function snapshotForSound(state: GameState): GameState {
   const players: GameState['players'] = {};
   for (const [id, p] of Object.entries(state.players)) {
-    players[id] = { ...p, bottles: { ...p.bottles }, inventory: { ...p.inventory }, upgrades: { ...p.upgrades }, spawn: { ...p.spawn } };
+    players[id] = {
+      ...p,
+      bottles: { ...p.bottles },
+      items: { ...p.items },
+      lastFood: p.lastFood === null ? null : { ...p.lastFood },
+      spawn: { ...p.spawn },
+    };
   }
   return {
     ...state,
