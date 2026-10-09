@@ -57,3 +57,13 @@ describe('soft collision config', () => {
     expect(CONFIG.slideMaxPx).toBeLessThan(CONFIG.playerHalf * 2);
   });
 });
+
+describe('dog chase config', () => {
+  it('is slower than the player so a dog can be outrun, and gives up within seconds', () => {
+    expect(CONFIG.npc.dog.speed).toBeLessThan(CONFIG.playerSpeed);
+    // Vorsprung pro Sekunde reicht, um den Radius der Jagd in unter 8 s zu verlassen
+    const gain = CONFIG.playerSpeed - CONFIG.npc.dog.speed;
+    expect(CONFIG.npc.dog.senseRadius / gain).toBeLessThan(8);
+    expect(CONFIG.npc.dog.lifeMs).toBeLessThanOrEqual(12000);
+  });
+});

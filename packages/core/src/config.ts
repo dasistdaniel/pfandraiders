@@ -164,12 +164,14 @@ export const CONFIG = {
     spawnEveryMs: [20000, 40000] as Range,
     dogChance: 0.6,
     dog: {
-      speed: 100,
+      /** Langsamer als der Spieler (115), damit man ihm entkommt; mit Einkaufswagen (ca. 80) holt er ihn trotzdem ein */
+      speed: 92,
       /** Streunen mit diesem Anteil der Geschwindigkeit */
       roamSpeedMult: 0.6,
       /** Ausdauer: so lange jagt er ohne Biss, dann gibt er auf (setzt sich) */
-      lifeMs: 30000,
-      senseRadius: 160,
+      lifeMs: 12000,
+      /** Reichweite der Jagd: ist der Spieler weiter weg, verliert er das Ziel */
+      senseRadius: 130,
       biteRadius: 12,
       biteDamage: 15,
       biteCooldownMs: 1500,
