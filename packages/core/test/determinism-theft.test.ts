@@ -18,7 +18,7 @@ function base(seed: number): GameState {
   return s;
 }
 
-/** Ausrauben ohne Bolzenschneider, wiederholte Tastendrücke: nur der erste wirkt (einmal pro Knockout) */
+/** Ausrauben mit wiederholten Tastendrücken: nur der erste wirkt (einmal pro Knockout) */
 function loot(seed: number): GameState {
   const s = base(seed);
   for (let t = 0; t < 400; t++) {
