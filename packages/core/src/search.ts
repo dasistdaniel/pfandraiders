@@ -1,6 +1,7 @@
 import { totalBottles, transferBottles } from './bottles';
 import { CONFIG } from './config';
 import { capacityOf, distance } from './economy';
+import { rollFood } from './food';
 import { rollContents } from './loot';
 import { upgradeValue } from './shop';
 import { spotMultiplier, spotRefillMs } from './zones';
@@ -57,6 +58,8 @@ export function updateSearch(state: GameState, p: Player, dtMs: number, canStart
   if (p.searchProgressMs >= searchMsOf(p)) {
     transferBottles(spot.contents, p.bottles, capacityOf(p));
     if (totalBottles(spot.contents) === 0) spot.refillInMs = spotRefillMs(state, spot);
+    // Genau ein Wurf je abgeschlossener Suche: vielleicht liegt auch etwas zu essen dort
+    rollFood(state, p, spot.type);
     cancelSearch(p);
   }
   return true;
