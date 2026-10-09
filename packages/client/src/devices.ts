@@ -12,7 +12,6 @@ export interface KeyboardLayout {
   action: string;
   steal: string;
   attack: string;
-  eat: string;
   labels: KeyLabels;
 }
 
@@ -27,8 +26,7 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     action: 'E',
     steal: 'Q',
     attack: 'F',
-    eat: 'C',
-    labels: { action: 'E', steal: 'Q', attack: 'F', eat: 'C' },
+    labels: { action: 'E', steal: 'Q', attack: 'F' },
   },
   {
     name: 'Tastatur 2 (Pfeile, Enter)',
@@ -39,8 +37,7 @@ export const KEYBOARD_LAYOUTS: KeyboardLayout[] = [
     action: 'ENTER',
     steal: 'FORWARD_SLASH',
     attack: 'PERIOD',
-    eat: 'COMMA',
-    labels: { action: 'Enter', steal: '/', attack: '.', eat: ',' },
+    labels: { action: 'Enter', steal: '/', attack: '.' },
   },
 ];
 
@@ -71,7 +68,7 @@ class KeyboardSource implements InputSource {
   ) {
     this.label = layout.name;
     this.labels = layout.labels;
-    const names = [layout.left, layout.right, layout.up, layout.down, layout.action, layout.steal, layout.attack, layout.eat];
+    const names = [layout.left, layout.right, layout.up, layout.down, layout.action, layout.steal, layout.attack];
     this.keys = keyboard.addKeys(names.join(',')) as Record<string, Key>;
     // 'down' kommt nur beim Wechsel auf gedrückt, mit dem auslösenden Ereignis
     this.keys[layout.action].on('down', (_key: Key, event: KeyboardEvent) => {
@@ -90,7 +87,6 @@ class KeyboardSource implements InputSource {
       action: k[l.action].isDown && !this.actionHeldOver,
       steal: k[l.steal].isDown,
       attack: k[l.attack].isDown,
-      eat: k[l.eat].isDown,
     };
   }
 

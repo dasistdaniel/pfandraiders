@@ -26,13 +26,11 @@ describe('LocalConnection', () => {
     expect(conn.getState().tick).toBeLessThanOrEqual(16);
   });
 
-  it('passes the eat key to the step', () => {
+  it('passes the attack key to the step', () => {
     const state = soloGame();
-    state.players.p1.health = 50;
-    state.players.p1.inventory.food = 1;
     const conn = new LocalConnection(state, ['p1']);
-    conn.setInput('p1', { ...NO_INPUT, eat: true });
+    conn.setInput('p1', { ...NO_INPUT, attack: true });
     conn.update(LOCAL_STEP_MS);
-    expect(conn.getState().players.p1.inventory.food).toBe(0);
+    expect(conn.getState().players.p1.attackCooldownMs).toBeGreaterThan(0);
   });
 });
