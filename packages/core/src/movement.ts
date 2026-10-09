@@ -1,7 +1,7 @@
 import { CONFIG } from './config';
 import { boxBlocked } from './map';
 import { speedMultOf } from './economy';
-import type { Input, MapData, Player } from './types';
+import type { Input, MapData, Player, Point } from './types';
 
 const free = (map: MapData, x: number, y: number): boolean => !boxBlocked(map, x, y, CONFIG.playerHalf);
 
@@ -108,4 +108,24 @@ export function walk(map: MapData, p: Player, input: Input, dtMs: number): void 
   const m = Math.min(best, dist);
   if (bestPerpX) p.x += bestSign * m;
   else p.y += bestSign * m;
+}
+
+/**
+ * Stoß (Pfefferspray, Spec §4.2): bis zu `px` Einzelschritte zu je 1 px in Richtung (ux, uy) (Einheitsvektor),
+ * je Schritt erst x, dann y, mit derselben Kollision wie walk. Eine blockierte Achse bleibt für den Rest stehen,
+ * die andere läuft weiter (rutscht an der Wand entlang).
+ */
+export function shove(map: MapData, p: Point, ux: number, uy: number, px: number): void {
+  let blockedX = ux === 0;
+  let blockedY = uy === 0;
+  for (let i = 0; i < px && !(blockedX && blockedY); i++) {
+    if (!blockedX) {
+      if (free(map, p.x + ux, p.y)) p.x += ux;
+      else blockedX = true;
+    }
+    if (!blockedY) {
+      if (free(map, p.x, p.y + uy)) p.y += uy;
+      else blockedY = true;
+    }
+  }
 }
