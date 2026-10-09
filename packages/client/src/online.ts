@@ -76,7 +76,7 @@ export class OnlineConnection implements GameConnection {
   serverBuild: ServerBuild | null = null;
   /** Lobby-Chat, älteste zuerst (höchstens CLIENT_CHAT_SIZE). chathistory ersetzt die Liste. */
   chat: ChatMessage[] = [];
-  /** Phase des Raums laut Server (lobby, playing, shop). */
+  /** Phase des Raums laut Server (lobby, playing, shop, final). */
   roomPhase: RoomPhase = 'lobby';
   /** Rundenzeit laut Server (Lobby-Nachricht oder start) */
   roundMs: number = DEFAULT_ROUND_MS;
@@ -325,7 +325,7 @@ export class OnlineConnection implements GameConnection {
         break;
       }
       case 'phase':
-        if (msg.phase !== 'lobby' && msg.phase !== 'playing' && msg.phase !== 'shop') break;
+        if (msg.phase !== 'lobby' && msg.phase !== 'playing' && msg.phase !== 'shop' && msg.phase !== 'final') break;
         this.roomPhase = msg.phase;
         this.onPhase?.();
         break;

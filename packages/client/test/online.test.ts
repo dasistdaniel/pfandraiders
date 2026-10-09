@@ -1,5 +1,5 @@
-import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, RETRO_MAP, createGame, freshProgress, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
-import type { ClientMessage, Player, ServerMessage } from '@pfandraiders/core';
+import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, DEFAULT_ROUNDS, RETRO_MAP, createGame, freshProgress, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
+import type { ClientMessage, Player, RoomPhase, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
 import type { SocketLike } from '../src/online';
@@ -27,9 +27,14 @@ class FakeSocket implements SocketLike {
 
 function roster() {
   return [
-    { id: 'p1', name: 'Anna', color: ROOM_COLORS[0], connected: true, ready: false },
-    { id: 'p2', name: 'Bob', color: ROOM_COLORS[1], connected: true, ready: false },
+    { id: 'p1', name: 'Anna', color: ROOM_COLORS[0], connected: true, ready: false, avatar: 1 },
+    { id: 'p2', name: 'Bob', color: ROOM_COLORS[1], connected: true, ready: false, avatar: 14 },
   ];
+}
+
+/** lobby-Nachricht mit den Pflichtfeldern für Räume */
+function lobbyMsg(host: string, phase: RoomPhase, roundMs: number): ServerMessage {
+  return { t: 'lobby', room: 'ABCD', roomName: 'Annas Raum', visibility: 'public', locked: false, host, players: roster(), phase, roundMs, rounds: DEFAULT_ROUNDS };
 }
 
 function setup() {
@@ -44,7 +49,7 @@ function startMessage(tickValue = 0, x2 = 40): ServerMessage {
   const s = createGame(1, CITY_MAP, ['p1', 'p2'], { countdownMs: 0 });
   s.tick = tickValue;
   s.players.p2.x = x2;
-  return { t: 'start', mapId: DEFAULT_MAP_ID, map: CITY_MAP, you: 'p1', players: roster(), snap: projectSnapshot(s, 'p1'), roundMs: DEFAULT_ROUND_MS };
+  return { t: 'start', mapId: DEFAULT_MAP_ID, map: CITY_MAP, you: 'p1', players: roster(), snap: projectSnapshot(s, 'p1'), roundMs: DEFAULT_ROUND_MS, rounds: DEFAULT_ROUNDS, round: 1 };
 }
 
 function snapMessage(tickValue: number, x2: number): ServerMessage {
@@ -78,10 +83,10 @@ describe('OnlineConnection messages', () => {
     expect(conn.room).toBe('ABCD');
     expect(conn.you).toBe('p2');
     expect(conn.token).toBe('secret');
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
+    socket.receive(lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS));
     expect(conn.roster).toHaveLength(2);
     expect(conn.isHost()).toBe(false);
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
+    socket.receive(lobbyMsg('p2', 'lobby', DEFAULT_ROUND_MS));
     expect(conn.isHost()).toBe(true);
   });
 
@@ -167,10 +172,10 @@ describe('OnlineConnection messages', () => {
   it('only the host sends start', () => {
     const { socket, conn } = setup();
     socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
+    socket.receive(lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS));
     conn.requestStart();
     expect(socket.sent.some((m) => m.t === 'start')).toBe(false);
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'lobby', roundMs: DEFAULT_ROUND_MS });
+    socket.receive(lobbyMsg('p2', 'lobby', DEFAULT_ROUND_MS));
     conn.requestStart();
     expect(socket.sent.filter((m) => m.t === 'start')).toHaveLength(1);
   });
@@ -244,7 +249,7 @@ describe('OnlineConnection input', () => {
     expect(conn.roomPhase).toBe('shop');
     conn.setReady(true);
     expect(socket.sent.at(-1)).toEqual({ t: 'ready', ready: true });
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'playing', roundMs: DEFAULT_ROUND_MS });
+    socket.receive(lobbyMsg('p1', 'playing', DEFAULT_ROUND_MS));
     expect(conn.roomPhase).toBe('playing');
   });
 });
@@ -715,16 +720,27 @@ describe('shop phase messages', () => {
     expect(phases).toBe(1);
   });
 
+  it('accepts the final phase and ignores unknown phases', () => {
+    const { socket, conn } = setup();
+    let phases = 0;
+    conn.onPhase = () => phases++;
+    socket.receive({ t: 'phase', phase: 'final' });
+    expect(conn.roomPhase).toBe('final');
+    socket.onmessage?.({ data: JSON.stringify({ t: 'phase', phase: 'bogus' }) });
+    expect(conn.roomPhase).toBe('final');
+    expect(phases).toBe(1);
+  });
+
   it('sends shopBuy, and setRoundMs and endSeries only as host', () => {
     const { socket, conn } = setup();
     socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p1', players: roster(), phase: 'lobby', roundMs: 420_000 });
+    socket.receive(lobbyMsg('p1', 'lobby', 420_000));
     expect(conn.roundMs).toBe(420_000);
     conn.shopBuy('defense', 'food', 3);
     conn.setRoundMs(180_000);
     conn.endSeries();
     expect(socket.sent.filter((m) => m.t !== 'join')).toEqual([{ t: 'shopBuy', category: 'defense', item: 'food', qty: 3 }]);
-    socket.receive({ t: 'lobby', room: 'ABCD', host: 'p2', players: roster(), phase: 'shop', roundMs: 420_000 });
+    socket.receive(lobbyMsg('p2', 'shop', 420_000));
     conn.setRoundMs(180_000);
     conn.endSeries();
     expect(socket.sent.slice(-2)).toEqual([{ t: 'setRoundMs', roundMs: 180_000 }, { t: 'endSeries' }]);

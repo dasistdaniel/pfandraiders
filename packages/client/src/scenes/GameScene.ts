@@ -723,6 +723,11 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.enterKey) && plan.phase === 'asking') plan.continueTrying();
     if (online.status !== 'open') this.joinedWatch = null;
     // Zurück, aber die Runde ist schon vorbei und der Raum im Shop: dorthin
+    // Zurück, aber die Serie ist vorbei: Endwertung gibt es erst mit Plan 2, also ins Menü
+    if (this.joinedSeen && online.roomPhase === 'final') {
+      this.leaveToMenu('Die Serie ist vorbei.');
+      return true;
+    }
     if (this.joinedSeen && online.roomPhase === 'shop' && online.shop) {
       this.plan = null;
       online.onClosed = null;

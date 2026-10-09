@@ -14,6 +14,7 @@ export * from './step';
 export * from './economy';
 export * from './shop';
 export * from './ranking';
+export * from './avatars';
 export * from './search';
 export * from './theft';
 export * from './fight';

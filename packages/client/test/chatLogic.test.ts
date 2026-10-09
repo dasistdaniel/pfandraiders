@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chatColorHex, MAX_CHAT_TEXT_CLIENT, parseChatMessage, rosterDiff } from '../src/chatLogic';
 
-const entry = (id: string, name: string, connected = true) => ({ id, name, color: 0xef5350, connected, ready: false });
+const entry = (id: string, name: string, connected = true) => ({ id, name, color: 0xef5350, connected, ready: false, avatar: 0 });
 
 describe('rosterDiff', () => {
   it('reports nothing for the first roster', () => {

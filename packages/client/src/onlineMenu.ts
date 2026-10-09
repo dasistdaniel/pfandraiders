@@ -70,6 +70,8 @@ const ERRORS: Record<ErrorCode, string> = {
   chat_closed: 'Chat gibt es nur in der Lobby.',
   wrong_phase: 'Das geht gerade nicht.',
   cannot_buy: 'Kauf abgelehnt.',
+  wrong_password: 'Passwort falsch oder nötig.',
+  avatar_taken: 'Die Figur ist schon vergeben.',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(

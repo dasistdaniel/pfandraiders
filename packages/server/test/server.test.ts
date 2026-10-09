@@ -182,6 +182,26 @@ describe('websocket server', () => {
     await b.until('error', (m) => m.code === 'not_host');
   });
 
+  it('keeps the password off the wire and lists only public rooms', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
+    const a = await connect(server.port);
+    const p = await connect(server.port);
+    const c = await connect(server.port);
+    a.send({ t: 'create', name: 'Anna', roomName: 'Bude', password: 'geheim' });
+    const joinedA = await a.until('joined');
+    p.send({ t: 'create', name: 'Pia', visibility: 'private' });
+    await p.until('joined');
+    c.send({ t: 'listRooms' });
+    const list = await c.until('rooms');
+    expect(list.rooms).toEqual([{ code: joinedA.room, name: 'Bude', host: 'Anna', players: 1, max: 8, phase: 'lobby', locked: true }]);
+    c.send({ t: 'join', room: joinedA.room, name: 'Cara' });
+    await c.until('error', (m) => m.code === 'wrong_password');
+    c.send({ t: 'join', room: joinedA.room, name: 'Cara', password: 'geheim' });
+    await c.until('joined');
+    await a.until('lobby', (m) => m.players.length === 2);
+    for (const bot of [a, p, c]) expect(JSON.stringify(bot.messages)).not.toContain('geheim');
+  });
+
   it('delivers lobby chat to everybody and the history to a late joiner', async () => {
     server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const a = await connect(server.port);

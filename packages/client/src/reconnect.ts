@@ -12,6 +12,8 @@ export const FATAL_CODES: ErrorCode[] = [
   'already_started',
   'room_full',
   'bad_message',
+  // Token abgelaufen, Raum hat ein Passwort: ohne Passwort kommt man nicht mehr hinein
+  'wrong_password',
 ];
 
 export type ReconnectPhase = 'trying' | 'asking' | 'gave_up';
