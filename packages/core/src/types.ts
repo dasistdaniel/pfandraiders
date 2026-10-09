@@ -134,7 +134,7 @@ export interface Spot extends SpotDef {
 
 export type NpcKind = 'dog' | 'police';
 
-export type NpcMood = 'active' | 'idle' | 'roaming';
+export type NpcMood = 'active' | 'idle' | 'alert' | 'roaming';
 
 export interface Npc {
   id: number;
@@ -143,9 +143,12 @@ export interface Npc {
   y: number;
   /** Restliche Ausdauer der Jagd (aktiv); läuft sie ab, gibt der NPC auf. Beim erneuten Jagen wieder voll. */
   lifeMs: number;
-  /** active = jagt/kontrolliert, idle = sitzt (nur Hund, harmlos), roaming = streunt durch die Stadt */
+  /**
+   * active = jagt/kontrolliert, idle = sitzt (nur Hund, harmlos), alert = hat sein Ziel verloren und steht
+   * (jagt nur wieder los, wenn ein passender Spieler ganz nah kommt), roaming = streunt durch die Stadt
+   */
   mood: NpcMood;
-  /** idle: Restzeit des Sitzens; roaming: wie lange er seinem Ziel schon nicht näher kommt */
+  /** idle/alert: Restzeit des Sitzens bzw. Stehens; roaming: wie lange er seinem Ziel schon nicht näher kommt */
   moodMs: number;
   targetId: string | null;
   /** Diesen Spieler lässt der NPC noch restMs lang in Ruhe (nach Biss, Kontrolle oder Aufgeben) */

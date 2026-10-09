@@ -474,6 +474,101 @@ describe('police', () => {
   });
 });
 
+describe('npcs that lose track of their target', () => {
+  const STAND = CONFIG.npc.lostTrackIdleMs;
+  const NEAR = CONFIG.npc.idleEngageRadius;
+
+  /** NPC jagt p1 auf der großen Karte, danach ist p1 weit weg (außerhalb jedes Sinnesradius). */
+  function lostTrack(kind: NpcKind): { s: GameState; npc: Npc } {
+    const s = quiet(newGame(BIG));
+    if (kind === 'police') s.players.p1.bottles = { plastic: 2, glass: 0, crate: 0 };
+    const npc = addNpc(s, kind, 124, 24); // 100 px entfernt: innerhalb beider Sinnesradien
+    runSteps(s, {}, 10, 20);
+    expect(npc.mood).toBe('active');
+    expect(npc.targetId).toBe('p1');
+    teleport(s, 'p1', FAR);
+    runSteps(s, {}, 1, 20);
+    return { s, npc };
+  }
+
+  for (const kind of ['dog', 'police'] as const) {
+    it(`${kind}: stands still for lostTrackIdleMs instead of roaming, then roams again`, () => {
+      const { s, npc } = lostTrack(kind);
+      expect(npc.mood).toBe('alert');
+      expect(npc.targetId).toBeNull();
+      expect(npc.checkMs).toBe(0);
+      const at = { x: npc.x, y: npc.y };
+      let ms = 20;
+      while (ms < STAND - 200) {
+        runSteps(s, {}, 1, 20);
+        ms += 20;
+        expect({ x: npc.x, y: npc.y }).toEqual(at);
+        expect(npc.mood).toBe('alert');
+      }
+      runFor(s, {}, 400);
+      expect(npc.mood).toBe('roaming');
+      runFor(s, {}, 6000);
+      expect(dist(npc, at)).toBeGreaterThan(0); // streunt wieder
+      expect(s.npcs).toHaveLength(1);
+    });
+
+    it(`${kind}: re-engages from standing only when a wanted player comes very close`, () => {
+      const { s, npc } = lostTrack(kind);
+      expect(npc.mood).toBe('alert');
+      teleport(s, 'p1', { x: npc.x + 100, y: npc.y }); // im Sinnesradius, aber nicht sehr nah
+      runFor(s, {}, 1000);
+      expect(npc.mood).toBe('alert');
+      expect(npc.targetId).toBeNull();
+      teleport(s, 'p1', { x: npc.x + NEAR - 10, y: npc.y });
+      runSteps(s, {}, 1, 20);
+      expect(npc.mood).toBe('active');
+      expect(npc.targetId).toBe('p1');
+    });
+  }
+
+  it('a standing police officer ignores a close player without bottles', () => {
+    const { s, npc } = lostTrack('police');
+    s.players.p1.bottles = { plastic: 0, glass: 0, crate: 0 };
+    teleport(s, 'p1', { x: npc.x + 20, y: npc.y });
+    runFor(s, {}, 1000);
+    expect(npc.mood).toBe('alert');
+  });
+
+  it('also stands still when the target is no longer wanted (knocked out)', () => {
+    const s = quiet(newGame(BIG));
+    const dog = addNpc(s, 'dog', 124, 24);
+    runSteps(s, {}, 5, 20);
+    expect(dog.targetId).toBe('p1');
+    damage(s.players.p1, 1000);
+    runSteps(s, {}, 1, 20);
+    expect(dog.mood).toBe('alert');
+    const at = { x: dog.x, y: dog.y };
+    runFor(s, {}, 2000);
+    expect({ x: dog.x, y: dog.y }).toEqual(at);
+  });
+
+  it('a dog sitting after its bite stays harmless even with a wanted player very close', () => {
+    const s = quiet(newGame(openRows(30, 5), ['p1', 'p2']));
+    const dog = addNpc(s, 'dog', 30, 24);
+    teleport(s, 'p2', { x: 30 + NEAR - 20, y: 24 });
+    runSteps(s, {}, 3, 20); // p1 gebissen
+    expect(dog.mood).toBe('idle');
+    const at = { x: dog.x, y: dog.y };
+    runFor(s, {}, CONFIG.npc.dog.sitMs - 200);
+    expect(dog.mood).toBe('idle');
+    expect(dog.targetId).toBeNull();
+    expect({ x: dog.x, y: dog.y }).toEqual(at);
+    expect(s.players.p2.health).toBeGreaterThan(CONFIG.health.max - 2);
+  });
+
+  it('a freshly spawned npc without any target still roams right away', () => {
+    const s = quiet(newGame(BIG));
+    const cop = addNpc(s, 'police', FAR.x, FAR.y);
+    runSteps(s, {}, 1, 20);
+    expect(cop.mood).toBe('roaming');
+  });
+});
+
 describe('npc spawning', () => {
   const SPAWN_ROWS = ['#######', '#@N...#', '#######'];
 
