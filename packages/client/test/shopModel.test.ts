@@ -148,7 +148,7 @@ describe('ShopModel rows', () => {
     const rows = m.rows(p);
     expect(rows[0]).toMatchObject({ name: 'Tasche', detail: '+2 Plätze  (hast 1/4)', price: '1,50 €', state: 'normal', selected: true });
     expect(rows[1]).toMatchObject({ name: 'Rucksack', detail: '+5 Plätze  (hast 0/2)', price: '4,00 €', state: 'normal' });
-    expect(rows[2]).toMatchObject({ name: 'Einkaufswagen', detail: 'mieten: +10 Plätze, 30 % langsamer, 1 Runde', price: '1,00 €' });
+    expect(rows[2]).toMatchObject({ name: 'Einkaufswagen', detail: 'mieten: +10 Plätze, −30 % Tempo', price: '1,00 €' });
   });
 
   it('greys a full bag stack and a rented cart', () => {

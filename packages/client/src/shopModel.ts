@@ -59,7 +59,8 @@ function infoText(item: ShopItemId): string {
     case 'backpack':
       return `+${CONFIG.carry.perUnit.backpack} Plätze`;
     case 'cart':
-      return `mieten: +${CONFIG.carry.perUnit.cart} Plätze, ${Math.round((1 - CONFIG.carry.cartSpeedMult) * 100)} % langsamer, 1 Runde`;
+      // kurz, damit die Zeile mit Preis auch im Viertel-Splitscreen nicht umbricht
+      return `mieten: +${CONFIG.carry.perUnit.cart} Plätze, −${Math.round((1 - CONFIG.carry.cartSpeedMult) * 100)} % Tempo`;
     case 'card':
       return `Abgabe alle ${secs(CONFIG.depositEveryMsCard)} s statt ${secs(CONFIG.depositEveryMs)} s`;
     case 'card_plus':
