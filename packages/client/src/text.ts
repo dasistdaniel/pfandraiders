@@ -1,8 +1,7 @@
 import {
-  bottlesValue,
+  bottlesValueFor,
   capacityOf,
   CONFIG,
-  containerOf,
   findAttackTarget,
   findLootTarget,
   findSearchableSpot,
@@ -20,23 +19,26 @@ export function playerName(id: string): string {
   return id.toUpperCase();
 }
 
-/** Inventar als kurze Teile, nur was vorhanden ist. */
-function inventoryParts(p: Player): string[] {
+/** Besitz als kurze Teile, nur was vorhanden ist (Spec §6.2). */
+function itemParts(p: Player): string[] {
   const parts: string[] = [];
-  if (p.inventory.food > 0) parts.push(`Essen ${p.inventory.food}`);
-  if (p.inventory.dog_treat > 0) parts.push(`Leckerli ${p.inventory.dog_treat}`);
-  if (p.inventory.bolt_cutters) parts.push('Bolzenschneider');
+  if (p.items.dog_treat > 0) parts.push(`Leckerli ${p.items.dog_treat}`);
+  if (p.items.cart > 0) parts.push('Wagen');
+  if (p.items.card_plus > 0) parts.push('Karte+');
+  else if (p.items.card > 0) parts.push('Karte');
   return parts;
 }
 
+/**
+ * Immer drei Zeilen: Zeit und Geld, Leben, Besitz (leer ohne Besitz). Das Leben steht allein, damit die Zeile nicht
+ * unter den Lebensbalken oben rechts läuft. Die Flaschen zeigt das HUD als Symbole (bottleIcons).
+ */
 export function statusLines(state: GameState, p: Player): string[] {
-  const lines = [
+  return [
     `Zeit ${formatTime(state.timeLeftMs)}   Geld ${formatMoney(p.money)}`,
-    `${containerOf(p).name} ${totalBottles(p.bottles)}/${capacityOf(p)}` +
-      `   Pl${p.bottles.plastic} Gl${p.bottles.glass} Ka${p.bottles.crate}`,
+    `Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`,
+    itemParts(p).join('  '),
   ];
-  lines.push([`Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`, ...inventoryParts(p)].join('   '));
-  return lines;
 }
 
 export function hintLines(state: GameState, p: Player, labels: KeyLabels): string[] {
@@ -47,7 +49,7 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   if (isNear(state.map.dropoffs, p)) {
     lines.push(
       totalBottles(p.bottles) > 0
-        ? `[${labels.action} halten] Pfand abgeben (${formatMoney(bottlesValue(p.bottles))})`
+        ? `[${labels.action} halten] Pfand abgeben (${formatMoney(bottlesValueFor(p, p.bottles))})`
         : 'Pfandautomat: nichts zum Abgeben',
     );
   }
@@ -58,10 +60,6 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   }
   if (!full && findLootTarget(state, p)) lines.push(`[${labels.steal}] Ausrauben`);
   if (p.attackCooldownMs === 0 && findAttackTarget(state, p)) lines.push(`[${labels.attack}] Schlagen`);
-  const food = p.inventory.food;
-  if (food > 0 && p.health <= CONFIG.health.max - CONFIG.health.food.heal) {
-    lines.push(`[${labels.eat}] Essen (+${CONFIG.health.food.heal} Leben, noch ${food})`);
-  }
   return lines;
 }
 

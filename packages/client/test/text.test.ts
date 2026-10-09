@@ -12,8 +12,8 @@ function createGame(...args: Parameters<typeof coreCreateGame>): GameState {
   return s;
 }
 
-const KEYS: KeyLabels ={ action: 'E', steal: 'Q', attack: 'F', eat: 'C' };
-const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.', eat: ',' };
+const KEYS: KeyLabels = { action: 'E', steal: 'Q', attack: 'F' };
+const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.' };
 
 // p1 (24,24) und p2 am Ende des Ganges, weit weg voneinander
 function twoGame(): GameState {
@@ -27,18 +27,12 @@ describe('playerName', () => {
 });
 
 describe('statusLines', () => {
-  it('shows time, money, container and bottles', () => {
+  it('shows time and money, health and an item line; the bottles are icons now', () => {
     const s = twoGame();
     s.players.p1.money = 150;
     s.players.p1.bottles = { plastic: 2, glass: 1, crate: 0 };
     const lines = statusLines(s, s.players.p1);
-    expect(lines[0]).toContain('Zeit 5:00');
-    expect(lines[0]).toContain('1,50 €');
-    expect(lines[1]).toContain('Hände 3/3');
-    expect(lines[1]).toContain('Pl2');
-    expect(lines[1]).toContain('Gl1');
-    expect(lines).toHaveLength(3);
-    expect(lines[2]).toBe('Leben 100/100');
+    expect(lines).toEqual(['Zeit 5:00   Geld 1,50 €', 'Leben 100/100', '']);
   });
 
 });
@@ -52,7 +46,7 @@ describe('hintLines', () => {
   it('offers no steal key next to an awake player who carries bottles', () => {
     const s = createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
     s.players.p2.bottles = { plastic: 2, glass: 0, crate: 0 };
-    s.players.p1.inventory.bolt_cutters = true;
+    s.players.p1.items.cart = 1;
     const lines = hintLines(s, s.players.p1, KEYS);
     expect(lines.some((l) => l.includes('[Q]'))).toBe(false);
     expect(lines.some((l) => l.includes('Klauen'))).toBe(false);
@@ -170,7 +164,7 @@ describe('health and shop', () => {
   it('shows health rounded up, also with fractions', () => {
     const s = twoGame();
     s.players.p1.health = 87.2;
-    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 88/100');
+    expect(statusLines(s, s.players.p1)[1]).toBe('Leben 88/100');
   });
 
 });
@@ -346,15 +340,26 @@ describe('inventory and fight hints', () => {
     return createGame(1, parseMap(['#######', '#@@...#', '#######']), ['p1', 'p2']);
   }
 
-  it('shows the inventory after the health', () => {
+  it('shows the items on their own line below the health', () => {
     const s = duo();
-    s.players.p1.inventory = { dog_treat: 2, food: 3, bolt_cutters: true };
-    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 100/100   Essen 3   Leckerli 2   Bolzenschneider');
+    s.players.p1.items = { ...s.players.p1.items, dog_treat: 2, cart: 1, card: 1 };
+    expect(statusLines(s, s.players.p1).slice(1)).toEqual(['Leben 100/100', 'Leckerli 2  Wagen  Karte']);
+    s.players.p1.items.card_plus = 1;
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leckerli 2  Wagen  Karte+');
   });
 
-  it('shows only the health without inventory', () => {
+  it('keeps the item line empty without items', () => {
     const s = duo();
-    expect(statusLines(s, s.players.p1)[2]).toBe('Leben 100/100');
+    expect(statusLines(s, s.players.p1).slice(1)).toEqual(['Leben 100/100', '']);
+  });
+
+  it('shows the deposit value with the Kundenkarte+ bonus', () => {
+    const s = createGame(1, parseMap(['#####', '#@D.#', '#####']), ['p1']);
+    s.players.p1.bottles = { plastic: 1, glass: 0, crate: 0 };
+    expect(hintLines(s, s.players.p1, KEYS)[0]).toBe('[E halten] Pfand abgeben (0,08 €)');
+    s.players.p1.items.card = 1;
+    s.players.p1.items.card_plus = 1;
+    expect(hintLines(s, s.players.p1, KEYS)[0]).toBe('[E halten] Pfand abgeben (0,09 €)');
   });
 
   it('offers punching an awake player in reach, but not during the cooldown', () => {
@@ -373,15 +378,6 @@ describe('inventory and fight hints', () => {
     expect(hintLines(s, s.players.p1, KEYS)).not.toContain('[F] Schlagen');
     s.players.p2.robbed = true;
     expect(hintLines(s, s.players.p1, KEYS)).not.toContain('[Q] Ausrauben');
-  });
-
-  it('offers eating when food is there and a portion would not be wasted', () => {
-    const s = duo();
-    s.players.p1.inventory.food = 2;
-    s.players.p1.health = 100 - CONFIG.health.food.heal;
-    expect(hintLines(s, s.players.p1, KEYS)).toContain('[C] Essen (+30 Leben, noch 2)');
-    s.players.p1.health = 100 - CONFIG.health.food.heal + 1;
-    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Essen'))).toBe(false);
   });
 
   it('tells an unconscious player that he was robbed', () => {
