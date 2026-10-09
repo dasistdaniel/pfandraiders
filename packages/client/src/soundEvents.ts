@@ -16,12 +16,14 @@ export type SoundId =
   | 'tick'
   | 'countdownGo'
   | 'punch'
-  | 'hit';
+  | 'hit'
+  | 'spray';
 
 /** Hunger kostet pro Frame nur Bruchteile eines Lebens; ein Biss mindestens dies (minus Toleranz). */
 const BITE_MIN_DROP = CONFIG.npc.dog.biteDamage - 1;
 const BITE_NEAR = CONFIG.npc.dog.biteRadius + 6;
 const PUNCH_NEAR = CONFIG.fight.radius + 6;
+const SPRAY_NEAR = CONFIG.spray.radius + 6;
 
 /** Höchstens so viele Plings pro Frame (online kann ein Snapshot mehrere Abgaben enthalten). */
 export const PLING_MAX_PER_FRAME = 4;
@@ -99,6 +101,7 @@ export function detectSounds(
     const knockedOut = q.unconsciousMs === 0 && p.unconsciousMs > 0;
     if (knockedOut) out.add('knockout');
     if (p.attackCooldownMs > q.attackCooldownMs) out.add('punch');
+    if (p.sprayCooldownMs > q.sprayCooldownMs || sprayedNear(prev, next, q)) out.add('spray');
     if (q.unconsciousMs === 0) {
       const drop = q.health - p.health;
       const punched = punchedNear(prev, next, q);
@@ -195,6 +198,19 @@ function punchedNear(prev: GameState, next: GameState, p: Player): boolean {
       before !== undefined &&
       o.attackCooldownMs > before.attackCooldownMs &&
       Math.hypot(o.x - p.x, o.y - p.y) <= PUNCH_NEAR
+    );
+  });
+}
+
+/** Hat ein anderer Spieler nahe der vorigen Position von `p` in diesem Schritt gesprüht (Abklingzeit sprang hoch)? */
+function sprayedNear(prev: GameState, next: GameState, p: Player): boolean {
+  return Object.values(next.players).some((o) => {
+    const before = prev.players[o.id];
+    return (
+      o.id !== p.id &&
+      before !== undefined &&
+      o.sprayCooldownMs > before.sprayCooldownMs &&
+      Math.hypot(before.x - p.x, before.y - p.y) <= SPRAY_NEAR
     );
   });
 }

@@ -5,6 +5,7 @@ import {
   findAttackTarget,
   findLootTarget,
   findSearchableSpot,
+  findSprayTarget,
   isBeingChecked,
   isNear,
   ranking,
@@ -23,9 +24,11 @@ export function playerName(id: string): string {
 function itemParts(p: Player): string[] {
   const parts: string[] = [];
   if (p.items.dog_treat > 0) parts.push(`Leckerli ${p.items.dog_treat}`);
+  if (p.items.pepper > 0) parts.push(`Spray ${p.items.pepper}`);
   if (p.items.cart > 0) parts.push('Wagen');
   if (p.items.card_plus > 0) parts.push('Karte+');
   else if (p.items.card > 0) parts.push('Karte');
+  if (p.items.id_papers > 0) parts.push('Ausweis');
   return parts;
 }
 
@@ -60,6 +63,9 @@ export function hintLines(state: GameState, p: Player, labels: KeyLabels): strin
   }
   if (!full && findLootTarget(state, p)) lines.push(`[${labels.steal}] Ausrauben`);
   if (p.attackCooldownMs === 0 && findAttackTarget(state, p)) lines.push(`[${labels.attack}] Schlagen`);
+  if (p.items.pepper > 0 && p.sprayCooldownMs === 0 && findSprayTarget(state, p)) {
+    lines.push(`[${labels.spray}] Pfefferspray (noch ${p.items.pepper})`);
+  }
   return lines;
 }
 

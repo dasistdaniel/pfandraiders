@@ -406,6 +406,23 @@ describe('Predictor against a simulated server', () => {
 });
 
 describe('Predictor unit behaviour', () => {
+  it('follows a 40 px knockback while standing: no jump, less than 1 px off after ten snapshots', () => {
+    const pr = new Predictor();
+    pr.reset({ x: 100, y: 100 });
+    for (let t = 0; t <= 200; t += 20) pr.step(20, NO_INPUT, undefined, MAP, t);
+    pr.noteSent(1, 100);
+    const server = { x: 100 + CONFIG.spray.knockbackPx, y: 100 };
+    pr.onSnapshot(server, 1, false, 200);
+    for (let i = 1; i < 10; i++) {
+      const t = 200 + i * 50;
+      pr.step(50, NO_INPUT, undefined, MAP, t);
+      pr.onSnapshot(server, 1, false, t);
+    }
+    expect(pr.snaps).toBe(0);
+    expect(Math.abs(pr.position!.x - server.x)).toBeLessThan(1);
+    expect(pr.position!.y).toBe(100);
+  });
+
   function player(): Player {
     return createGame(1, MAP, ['p1']).players.p1;
   }

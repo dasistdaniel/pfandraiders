@@ -5,6 +5,7 @@ import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource } from '../devices';
 import { isSwinging } from '../fightView';
+import { isSpraying, SPRAY_COLOR, sprayCloudRadius } from '../sprayView';
 import { LocalShop } from '../localShop';
 import type { PlayerSlot } from '../devices';
 import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
@@ -95,6 +96,8 @@ export class GameScene extends Phaser.Scene {
   /** Texturschlüssel des Figurenbogens je Spieler, null = Bogen fehlt, gezeichnete Figur als Rückfall. */
   private charKeys = new Map<string, string | null>();
   private rings = new Map<string, Phaser.GameObjects.Ellipse>();
+  /** Pfefferspray-Wolke je Spieler (sichtbar kurz nach dem Sprühen) */
+  private sprays = new Map<string, Phaser.GameObjects.Arc>();
   /** Lebensbalken je Spieler (Weltobjekte), nur sichtbar unter vollem Leben */
   private hpBars = new Map<string, { bg: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle }>();
   private poses = new Map<string, PoseState>();
@@ -235,6 +238,7 @@ export class GameScene extends Phaser.Scene {
     this.bodies = new Map();
     this.charKeys = new Map();
     this.rings = new Map();
+    this.sprays = new Map();
     this.hpBars = new Map();
     this.poses = new Map();
     this.npcPoses = new Map();
@@ -278,6 +282,7 @@ export class GameScene extends Phaser.Scene {
           .setStrokeStyle(1, color, RING.strokeAlpha)
           .setDepth(RING.depth),
       );
+      this.sprays.set(p.id, this.add.circle(p.x, p.y, CONFIG.spray.radius, SPRAY_COLOR, 0.35).setDepth(4.8).setVisible(false));
       let body: Phaser.GameObjects.Image;
       if (charKey) {
         body = this.add.image(p.x, p.y, charKey, charFrameIndex('down', 0)).setOrigin(0.5, CHAR_ORIGIN_Y);
@@ -497,6 +502,7 @@ export class GameScene extends Phaser.Scene {
       body.setAlpha(unconscious ? 0.6 : 1);
       body.setScale(isSwinging(p) ? 1.15 : 1);
       this.rings.get(p.id)?.setPosition(p.x, p.y + RING.dy);
+      this.sprays.get(p.id)?.setPosition(p.x, p.y).setRadius(sprayCloudRadius(p)).setVisible(isSpraying(p));
       this.renderHpBar(p);
     }
     const countdownText = this.countdown.update(state.countdownMs, viewDelta, state.phase);

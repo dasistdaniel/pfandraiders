@@ -38,6 +38,8 @@ const RECIPES: Record<SoundId, Recipe> = {
   punch: { wave: 'sawtooth', gain: 0.6, notes: [{ f: 0, d: 0.06 }], noise: true },
   /** selbst getroffen: tiefer Schlag mit Abfall */
   hit: { wave: 'square', gain: 0.8, notes: [{ f: 220, d: 0.15, to: 90 }] },
+  /** Pfefferspray: längerer zischender Rauschstoß */
+  spray: { wave: 'sawtooth', gain: 0.5, notes: [{ f: 0, d: 0.25 }], noise: true },
   policeCheck: {
     wave: 'square',
     gain: 0.4,

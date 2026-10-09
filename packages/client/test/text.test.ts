@@ -12,8 +12,8 @@ function createGame(...args: Parameters<typeof coreCreateGame>): GameState {
   return s;
 }
 
-const KEYS: KeyLabels = { action: 'E', steal: 'Q', attack: 'F' };
-const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.' };
+const KEYS: KeyLabels = { action: 'E', steal: 'Q', attack: 'F', spray: 'C' };
+const KEYS2: KeyLabels = { action: 'Enter', steal: '/', attack: '.', spray: ',' };
 
 // p1 (24,24) und p2 am Ende des Ganges, weit weg voneinander
 function twoGame(): GameState {
@@ -342,10 +342,19 @@ describe('inventory and fight hints', () => {
 
   it('shows the items on their own line below the health', () => {
     const s = duo();
-    s.players.p1.items = { ...s.players.p1.items, dog_treat: 2, cart: 1, card: 1 };
-    expect(statusLines(s, s.players.p1).slice(1)).toEqual(['Leben 100/100', 'Leckerli 2  Wagen  Karte']);
+    s.players.p1.items = { ...s.players.p1.items, dog_treat: 2, pepper: 17, cart: 1, card: 1, id_papers: 1 };
+    expect(statusLines(s, s.players.p1).slice(1)).toEqual(['Leben 100/100', 'Leckerli 2  Spray 17  Wagen  Karte  Ausweis']);
     s.players.p1.items.card_plus = 1;
-    expect(statusLines(s, s.players.p1)[2]).toBe('Leckerli 2  Wagen  Karte+');
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leckerli 2  Spray 17  Wagen  Karte+  Ausweis');
+  });
+
+  it('offers the spray with charges and a target in reach, not during its cooldown', () => {
+    const s = duo();
+    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Pfefferspray'))).toBe(false);
+    s.players.p1.items.pepper = 3;
+    expect(hintLines(s, s.players.p1, KEYS)).toContain('[C] Pfefferspray (noch 3)');
+    s.players.p1.sprayCooldownMs = 500;
+    expect(hintLines(s, s.players.p1, KEYS).some((l) => l.includes('Pfefferspray'))).toBe(false);
   });
 
   it('keeps the item line empty without items', () => {
