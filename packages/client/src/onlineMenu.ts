@@ -10,6 +10,7 @@ import {
   ROUNDS_CHOICES,
 } from '@pfandraiders/core';
 import { AVATAR_COLUMNS, avatarCells, stepAvatar, takenByOthers } from './avatarGrid';
+import { sfx } from './sfx';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
 import { CHARACTER_URLS } from './characterAssets';
 import { chatColorHex, rosterDiff } from './chatLogic';
@@ -136,6 +137,8 @@ export function showOnlineMenu(
     document.body.appendChild(root);
 
     const conn = opts.resume ?? new OnlineConnection(url, socketFactory);
+    // Lobby, Chat und Fehler klingen über die ganze Verbindung (auch später im Spiel und im Shop)
+    conn.sound = (id) => sfx.play(id);
     let finished = false;
     const finish = (result: OnlineConnection | null) => {
       if (finished) return;
@@ -157,6 +160,7 @@ export function showOnlineMenu(
     const message = el('div', {}, 'color:#ff8a80;min-height:1.2em;margin-top:8px');
     const showError = (text: string) => {
       message.textContent = text;
+      if (text) sfx.play('error');
     };
     /** Selbst gewählte Figur, bis die Lobby sie bestätigt (dann wird sie als Wunsch gemerkt) */
     let pendingWish: number | null = null;
@@ -231,11 +235,13 @@ export function showOnlineMenu(
     };
 
     const doCreate = () => {
+      sfx.play('ui_select');
       const req = createRequest({ roomName: form.roomName, visibility: form.visibility, password: form.createPassword });
       if (!req.ok) return showError(req.error);
       if (need()) whenOpen(() => conn.create(form.name.trim(), { ...req.value, avatar: loadAvatarWish() }));
     };
     const doJoin = (rawCode: string, password: string) => {
+      sfx.play('ui_select');
       const room = sanitizeRoomCode(rawCode);
       if (room.length !== ROOM_CODE_LENGTH) return showError('Bitte einen Raumcode eingeben.');
       if (!need()) return;
@@ -292,7 +298,10 @@ export function showOnlineMenu(
       box.appendChild(tabBar);
 
       const cancel = el('button', { textContent: 'Abbrechen' }, 'font:inherit');
-      cancel.onclick = () => finish(null);
+      cancel.onclick = () => {
+        sfx.play('ui_back');
+        finish(null);
+      };
 
       if (form.tab === 'host') {
         const roomName = el('input', { maxLength: MAX_ROOM_NAME_LENGTH, value: form.roomName }, fieldStyle);
@@ -460,6 +469,7 @@ export function showOnlineMenu(
           go.onclick = () => doJoin(prompt.code, list.password);
           const back = el('button', { textContent: 'Zurück' }, 'font:inherit');
           back.onclick = () => {
+            sfx.play('ui_back');
             list.prompt = null;
             drawList?.();
             listBox.focus();
@@ -475,7 +485,9 @@ export function showOnlineMenu(
       listBox.onkeydown = (e) => {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
+          const before = list.selected;
           list.selected = moveSelection(rows(), list.selected, e.key === 'ArrowDown' ? 1 : -1);
+          if (list.selected !== before) sfx.play('ui_move');
           drawList?.();
           listBox.children[list.selected]?.scrollIntoView({ block: 'nearest' });
         } else if (e.key === 'Enter') {
@@ -503,6 +515,7 @@ export function showOnlineMenu(
 
     const switchTab = (tab: MenuTab, viaKeyboard: boolean) => {
       if (tab === form.tab) return;
+      sfx.play('ui_move');
       form.tab = tab;
       localSet(TAB_KEY, tab);
       showError('');
@@ -567,6 +580,7 @@ export function showOnlineMenu(
       grid.setAttribute('role', 'listbox');
       grid.setAttribute('aria-label', 'Figur wählen (Pfeiltasten oder Klick)');
       const choose = (avatar: number) => {
+        sfx.play('avatar_pick');
         pendingWish = avatar;
         conn.setAvatar(avatar);
       };
@@ -630,6 +644,7 @@ export function showOnlineMenu(
         const text = chatInput.value;
         if (text.trim().length === 0) return;
         conn.sendChat(text);
+        sfx.play('chat_send');
         chatInput.value = '';
       };
       conn.onChat = showChat;
@@ -680,8 +695,12 @@ export function showOnlineMenu(
         }
         refresh();
       };
-      start.onclick = () => conn.requestStart();
+      start.onclick = () => {
+        sfx.play('ui_select');
+        conn.requestStart();
+      };
       leave.onclick = () => {
+        sfx.play('ui_back');
         safeRemove(TOKEN_KEY(conn.room));
         finish(null);
       };
