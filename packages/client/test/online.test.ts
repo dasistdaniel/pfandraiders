@@ -746,3 +746,99 @@ describe('shop phase messages', () => {
     expect(socket.sent.slice(-2)).toEqual([{ t: 'setRoundMs', roundMs: 180_000 }, { t: 'endSeries' }]);
   });
 });
+
+describe('rooms, room list, avatars and round count', () => {
+  it('sends create with only the given options', () => {
+    const { socket, conn } = setup();
+    conn.create('Anna', { roomName: 'Bude', visibility: 'private', password: 'pw', avatar: 3 });
+    conn.create('Anna', { roomName: '', password: '' });
+    expect(socket.sent).toEqual([
+      { t: 'create', name: 'Anna', roomName: 'Bude', visibility: 'private', password: 'pw', avatar: 3 },
+      { t: 'create', name: 'Anna' },
+    ]);
+  });
+
+  it('sends join with password and avatar next to the token', () => {
+    const { socket, conn } = setup();
+    conn.join('ABCD', 'Bob', undefined, { password: 'pw', avatar: 0 });
+    conn.join('ABCD', 'Bob', 'tok', {});
+    expect(socket.sent).toEqual([
+      { t: 'join', room: 'ABCD', name: 'Bob', password: 'pw', avatar: 0 },
+      { t: 'join', room: 'ABCD', name: 'Bob', token: 'tok' },
+    ]);
+  });
+
+  it('reconnects with the token only, never with a password', () => {
+    const sockets = [new FakeSocket(), new FakeSocket()];
+    let k = 0;
+    const conn = new OnlineConnection('ws://test', () => sockets[k++]);
+    conn.connect();
+    sockets[0].open();
+    conn.join('ABCD', 'Bob', undefined, { password: 'geheim' });
+    sockets[0].receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 'tok' });
+    conn.reopen();
+    sockets[1].open();
+    expect(sockets[1].sent).toEqual([{ t: 'join', room: 'ABCD', name: 'Bob', token: 'tok' }]);
+  });
+
+  it('reads room name, visibility, lock and round count from lobby and keeps old values for garbage', () => {
+    const { socket, conn } = setup();
+    socket.receive({ ...lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS), roomName: 'Bude', visibility: 'private', locked: true, rounds: 5 } as ServerMessage);
+    expect(conn).toMatchObject({ roomName: 'Bude', visibility: 'private', locked: true, rounds: 5 });
+    socket.onmessage?.({
+      data: JSON.stringify({ ...lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS), roomName: 7, visibility: 'x', locked: 'ja', rounds: 2 }),
+    });
+    expect(conn).toMatchObject({ roomName: 'Bude', visibility: 'private', locked: true, rounds: 5 });
+  });
+
+  it('reads rounds and the round number from start', () => {
+    const { socket, conn } = setup();
+    socket.receive({ ...(startMessage() as Extract<ServerMessage, { t: 'start' }>), rounds: 1, round: 1 });
+    expect(conn.rounds).toBe(1);
+    expect(conn.round).toBe(1);
+  });
+
+  it('stores a valid room list, calls onRooms and ignores garbage', () => {
+    const { socket, conn } = setup();
+    let calls = 0;
+    conn.onRooms = () => calls++;
+    const room = { code: 'ABCD', name: 'Bude', host: 'Anna', players: 1, max: 8, phase: 'lobby' as const, locked: false };
+    socket.receive({ t: 'rooms', rooms: [room] });
+    expect(conn.rooms).toEqual([room]);
+    socket.onmessage?.({ data: JSON.stringify({ t: 'rooms', rooms: 'kaputt' }) });
+    expect(conn.rooms).toEqual([room]);
+    expect(calls).toBe(1);
+  });
+
+  it('sends listRooms and setAvatar when open, setRounds and toLobby only as host', () => {
+    const { socket, conn } = setup();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
+    socket.receive(lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS));
+    conn.listRooms();
+    conn.setAvatar(5);
+    conn.setRounds(1);
+    conn.toLobby();
+    expect(socket.sent).toEqual([{ t: 'listRooms' }, { t: 'setAvatar', avatar: 5 }]);
+    socket.receive(lobbyMsg('p2', 'final', DEFAULT_ROUND_MS));
+    conn.setRounds(1);
+    conn.toLobby();
+    expect(socket.sent.slice(-2)).toEqual([{ t: 'setRounds', rounds: 1 }, { t: 'toLobby' }]);
+  });
+
+  it('knows its own avatar from the roster', () => {
+    const { socket, conn } = setup();
+    expect(conn.ownAvatar()).toBeNull();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
+    socket.receive(lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS));
+    expect(conn.ownAvatar()).toBe(14);
+  });
+
+  it('keeps the chat when the room goes final and back to lobby', () => {
+    const { socket, conn } = setup();
+    socket.receive({ t: 'chathistory', messages: [{ id: 'p1', name: 'Anna', color: ROOM_COLORS[0], text: 'Hallo', at: 1 }] });
+    socket.receive({ t: 'phase', phase: 'final' });
+    socket.receive({ t: 'phase', phase: 'lobby' });
+    expect(conn.roomPhase).toBe('lobby');
+    expect(conn.chat.map((m) => m.text)).toEqual(['Hallo']);
+  });
+});
