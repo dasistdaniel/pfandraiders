@@ -1,15 +1,44 @@
 import { DEFAULT_VOLUME, loadAudioToggles, loadVolume, saveVolume } from './settings';
 import { plingStep } from './soundEvents';
-import type { SoundId } from './soundEvents';
+import type { LoopId, SoundId, SynthId } from './audioIds';
 
-export type { SoundId } from './soundEvents';
+export type { SoundId } from './audioIds';
 
 const MASTER_GAIN = 0.15;
 const MIN_REPEAT_MS = 80;
 /** Abstand der Plings eines Frames in s; mindestens MIN_REPEAT_MS, sonst schluckt die Sperre sie. */
 export const PLING_GAP_SEC = 0.09;
 /** Pling-Tonleiter: Halbtöne über dem Grundton je Stufe (Dur-Pentatonik) */
-const PLING_SEMITONES = [0, 2, 4, 7, 9, 12, 14, 16];
+export const PLING_SEMITONES = [0, 2, 4, 7, 9, 12, 14, 16];
+/** Ausblenden eines Loops beim Stoppen (gegen Knacken), in s */
+const LOOP_FADE_SEC = 0.04;
+
+/** Puffer der eigenen Audiodateien (AudioAssets); null = keine Datei, dann gilt der erzeugte Klang. */
+export interface SoundAssets {
+  buffer(id: string): AudioBuffer | null;
+  /** Nach der ersten Nutzergeste: Dateien laden und dekodieren */
+  load?(ctx: AudioContext): Promise<void>;
+}
+
+/** Woher ein Effekt kommt: eigene Datei, erzeugter Klang (nur die 15 alten IDs) oder gar nicht (stumm). */
+export type EffectSource = 'file' | 'synth' | 'none';
+
+export function effectSource(id: SoundId, hasFile: boolean): EffectSource {
+  if (hasFile) return 'file';
+  return Object.prototype.hasOwnProperty.call(RECIPES, id) ? 'synth' : 'none';
+}
+
+/**
+ * Datei und Abspielrate für einen Pling der Stufe `step` (0 bis 7): zuerst die eigene Datei pling_<step+1>
+ * (unverändert), sonst pling mit der Tonleiter als Abspielrate, sonst null (erzeugter Klang).
+ */
+export function plingChoice(step: number, has: (id: string) => boolean): { id: string; rate: number } | null {
+  const s = Math.min(PLING_SEMITONES.length - 1, Math.max(0, Math.floor(step)));
+  const variant = `pling_${s + 1}`;
+  if (has(variant)) return { id: variant, rate: 1 };
+  if (has('pling')) return { id: 'pling', rate: 2 ** (PLING_SEMITONES[s] / 12) };
+  return null;
+}
 
 type Wave = 'square' | 'triangle' | 'sawtooth' | 'sine';
 /** Frequenz in Hz (0 = Pause), Dauer in s. `to` gleitet innerhalb der Note zu dieser Frequenz. */
@@ -26,7 +55,7 @@ interface Recipe {
   noise?: boolean;
 }
 
-const RECIPES: Record<SoundId, Recipe> = {
+const RECIPES: Record<SynthId, Recipe> = {
   pickup: { wave: 'square', gain: 0.5, notes: [{ f: 1200, d: 0.06 }] },
   /** eine Flasche am Pfandautomaten: kurzer heller Münz-Blip, Tonhöhe steigt pro Flasche */
   pling: { wave: 'triangle', gain: 0.55, notes: [{ f: 1047, d: 0.035 }, { f: 1568, d: 0.09 }] },
@@ -80,8 +109,9 @@ function defaultContext(): AudioContext | null {
 }
 
 /**
- * Synthetisierte Soundeffekte per WebAudio. Ohne AudioContext sind alle Aufrufe stille No-Ops.
- * Der Kontext entsteht erst bei der ersten Nutzergeste (Autoplay-Richtlinie der Browser).
+ * Soundeffekte per WebAudio: eigene Datei (AudioAssets), sonst der erzeugte Klang, sonst nichts.
+ * Ohne AudioContext sind alle Aufrufe stille No-Ops. Der Kontext entsteht erst bei der ersten Nutzergeste
+ * (Autoplay-Richtlinie der Browser); dann beginnt auch das Laden der Dateien.
  */
 export class SoundFx {
   private ctx: AudioContext | null = null;
@@ -90,6 +120,8 @@ export class SoundFx {
   private noiseBuffer: AudioBuffer | null = null;
   private plingLastMs: number | null = null;
   private plingPrevStep = 0;
+  /** Laufende Loops je Schlüssel (z. B. "search:p1" im Splitscreen) */
+  private loops = new Map<string, { src: AudioBufferSourceNode; env: GainNode }>();
   /** Effekte aus (die Musik schaltet getrennt, siehe sfx.ts). */
   muted: boolean;
   volume: number;
@@ -99,6 +131,7 @@ export class SoundFx {
     private readonly now: () => number = () => performance.now(),
     muted: boolean = !loadAudioToggles().effects,
     volume: number = loadVolume(),
+    private readonly assets: SoundAssets | null = null,
   ) {
     this.muted = muted;
     this.volume = clampVolume(volume);
@@ -116,6 +149,11 @@ export class SoundFx {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.masterGain();
       this.master.connect(this.ctx.destination);
+      try {
+        void this.assets?.load?.(this.ctx)?.catch(() => undefined);
+      } catch {
+        // ohne Dateien geht es mit den erzeugten Klängen weiter
+      }
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
   }
@@ -139,6 +177,15 @@ export class SoundFx {
   /** Effekte stumm schalten oder wieder an; gespeichert wird in sfx.ts (zusammen mit der Musik). */
   setMuted(muted: boolean): void {
     this.muted = muted;
+    if (muted) this.stopAllLoops();
+  }
+
+  private bufferFor(id: string): AudioBuffer | null {
+    try {
+      return this.assets?.buffer(id) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -152,18 +199,81 @@ export class SoundFx {
     const last = this.lastPlayed.get(id);
     if (last !== undefined && t - last < MIN_REPEAT_MS) return;
     this.lastPlayed.set(id, t);
-    let ratio = 1;
-    if (id === 'pling') {
-      const step = plingStep(this.plingLastMs, t, this.plingPrevStep);
-      this.plingLastMs = t;
-      this.plingPrevStep = step;
-      ratio = 2 ** (PLING_SEMITONES[step] / 12);
-    }
     try {
-      this.synth(RECIPES[id], delay, ratio);
+      if (id === 'pling') {
+        const step = plingStep(this.plingLastMs, t, this.plingPrevStep);
+        this.plingLastMs = t;
+        this.plingPrevStep = step;
+        const file = plingChoice(step, (v) => this.bufferFor(v) !== null);
+        if (file) this.playBuffer(this.bufferFor(file.id)!, delay, file.rate);
+        else this.synth(RECIPES.pling, delay, 2 ** (PLING_SEMITONES[step] / 12));
+        return;
+      }
+      const buf = this.bufferFor(id);
+      const source = effectSource(id, buf !== null);
+      if (source === 'file') this.playBuffer(buf!, delay, 1);
+      else if (source === 'synth') this.synth(RECIPES[id as SynthId], delay);
     } catch {
       // Audio darf das Spiel nie stören
     }
+  }
+
+  /** Eine Datei einmal abspielen, über den Master (Effekt-Lautstärke). */
+  private playBuffer(buf: AudioBuffer, delaySec: number, rate: number): void {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    if (rate !== 1 && src.playbackRate) src.playbackRate.value = rate;
+    src.connect(this.master!);
+    src.start(ctx.currentTime + delaySec);
+  }
+
+  /**
+   * Startet einen Loop-Sound (nur mit Datei; ohne Datei bleibt er stumm). `key` trennt gleichzeitige Loops,
+   * z. B. je Spieler im Splitscreen. Läuft unter dem Schlüssel schon einer, passiert nichts.
+   */
+  startLoop(id: LoopId, key: string = id): void {
+    if (this.muted || !this.ctx || !this.master || this.loops.has(key)) return;
+    const buf = this.bufferFor(id);
+    if (!buf) return;
+    try {
+      const ctx = this.ctx;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const env = ctx.createGain();
+      env.gain.value = 1;
+      src.connect(env);
+      env.connect(this.master);
+      src.start(ctx.currentTime);
+      this.loops.set(key, { src, env });
+    } catch {
+      // Audio darf das Spiel nie stören
+    }
+  }
+
+  /** Stoppt den Loop unter `key` (kurz ausgeblendet). Ohne laufenden Loop ein No-Op. */
+  stopLoop(key: string): void {
+    const loop = this.loops.get(key);
+    if (!loop) return;
+    this.loops.delete(key);
+    try {
+      const at = this.ctx?.currentTime ?? 0;
+      loop.env.gain.setValueAtTime(loop.env.gain.value, at);
+      loop.env.gain.linearRampToValueAtTime(0, at + LOOP_FADE_SEC);
+      loop.src.stop(at + LOOP_FADE_SEC + 0.01);
+    } catch {
+      // schon gestoppt
+    }
+  }
+
+  stopAllLoops(): void {
+    for (const key of [...this.loops.keys()]) this.stopLoop(key);
+  }
+
+  /** Läuft unter `key` gerade ein Loop? */
+  isLooping(key: string): boolean {
+    return this.loops.has(key);
   }
 
   private synth(recipe: Recipe, delaySec = 0, ratio = 1): void {

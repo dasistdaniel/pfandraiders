@@ -1,23 +1,9 @@
 import { CONFIG, foodText, isBeingChecked, totalBottles } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
+import type { SoundId } from './audioIds';
 import { countdownLeft } from './countdown';
 
-export type SoundId =
-  | 'pickup'
-  | 'pling'
-  | 'buy'
-  | 'stealSuccess'
-  | 'bite'
-  | 'knockout'
-  | 'policeCheck'
-  | 'policeSeize'
-  | 'zoneAnnounced'
-  | 'roundEnd'
-  | 'tick'
-  | 'countdownGo'
-  | 'punch'
-  | 'hit'
-  | 'spray';
+export type { SoundId } from './audioIds';
 
 /** Hunger kostet pro Frame nur Bruchteile eines Lebens; ein Biss mindestens dies (minus Toleranz). */
 const BITE_MIN_DROP = CONFIG.npc.dog.biteDamage - 1;
