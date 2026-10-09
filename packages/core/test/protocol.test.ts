@@ -86,7 +86,7 @@ describe('parseClientMessage', () => {
 
 describe('ServerMessage start', () => {
   it('carries the map id', () => {
-    const msg: ServerMessage = { t: 'start', mapId: 'retro', map: RETRO_MAP, you: 'p1', players: [], snap: {} as Snapshot, roundMs: 300_000 };
+    const msg: ServerMessage = { t: 'start', mapId: 'retro', map: RETRO_MAP, you: 'p1', players: [], snap: {} as Snapshot, roundMs: 300_000, rounds: 3, round: 1 };
     expect(msg.t === 'start' && msg.mapId).toBe('retro');
   });
 });

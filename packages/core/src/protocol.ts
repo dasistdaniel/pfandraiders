@@ -1,5 +1,6 @@
 import { CONFIG } from './config';
 import { sanitizeInput } from './sanitize';
+import { isAvatar } from './avatars';
 import { isShopCategory, isShopItemId } from './shop';
 import type { Progress } from './shop';
 import type { RankEntry } from './ranking';
@@ -32,6 +33,48 @@ export const CHAT_HISTORY_SIZE = 30;
 /** Größte Länge von Buildnummer und Kurz-Hash in der joined-Nachricht */
 export const MAX_BUILD_FIELD_LENGTH = 16;
 
+/** Längster Raumname nach dem Bereinigen (UTF-16-Einheiten wie bei Namen) */
+export const MAX_ROOM_NAME_LENGTH = 24;
+/** Längstes Raum-Passwort nach dem Bereinigen */
+export const MAX_PASSWORD_LENGTH = 16;
+/** Erlaubte Rundenzahlen einer Serie; 0 = offen (der Host beendet die Serie) */
+export const ROUNDS_CHOICES: readonly number[] = [1, 3, 5, 0];
+/** Standard-Rundenzahl */
+export const DEFAULT_ROUNDS = 3;
+/** Höchstens so viele Einträge hat die Raumliste */
+export const MAX_LISTED_ROOMS = 50;
+
+export function isRounds(v: unknown): v is number {
+  return typeof v === 'number' && ROUNDS_CHOICES.includes(v);
+}
+
+/** public = in der Raumliste, private = nur per Code */
+export type RoomVisibility = 'public' | 'private';
+
+export function isVisibility(v: unknown): v is RoomVisibility {
+  return v === 'public' || v === 'private';
+}
+
+/** Eintrag der Raumliste: ohne Token, Passwörter und Spieler-IDs. */
+export interface RoomInfo {
+  code: string;
+  name: string;
+  /** Name des Hosts */
+  host: string;
+  /** Mitglieder (auch getrennte in der Rückkehrfrist) */
+  players: number;
+  max: number;
+  /** Phase 'final' wird als 'shop' gemeldet (läuft, nicht beitretbar) */
+  phase: 'lobby' | 'playing' | 'shop';
+  /** Raum hat ein Passwort */
+  locked: boolean;
+}
+
+/** Standard-Raumname "<Name>s Raum"; auf s, ß, x, z endende Namen bekommen den Apostroph ("Klaus' Raum"). */
+export function defaultRoomName(name: string): string {
+  return /[sßxz]$/i.test(name) ? `${name}' Raum` : `${name}s Raum`;
+}
+
 /** Erlaubte Rundenzeiten in ms: 3, 5, 7, 10 Minuten (Spec §2) */
 export const ROUND_MS_CHOICES: readonly number[] = [180_000, 300_000, 420_000, 600_000];
 /** Standard-Rundenzeit: 5 Minuten */
@@ -63,7 +106,11 @@ export type ErrorCode =
   /** Nachricht passt nicht zur Phase des Raums (etwa Kaufen während der Runde) */
   | 'wrong_phase'
   /** Kauf abgelehnt (Geld, Bestand, Artikel) */
-  | 'cannot_buy';
+  | 'cannot_buy'
+  /** Raum hat ein Passwort und es fehlt oder ist falsch */
+  | 'wrong_password'
+  /** Figur ist im Raum schon vergeben */
+  | 'avatar_taken';
 
 /** Eine Chatnachricht der Lobby; id, name und color stammen aus der Spielerliste des Servers. */
 export interface ChatMessage {
@@ -76,8 +123,10 @@ export interface ChatMessage {
 }
 
 export type ClientMessage =
-  | { t: 'create'; name: string }
-  | { t: 'join'; room: string; name: string; token?: string }
+  /** Raum anlegen; roomName fehlt = Standardname, visibility fehlt = public, password fehlt = keins, avatar = Wunschfigur */
+  | { t: 'create'; name: string; roomName?: string; visibility?: RoomVisibility; password?: string; avatar?: number }
+  /** Raum betreten; password nur für Räume mit Passwort nötig (nicht bei Rückkehr mit gültigem Token) */
+  | { t: 'join'; room: string; name: string; token?: string; password?: string; avatar?: number }
   /** Serie starten (nur Host, nur Lobby); roundMs optional, der Server prüft ihn gegen ROUND_MS_CHOICES */
   | { t: 'start'; roundMs?: number }
   | { t: 'input'; seq: number; input: Input }
@@ -89,10 +138,18 @@ export type ClientMessage =
   | { t: 'ready'; ready: boolean }
   /** Shop-Phase: kaufen (Menge 1 bis 99; der Server lehnt ohne Teilkauf ab) */
   | { t: 'shopBuy'; category: ShopCategory; item: ShopItemId; qty: number }
-  /** Rundenzeit setzen (nur Host, nur Lobby oder Shop) */
+  /** Rundenzeit setzen (nur Host, nicht während einer Runde) */
   | { t: 'setRoundMs'; roundMs: number }
-  /** Serie beenden, zurück in die Lobby (nur Host, nur Shop) */
-  | { t: 'endSeries' };
+  /** Serie vorzeitig beenden, weiter zur Endwertung (nur Host, nur Shop) */
+  | { t: 'endSeries' }
+  /** Öffentliche Räume abfragen (jederzeit, auch ohne Raum; höchstens einmal pro Sekunde) */
+  | { t: 'listRooms' }
+  /** Eigene Figur wählen (nur Lobby) */
+  | { t: 'setAvatar'; avatar: number }
+  /** Rundenzahl setzen (nur Host, nur Lobby): 1, 3, 5 oder 0 = offen */
+  | { t: 'setRounds'; rounds: number }
+  /** Nach der Endwertung zurück in die Lobby (nur Host, nur Phase final) */
+  | { t: 'toLobby' };
 
 export interface RosterEntry {
   id: string;
@@ -101,16 +158,42 @@ export interface RosterEntry {
   connected: boolean;
   /** Shop-Phase: hat "Bereit" gedrückt (sonst immer false) */
   ready: boolean;
+  /** Figur (Index 0 bis AVATAR_COUNT - 1), im Raum eindeutig */
+  avatar: number;
 }
 
-/** lobby = Warteraum, playing = Runde läuft, shop = Rangliste und Einkaufen zwischen den Runden */
-export type RoomPhase = 'lobby' | 'playing' | 'shop';
+/** lobby = Warteraum, playing = Runde läuft, shop = Rangliste und Einkaufen zwischen den Runden, final = Endwertung der Serie */
+export type RoomPhase = 'lobby' | 'playing' | 'shop' | 'final';
 
 export type ServerMessage =
   | { t: 'error'; code: ErrorCode; message: string }
   | { t: 'joined'; room: string; you: string; token: string; build?: ServerBuild }
-  | { t: 'lobby'; room: string; host: string; players: RosterEntry[]; phase: RoomPhase; roundMs: number }
-  | { t: 'start'; mapId: MapId; map: MapData; you: string; players: RosterEntry[]; snap: Snapshot; roundMs: number }
+  | {
+      t: 'lobby';
+      room: string;
+      roomName: string;
+      visibility: RoomVisibility;
+      /** Raum hat ein Passwort (das Passwort selbst wird nie gesendet) */
+      locked: boolean;
+      host: string;
+      players: RosterEntry[];
+      phase: RoomPhase;
+      roundMs: number;
+      /** Rundenzahl der Serie (0 = offen) */
+      rounds: number;
+    }
+  | {
+      t: 'start';
+      mapId: MapId;
+      map: MapData;
+      you: string;
+      players: RosterEntry[];
+      snap: Snapshot;
+      roundMs: number;
+      rounds: number;
+      /** Nummer der laufenden Runde ab 1 */
+      round: number;
+    }
   | { t: 'snap'; snap: Snapshot; ack: number }
   | ({ t: 'chat' } & ChatMessage)
   /** Bisheriger Chat des Raums, direkt nach joined */
@@ -119,8 +202,10 @@ export type ServerMessage =
   | { t: 'phase'; phase: RoomPhase }
   /** Eigener Stand in der Shop-Phase (nur an diesen Spieler) */
   | { t: 'shopState'; you: Progress; ready: boolean }
-  /** Rangliste der letzten Runde (Runden- und Gesamtverdienst) */
-  | { t: 'ranking'; entries: RankEntry[] };
+  /** Rangliste: in der Shop-Phase die der letzten Runde, in der Phase final die Endwertung nach Gesamtverdienst */
+  | { t: 'ranking'; entries: RankEntry[] }
+  /** Antwort auf listRooms */
+  | { t: 'rooms'; rooms: RoomInfo[] };
 
 /**
  * Bereinigt eine Chatnachricht: Leerraum zu einem Leerzeichen, Steuer- und Formatzeichen
@@ -137,6 +222,26 @@ export function cleanChat(raw: unknown): string | null {
     .trim();
   const cut = [...text].slice(0, MAX_CHAT_LENGTH).join('').trim();
   return cut.length === 0 ? null : cut;
+}
+
+/**
+ * Bereinigt Raumname und Passwort: Steuer- und Formatzeichen (\p{Cc}, \p{Cf}) entfernen, trimmen.
+ * null = keine Zeichenkette oder danach länger als `max` (UTF-16-Einheiten); '' = leer (gilt als fehlend).
+ */
+export function cleanField(raw: unknown, max: number): string | null {
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/[\p{Cc}\p{Cf}]/gu, '').trim();
+  return text.length > max ? null : text;
+}
+
+/**
+ * Optionales Textfeld: fehlt = undefined (ok), ungültig = null (Nachricht verwerfen), leer = undefined.
+ */
+function optionalField(raw: unknown, max: number): string | undefined | null {
+  if (raw === undefined) return undefined;
+  const text = cleanField(raw, max);
+  if (text === null) return null;
+  return text === '' ? undefined : text;
 }
 
 function cleanName(raw: unknown): string | null {
@@ -171,17 +276,34 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
   switch (m.t) {
     case 'create': {
       const name = cleanName(m.name);
-      return name === null ? null : { t: 'create', name };
+      if (name === null) return null;
+      const roomName = optionalField(m.roomName, MAX_ROOM_NAME_LENGTH);
+      const password = optionalField(m.password, MAX_PASSWORD_LENGTH);
+      if (roomName === null || password === null) return null;
+      const visibility = m.visibility;
+      if (visibility !== undefined && !isVisibility(visibility)) return null;
+      const msg: Extract<ClientMessage, { t: 'create' }> = { t: 'create', name };
+      if (roomName !== undefined) msg.roomName = roomName;
+      if (visibility !== undefined) msg.visibility = visibility;
+      if (password !== undefined) msg.password = password;
+      // Ungültiger Wunsch wird still verworfen (der Server vergibt dann selbst)
+      if (isAvatar(m.avatar)) msg.avatar = m.avatar;
+      return msg;
     }
     case 'join': {
       const name = cleanName(m.name);
       const room = cleanRoom(m.room);
       if (name === null || room === null) return null;
-      if (m.token === undefined) return { t: 'join', room, name };
-      if (typeof m.token !== 'string' || m.token.length === 0 || m.token.length > MAX_TOKEN_LENGTH) {
-        return null;
+      const msg: Extract<ClientMessage, { t: 'join' }> = { t: 'join', room, name };
+      if (m.token !== undefined) {
+        if (typeof m.token !== 'string' || m.token.length === 0 || m.token.length > MAX_TOKEN_LENGTH) return null;
+        msg.token = m.token;
       }
-      return { t: 'join', room, name, token: m.token };
+      const password = optionalField(m.password, MAX_PASSWORD_LENGTH);
+      if (password === null) return null;
+      if (password !== undefined) msg.password = password;
+      if (isAvatar(m.avatar)) msg.avatar = m.avatar;
+      return msg;
     }
     case 'start':
       // Ungültige Zahlen setzt der Raum auf den Standard; Nicht-Zahlen gelten als "nicht angegeben"
@@ -211,6 +333,14 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return isRoundMs(m.roundMs) ? { t: 'setRoundMs', roundMs: m.roundMs } : null;
     case 'endSeries':
       return { t: 'endSeries' };
+    case 'listRooms':
+      return { t: 'listRooms' };
+    case 'setAvatar':
+      return isAvatar(m.avatar) ? { t: 'setAvatar', avatar: m.avatar } : null;
+    case 'setRounds':
+      return isRounds(m.rounds) ? { t: 'setRounds', rounds: m.rounds } : null;
+    case 'toLobby':
+      return { t: 'toLobby' };
     default:
       return null;
   }
