@@ -10,7 +10,7 @@ describe('knockoutText', () => {
   });
 
   it('shows AUSGEKNOCKT and the remaining seconds rounded up', () => {
-    expect(knockoutText(down(20000), 'running')).toEqual({ title: KNOCKOUT_TITLE, seconds: '20', robbed: '' });
+    expect(knockoutText(down(10000), 'running')).toEqual({ title: KNOCKOUT_TITLE, seconds: '10', robbed: '' });
     expect(knockoutText(down(4200), 'running')?.seconds).toBe('5');
     expect(knockoutText(down(4000), 'running')?.seconds).toBe('4');
     expect(knockoutText(down(1), 'running')?.seconds).toBe('1');

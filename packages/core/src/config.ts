@@ -120,7 +120,7 @@ export const CONFIG = {
     /** alle so viele ms verliert ein Spieler 1 Leben durch Hunger */
     hungerEveryMs: 8000,
     /** Dauer eines Knockouts */
-    knockoutMs: 20000,
+    knockoutMs: 10000,
     /** Essensfund beim Suchen (Spec §5): heilt so viel, Chance je abgeschlossener Suche nach Spot-Art */
     food: {
       heal: 30,

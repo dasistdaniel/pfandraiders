@@ -36,8 +36,8 @@ describe('config sanity', () => {
     expect(CONFIG.carry.cartSpeedMult).toBeGreaterThan(0);
   });
 
-  it('knocks out for a fixed 20 s and finds food in bins more often', () => {
-    expect(CONFIG.health.knockoutMs).toBe(20000);
+  it('knocks out for a fixed 10 s and finds food in bins more often', () => {
+    expect(CONFIG.health.knockoutMs).toBe(10000);
     expect(CONFIG.health.food.chance).toEqual({ bin: 0.1, bus_stop: 0.04, bench: 0.04, bush: 0.04, park: 0.04 });
   });
 });
