@@ -121,7 +121,7 @@ describe('final phase', () => {
     room.setRounds('p1', 1);
     room.start('p1');
     endRound();
-    expect(room.shopBuy(members[0], 'defense', 'food', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
+    expect(room.shopBuy(members[0], 'defense', 'dog_treat', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
     expect(room.setReady(members[0], true)).toMatchObject({ ok: false, code: 'wrong_phase' });
     expect(room.endSeries('p1')).toMatchObject({ ok: false, code: 'wrong_phase' });
     expect(room.start('p1')).toMatchObject({ ok: false, code: 'already_started' });
