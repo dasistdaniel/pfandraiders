@@ -1,4 +1,4 @@
-import { DEFAULT_ROUND_MS, isRoundMs } from '@pfandraiders/core';
+import { DEFAULT_ROUND_MS, isAvatar, isRoundMs } from '@pfandraiders/core';
 import type { DeviceRef } from './devices';
 
 export interface KeyValueStore {
@@ -179,6 +179,32 @@ export function saveLocalRoundMs(ms: number, store: KeyValueStore | undefined = 
     store?.setItem(LOCAL_ROUND_KEY, String(ms));
   } catch {
     // Speicher gesperrt: Wahl gilt nur für diese Sitzung
+  }
+}
+
+// ---- Figurenwunsch online ----
+
+const AVATAR_KEY = 'pfandraiders.avatar';
+
+/** Zuletzt gewählte Figur (0 bis 23); undefined = keine oder ungültig. Wirft nie. */
+export function loadAvatarWish(store: KeyValueStore | undefined = defaultStore()): number | undefined {
+  try {
+    const raw = store?.getItem(AVATAR_KEY);
+    if (raw === null || raw === undefined || raw.trim() === '') return undefined;
+    const n = Number(raw);
+    return isAvatar(n) ? n : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Merkt die gewählte Figur; ungültige Werte werden ignoriert. Wirft nie. */
+export function saveAvatarWish(avatar: number, store: KeyValueStore | undefined = defaultStore()): void {
+  if (!isAvatar(avatar)) return;
+  try {
+    store?.setItem(AVATAR_KEY, String(avatar));
+  } catch {
+    // Speicher gesperrt: Wunsch gilt nur für diese Sitzung
   }
 }
 

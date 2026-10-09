@@ -1,3 +1,4 @@
+import { AVATAR_COUNT, AVATAR_DEFAULT_ORDER } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import {
   ALL_CHARACTERS,
@@ -8,6 +9,7 @@ import {
   charDir,
   charFrameIndex,
   characterFor,
+  characterOfAvatar,
   characterIndex,
 } from '../src/playerChars';
 
@@ -119,5 +121,21 @@ describe('charFrameIndex', () => {
         expect(f).toBeLessThan(12);
       }
     }
+  });
+});
+
+describe('avatars and characters', () => {
+  it('core and client agree: 24 avatars, the default order starts with PLAYER_CHARACTERS', () => {
+    expect(AVATAR_COUNT).toBe(ALL_CHARACTERS.length);
+    expect(AVATAR_DEFAULT_ORDER.slice(0, PLAYER_CHARACTERS.length).map((i) => ALL_CHARACTERS[i])).toEqual([...PLAYER_CHARACTERS]);
+  });
+
+  it('maps a valid avatar to its sheet and falls back to the position otherwise', () => {
+    expect(characterOfAvatar(0, 5)).toBe('m01');
+    expect(characterOfAvatar(23, 5)).toBe('f12');
+    expect(characterOfAvatar(undefined, 1)).toBe(characterFor(1));
+    expect(characterOfAvatar(24, 2)).toBe(characterFor(2));
+    expect(characterOfAvatar(1.5, 0)).toBe(characterFor(0));
+    expect(characterOfAvatar('3', 0)).toBe(characterFor(0));
   });
 });

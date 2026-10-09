@@ -12,3 +12,9 @@ export function stepRoundMs(ms: number, dir: -1 | 1): number {
   const to = Math.min(ROUND_MS_CHOICES.length - 1, Math.max(0, from + dir));
   return ROUND_MS_CHOICES[to];
 }
+
+/** Rundenzahl einer Serie: 0 = "offen", 1 = "1 Runde", sonst "n Runden". */
+export function roundsLabel(rounds: number): string {
+  if (rounds === 0) return 'offen';
+  return rounds === 1 ? '1 Runde' : `${rounds} Runden`;
+}

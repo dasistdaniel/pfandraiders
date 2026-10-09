@@ -20,6 +20,8 @@ import {
   stepDevice,
   loadLocalRoundMs,
   saveLocalRoundMs,
+  loadAvatarWish,
+  saveAvatarWish,
   type KeyValueStore,
 } from '../src/settings';
 
@@ -250,5 +252,38 @@ describe('local round time', () => {
     };
     expect(loadLocalRoundMs(broken)).toBe(300_000);
     expect(() => saveLocalRoundMs(300_000, broken)).not.toThrow();
+  });
+});
+
+describe('avatar wish', () => {
+  it('is undefined without a stored value and for garbage', () => {
+    expect(loadAvatarWish(memStore())).toBeUndefined();
+    const store = memStore();
+    for (const raw of ['', 'x', '24', '-1', '1.5']) {
+      store.setItem('pfandraiders.avatar', raw);
+      expect(loadAvatarWish(store)).toBeUndefined();
+    }
+  });
+
+  it('stores and loads a valid avatar and ignores invalid ones', () => {
+    const store = memStore();
+    saveAvatarWish(7, store);
+    expect(store.map.get('pfandraiders.avatar')).toBe('7');
+    expect(loadAvatarWish(store)).toBe(7);
+    saveAvatarWish(99, store);
+    expect(loadAvatarWish(store)).toBe(7);
+  });
+
+  it('never throws when the storage is locked', () => {
+    const locked = {
+      getItem: () => {
+        throw new Error('locked');
+      },
+      setItem: () => {
+        throw new Error('locked');
+      },
+    };
+    expect(loadAvatarWish(locked)).toBeUndefined();
+    expect(() => saveAvatarWish(3, locked)).not.toThrow();
   });
 });
