@@ -181,3 +181,70 @@ export function saveLocalRoundMs(ms: number, store: KeyValueStore | undefined = 
     // Speicher gesperrt: Wahl gilt nur für diese Sitzung
   }
 }
+
+// ---- Musik und Effekte an/aus ----
+
+/** Musik und Soundeffekte lassen sich getrennt an- und ausschalten (Lautstärken bleiben davon unberührt). */
+export interface AudioToggles {
+  music: boolean;
+  effects: boolean;
+}
+
+const MUSIC_ON_KEY = 'pfandraiders.musicOn';
+const EFFECTS_ON_KEY = 'pfandraiders.effectsOn';
+/** Früherer gemeinsamer Schalter "Ton aus" ('1' = stumm): gilt nur, solange nichts Neues gespeichert ist. */
+const LEGACY_MUTED_KEY = 'pfandraiders.muted';
+
+/** '1' = an, '0' = aus, alles andere ergibt `fallback`. */
+export function parseToggle(raw: string | null | undefined, fallback: boolean): boolean {
+  if (raw === '1') return true;
+  if (raw === '0') return false;
+  return fallback;
+}
+
+/** Beide Schalter; Standard beide an, ein alter "Ton aus" schaltet beide aus. Wirft nie. */
+export function loadAudioToggles(store: KeyValueStore | undefined = defaultStore()): AudioToggles {
+  try {
+    const fallback = store?.getItem(LEGACY_MUTED_KEY) !== '1';
+    return {
+      music: parseToggle(store?.getItem(MUSIC_ON_KEY), fallback),
+      effects: parseToggle(store?.getItem(EFFECTS_ON_KEY), fallback),
+    };
+  } catch {
+    return { music: true, effects: true };
+  }
+}
+
+export function saveAudioToggles(t: AudioToggles, store: KeyValueStore | undefined = defaultStore()): void {
+  try {
+    store?.setItem(MUSIC_ON_KEY, t.music ? '1' : '0');
+    store?.setItem(EFFECTS_ON_KEY, t.effects ? '1' : '0');
+  } catch {
+    // Speicher gesperrt: Wahl gilt nur für diese Sitzung
+  }
+}
+
+/**
+ * Taste M (und "Ton" im Esc-Menü): beide an -> Musik aus -> Effekte aus (Musik wieder an) -> beides aus
+ * -> beides an. Jeder der vier Zustände hat genau einen Nachfolger, also klappt es auch nach einer Wahl
+ * in den Einstellungen.
+ */
+export function nextAudioToggles(t: AudioToggles): AudioToggles {
+  if (t.music && t.effects) return { music: false, effects: true };
+  if (!t.music && t.effects) return { music: true, effects: false };
+  if (t.music && !t.effects) return { music: false, effects: false };
+  return { music: true, effects: true };
+}
+
+/** Beschriftung des Ton-Eintrags im Esc-Menü. */
+export function audioMenuLabel(t: AudioToggles): string {
+  if (t.music && t.effects) return 'Ton: an';
+  if (!t.music && !t.effects) return 'Ton: aus';
+  return t.music ? 'Ton: Effekte aus' : 'Ton: Musik aus';
+}
+
+/** Kurzer Hinweis nach Taste M. */
+export function audioNoticeText(t: AudioToggles): string {
+  const onOff = (on: boolean): string => (on ? 'an' : 'aus');
+  return `Musik ${onOff(t.music)}, Effekte ${onOff(t.effects)}`;
+}

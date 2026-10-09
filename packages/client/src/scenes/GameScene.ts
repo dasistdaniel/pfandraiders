@@ -18,7 +18,7 @@ import type { TilesetId } from '../textureKeys';
 import { tileKey } from '../tiles';
 import { CountdownDisplay, musicModeFor } from '../countdown';
 import { PlayerHud } from '../hud';
-import { music, sfx, unlockAudio } from '../sfx';
+import { audioToggles, cycleAudio, music, sfx, unlockAudio } from '../sfx';
 import { PLING_GAP_SEC } from '../sound';
 import { detectSeizures, detectSounds, snapshotForSound } from '../soundEvents';
 import { Notices } from '../notices';
@@ -29,7 +29,7 @@ import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
 import { padBLeaves } from '../sources';
 import type { InputSource } from '../sources';
-import { autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
+import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
 import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 
@@ -437,8 +437,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.muteKey)) {
-      sfx.toggleMute();
-      this.renderPause(); // Beschriftung "Ton: an/aus" im offenen Menü
+      this.cycleSound();
+      this.renderPause(); // Beschriftung "Ton: ..." im offenen Menü
     }
     // Mehrere Plings eines Frames (online: mehrere Flaschen pro Snapshot) nacheinander abspielen
     let plings = 0;
@@ -593,7 +593,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Führt eine Menüaktion aus. true = Szene verlassen. */
   private runPauseAction(action: PauseAction | null): boolean {
-    if (action === 'toggleSound') sfx.toggleMute();
+    if (action === 'toggleSound') this.cycleSound();
     if (action === 'leave') {
       // Online zuerst dem Server Bescheid geben (Platz sofort frei), dann absichtlich schließen
       this.online?.leave();
@@ -602,6 +602,12 @@ export class GameScene extends Phaser.Scene {
     }
     this.renderPause();
     return false;
+  }
+
+  /** Taste M bzw. "Ton" im Esc-Menü: Musik/Effekte weiterschalten und kurz in jedem Bild anzeigen. */
+  private cycleSound(): void {
+    const text = audioNoticeText(cycleAudio());
+    for (const slot of this.slots) this.notices.show(slot.id, text);
   }
 
   private closePause(): void {
@@ -629,7 +635,7 @@ export class GameScene extends Phaser.Scene {
       t.setVisible(item !== undefined);
       if (!item) return;
       const sel = i === p.selected;
-      t.setText(`${sel ? '> ' : '  '}${pauseLabel(item, sfx.muted)}`)
+      t.setText(`${sel ? '> ' : '  '}${pauseLabel(item, audioToggles())}`)
         .setColor(sel ? PAUSE_COLOR.selected : PAUSE_COLOR.normal)
         .setPosition(GAME_W / 2, top + itemsTop + i * PAUSE.rowH);
     });

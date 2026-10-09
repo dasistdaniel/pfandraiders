@@ -94,9 +94,12 @@ describe('PauseMenu', () => {
 
 describe('pause menu texts', () => {
   it('labels the sound entry with its state', () => {
-    expect(pauseLabel({ id: 'toggleSound', label: 'Ton' }, false)).toBe('Ton: an');
-    expect(pauseLabel({ id: 'toggleSound', label: 'Ton' }, true)).toBe('Ton: aus');
-    expect(pauseLabel({ id: 'resume', label: 'Fortsetzen' }, true)).toBe('Fortsetzen');
+    const sound = { id: 'toggleSound', label: 'Ton' };
+    expect(pauseLabel(sound, { music: true, effects: true })).toBe('Ton: an');
+    expect(pauseLabel(sound, { music: false, effects: false })).toBe('Ton: aus');
+    expect(pauseLabel(sound, { music: false, effects: true })).toBe('Ton: Musik aus');
+    expect(pauseLabel(sound, { music: true, effects: false })).toBe('Ton: Effekte aus');
+    expect(pauseLabel({ id: 'resume', label: 'Fortsetzen' }, { music: false, effects: false })).toBe('Fortsetzen');
   });
 
   it('tells online players that the game keeps running', () => {
