@@ -85,12 +85,15 @@ export class FinalScene extends Phaser.Scene {
     online.onChat = null;
     if (online.status === 'closed') this.leave('Verbindung zum Server verloren.');
     else if (online.roomPhase === 'lobby') this.backToLobby();
+    // Endwertung steht: Gesamtsieger (nur online, lokal gibt es keine Endwertung)
+    else sfx.play('win');
   }
 
   update(_time: number, delta: number): void {
     const online = this.online;
     if (!online || this.leaving) return;
     if (Phaser.Input.Keyboard.JustDown(this.escKey)) {
+      sfx.play('ui_back');
       this.leave();
       return;
     }

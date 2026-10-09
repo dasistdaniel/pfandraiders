@@ -9,6 +9,8 @@ import type { Rect } from '../layout';
 import { LocalShop } from '../localShop';
 import type { OnlineConnection } from '../online';
 import { loadOnlineDevice } from '../settings';
+import type { SoundId } from '../audioIds';
+import { preferAlternatives } from '../eventSounds';
 import { sfx } from '../sfx';
 import { ShopModel, shopPointerEnabled } from '../shopModel';
 import type { ShopAction, ShopRowView } from '../shopModel';
@@ -66,6 +68,7 @@ export class ShopScene extends Phaser.Scene {
   private escKey!: Phaser.Input.Keyboard.Key;
   private leaving = false;
   private lastMoney: number | null = null;
+  private lastCart: number | null = null;
 
   constructor() {
     super('shop');
@@ -79,6 +82,7 @@ export class ShopScene extends Phaser.Scene {
     this.panels = [];
     this.leaving = false;
     this.lastMoney = null;
+    this.lastCart = null;
   }
 
   create(): void {
@@ -93,10 +97,15 @@ export class ShopScene extends Phaser.Scene {
       const view = { x: 0, y: 0, w: GAME_W, h: GAME_H };
       this.panels.push(this.makePanel(online.you, me?.name ?? 'Du', me?.color ?? ROOM_COLORS[0], view, createSource(this, loadOnlineDevice()), online.isHost()));
       this.lastMoney = online.shop?.money ?? null;
+      this.lastCart = online.shop?.items.cart ?? null;
       online.onShopState = () => {
         const money = online.shop?.money ?? null;
-        if (money !== null && this.lastMoney !== null && money < this.lastMoney) sfx.play('buy');
+        const cart = online.shop?.items.cart ?? null;
+        if (money !== null && this.lastMoney !== null && money < this.lastMoney) {
+          playAll(cart !== null && this.lastCart !== null && cart > this.lastCart ? ['buy', 'cart_rent'] : ['buy']);
+        }
         this.lastMoney = money;
+        this.lastCart = cart;
         this.panels[0]?.model.setReady(online.shopReady);
       };
       online.onStart = () => this.goTo('game', { online });
@@ -114,17 +123,20 @@ export class ShopScene extends Phaser.Scene {
       // Serie ist zu Ende (letzte Runde oder vom Host beendet), während dieser Spieler noch auf der Rangliste stand
       else if (online.roomPhase === 'final') this.goTo('final', { online });
       else if (online.roomPhase === 'lobby') this.goTo('menu', { resumeOnline: online });
+      else sfx.play('shop_start');
     } else {
       const views = viewportsFor(this.slots.length);
       this.slots.forEach((s, i) => {
         this.panels.push(this.makePanel(s.id, playerName(s.id), s.color, views[i], createSource(this, s.device), false));
       });
+      sfx.play('shop_start');
     }
   }
 
   update(_time: number, delta: number): void {
     if (this.leaving) return;
     if (Phaser.Input.Keyboard.JustDown(this.escKey)) {
+      sfx.play('ui_back');
       if (this.online) this.leaveOnline();
       else this.goTo('menu', {});
       return;
@@ -133,7 +145,10 @@ export class ShopScene extends Phaser.Scene {
       const progress = this.progressOf(panel.id);
       for (const cmd of panel.nav.update(panel.source.read(), delta)) {
         if (cmd === 'confirm') this.run(panel, panel.model.activate(progress));
-        else panel.model.move(cmd, progress);
+        else {
+          panel.model.move(cmd, progress);
+          sfx.play('ui_move');
+        }
       }
       panel.messageMs = Math.max(0, panel.messageMs - delta);
       this.render(panel);
@@ -152,18 +167,23 @@ export class ShopScene extends Phaser.Scene {
     if (!action) return;
     switch (action.kind) {
       case 'refused':
+        sfx.play('buy_denied');
         this.say(panel, BUY_REFUSAL_TEXT[action.reason]);
         return;
       case 'buy':
         if (this.local) {
           const r = this.local.buy(panel.id, action.category, action.item, action.qty);
-          if (r.ok) sfx.play('buy');
-          else this.say(panel, BUY_REFUSAL_TEXT[r.reason]);
+          if (r.ok) playAll(action.item === 'cart' ? ['buy', 'cart_rent'] : ['buy']);
+          else {
+            sfx.play('buy_denied');
+            this.say(panel, BUY_REFUSAL_TEXT[r.reason]);
+          }
         } else {
           this.online?.shopBuy(action.category, action.item, action.qty);
         }
         return;
       case 'ready':
+        sfx.play(action.ready ? 'ready' : 'ready_off');
         if (this.local) this.local.setReady(panel.id, action.ready);
         else this.online?.setReady(action.ready);
         return;
@@ -293,6 +313,11 @@ export class ShopScene extends Phaser.Scene {
     }
     this.goTo('menu', notice ? { notice } : {});
   }
+}
+
+/** Kauf-Töne: 'cart_rent' ersetzt 'buy', wenn es dafür eine eigene Datei gibt. */
+function playAll(ids: SoundId[]): void {
+  for (const id of preferAlternatives(ids, (x) => sfx.hasFile(x))) sfx.play(id);
 }
 
 function rowText(r: ShopRowView): string {
