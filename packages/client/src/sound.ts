@@ -6,6 +6,25 @@ export type { SoundId } from './audioIds';
 
 const MASTER_GAIN = 0.15;
 const MIN_REPEAT_MS = 80;
+/**
+ * Längere Sperren gegen Dauerfeuer: Menüs (Taste gehalten), NPCs, die zwischen Stehen und Jagen wechseln,
+ * Lobby und Chat. Gilt je ID, auch über mehrere Spieler im Splitscreen.
+ */
+export const MIN_GAP_MS: Partial<Record<SoundId, number>> = {
+  ui_move: 90,
+  dog_bark: 3000,
+  siren_start: 3000,
+  id_shown: 3000,
+  low_health: 2000,
+  chat: 300,
+  join: 300,
+  leave: 300,
+  error: 500,
+  buy_denied: 300,
+  spray_empty: 250,
+  search_empty: 250,
+  bag_full: 400,
+};
 /** Abstand der Plings eines Frames in s; mindestens MIN_REPEAT_MS, sonst schluckt die Sperre sie. */
 export const PLING_GAP_SEC = 0.09;
 /** Pling-Tonleiter: Halbtöne über dem Grundton je Stufe (Dur-Pentatonik) */
@@ -180,6 +199,11 @@ export class SoundFx {
     if (muted) this.stopAllLoops();
   }
 
+  /** Gibt es für diese ID eine geladene eigene Datei? */
+  hasFile(id: string): boolean {
+    return this.bufferFor(id) !== null;
+  }
+
   private bufferFor(id: string): AudioBuffer | null {
     try {
       return this.assets?.buffer(id) ?? null;
@@ -197,7 +221,7 @@ export class SoundFx {
     const delay = Number.isFinite(delaySec) ? Math.max(0, delaySec) : 0;
     const t = this.now() + delay * 1000;
     const last = this.lastPlayed.get(id);
-    if (last !== undefined && t - last < MIN_REPEAT_MS) return;
+    if (last !== undefined && t - last < (MIN_GAP_MS[id] ?? MIN_REPEAT_MS)) return;
     this.lastPlayed.set(id, t);
     try {
       if (id === 'pling') {

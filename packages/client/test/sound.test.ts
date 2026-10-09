@@ -385,3 +385,23 @@ describe('SoundFx loops', () => {
     expect(sources(ctx)[0].stop).toHaveBeenCalled();
   });
 });
+
+describe('SoundFx gaps', () => {
+  it('keeps longer gaps for spammy ids', () => {
+    const ctx = fakeContext();
+    let t = 0;
+    const fx = new SoundFx(() => ctx as unknown as AudioContext, () => t, false, 70, assets(['ui_move', 'dog_bark']));
+    fx.unlock();
+    expect(fx.hasFile('ui_move')).toBe(true);
+    expect(fx.hasFile('chat')).toBe(false);
+    fx.play('ui_move');
+    t = 85;
+    fx.play('ui_move');
+    t = 100;
+    fx.play('ui_move');
+    fx.play('dog_bark');
+    t = 2000;
+    fx.play('dog_bark');
+    expect(sources(ctx).map((s) => s.buffer?.id)).toEqual(['ui_move', 'ui_move', 'dog_bark']);
+  });
+});
