@@ -55,7 +55,7 @@ interface Buffered {
 }
 
 function sameInput(a: Input, b: Input): boolean {
-  return a.moveX === b.moveX && a.moveY === b.moveY && a.action === b.action && a.steal === b.steal && a.attack === b.attack;
+  return a.moveX === b.moveX && a.moveY === b.moveY && a.action === b.action && a.steal === b.steal && a.attack === b.attack && a.spray === b.spray;
 }
 
 /** Angaben beim Anlegen eines Raums (leere Felder werden nicht gesendet) */

@@ -68,10 +68,10 @@ describe('controlLines', () => {
     expect(lines[lines.length - 1]).toContain('Gamepad');
   });
 
-  it('names steal and attack and no buy or eat keys', () => {
-    expect(lines[0]).toBe('Tastatur 1 (WASD, E): Aktion E, Ausrauben Q, Schlagen F');
-    expect(lines[1]).toBe('Tastatur 2 (Pfeile, Enter): Aktion Enter, Ausrauben /, Schlagen .');
-    expect(lines[2]).toBe('Gamepad (Stick/Steuerkreuz): Aktion A, Ausrauben B, Schlagen X');
+  it('names steal, attack and spray and no buy or eat keys', () => {
+    expect(lines[0]).toBe('Tastatur 1 (WASD, E): Aktion E, Ausrauben Q, Schlagen F, Pfefferspray C');
+    expect(lines[1]).toBe('Tastatur 2 (Pfeile, Enter): Aktion Enter, Ausrauben /, Schlagen ., Pfefferspray ,');
+    expect(lines[2]).toBe('Gamepad (Stick/Steuerkreuz): Aktion A, Ausrauben B, Schlagen X, Pfefferspray Y');
   });
 });
 

@@ -36,7 +36,7 @@ export interface ControlSource {
 
 /** Eine Zeile je Gerät, zusammengesetzt aus denselben Beschriftungen wie die Hinweise im Spiel. */
 export function controlLines(keyboards: ControlSource[], pad: KeyLabels): string[] {
-  const fmt = (l: KeyLabels): string => `Aktion ${l.action}, Ausrauben ${l.steal}, Schlagen ${l.attack}`;
+  const fmt = (l: KeyLabels): string => `Aktion ${l.action}, Ausrauben ${l.steal}, Schlagen ${l.attack}, Pfefferspray ${l.spray}`;
   return [
     ...keyboards.map((k) => `${k.name}: ${fmt(k.labels)}`),
     `Gamepad (Stick/Steuerkreuz): ${fmt(pad)}`,
