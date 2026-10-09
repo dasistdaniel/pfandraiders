@@ -5,6 +5,7 @@ import { GAME_W } from '../layout';
 import { addLogo } from '../logoTexture';
 import { roundMsLabel, stepRoundMs } from '../roundTime';
 import { loadLocalRoundMs, saveLocalRoundMs } from '../settings';
+import { sfx } from '../sfx';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 /** Oberkante des Lobby-Textes unter dem Logo. */
@@ -71,6 +72,7 @@ export class LobbyScene extends Phaser.Scene {
   update(): void {
     if (!this.text) return; // Testhilfe-Pfad: create() hat schon zur Spielszene gewechselt
     if (Phaser.Input.Keyboard.JustDown(this.backKey)) {
+      sfx.play('ui_back');
       this.scene.start('menu');
       return;
     }
@@ -100,15 +102,18 @@ export class LobbyScene extends Phaser.Scene {
       this.padPrev[pad.index] = { a: pad.A, b: pad.B, start, left, right };
     }
     if (roundDir !== 0) {
+      sfx.play('ui_move');
       this.roundMs = stepRoundMs(this.roundMs, roundDir);
       saveLocalRoundMs(this.roundMs);
     }
 
     if (backPressed) {
+      sfx.play('ui_back');
       this.scene.start('menu');
       return;
     }
     if (startPressed && this.slots.length > 0) {
+      sfx.play('ui_select');
       this.scene.start('game', { slots: this.slots, roundMs: this.roundMs });
       return;
     }
@@ -120,6 +125,7 @@ export class LobbyScene extends Phaser.Scene {
     if (this.slots.some((s) => sameDevice(s.device, device))) return;
     const n = this.slots.length;
     this.slots.push({ id: `p${n + 1}`, color: PLAYER_COLORS[n], device });
+    sfx.play('join');
   }
 
   private lines(): string[] {

@@ -189,7 +189,7 @@ function punchedNear(prev: GameState, next: GameState, p: Player): boolean {
 }
 
 /** Hat ein anderer Spieler nahe der vorigen Position von `p` in diesem Schritt gesprüht (Abklingzeit sprang hoch)? */
-function sprayedNear(prev: GameState, next: GameState, p: Player): boolean {
+export function sprayedNear(prev: GameState, next: GameState, p: Player): boolean {
   return Object.values(next.players).some((o) => {
     const before = prev.players[o.id];
     return (

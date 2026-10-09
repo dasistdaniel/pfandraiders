@@ -250,13 +250,16 @@ export class MenuScene extends Phaser.Scene {
 
     // Nur eine Aktion pro Frame
     if (move !== 0) {
+      const before = this.model.selected;
       this.model.move(move);
+      if (this.model.selected !== before) sfx.play('ui_move');
       this.render();
     } else if (adjust !== 0) {
       this.adjustSetting(adjust);
     } else if (confirm) {
-      this.activate(this.model.activate());
+      this.confirm(this.model.activate());
     } else if (back) {
+      if (this.page !== 'main') sfx.play('ui_back');
       this.goBack();
     }
   }
@@ -327,8 +330,15 @@ export class MenuScene extends Phaser.Scene {
         if (dir !== 0) this.adjustSetting(dir);
         return;
       }
-      this.activate(id);
+      this.confirm(id);
     });
+  }
+
+  /** Bestätigen per Taste oder Klick: Ton (Zurück-Eintrag klingt wie Zurück) und Aktion. Regler ändern sich nur mit links/rechts. */
+  private confirm(id: string): void {
+    if (id === 'back') sfx.play('ui_back');
+    else if (id !== 'volume' && id !== 'music' && id !== 'onlineDevice') sfx.play('ui_select');
+    this.activate(id);
   }
 
   /** Credits-Eintrag zu einer Menü-ID (credit:<Index>), sonst null. */

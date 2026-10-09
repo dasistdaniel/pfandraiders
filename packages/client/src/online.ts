@@ -20,7 +20,9 @@ import type {
   Snapshot,
 } from '@pfandraiders/core';
 import { NO_INPUT } from '@pfandraiders/core';
+import type { SoundId } from './audioIds';
 import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
+import { chatSound, errorSound, rosterSounds } from './eventSounds';
 import { countdownLeft } from './countdown';
 import type { GameConnection } from './connection';
 import { interpolateSnapshot } from './interpolate';
@@ -120,6 +122,15 @@ export class OnlineConnection implements GameConnection {
   onStart: (() => void) | null = null;
   onError: ((code: ErrorCode, message: string) => void) | null = null;
   onClosed: (() => void) | null = null;
+  /**
+   * Töne der Verbindung, unabhängig davon, welche Szene gerade zuhört: join/leave (Spielerliste), chat (fremde
+   * Nachricht), error bzw. buy_denied (Fehler vom Server, Verbindung verloren). null = still.
+   */
+  sound: ((id: SoundId) => void) | null = null;
+  /** Spielerliste für join/leave; null = nach dem Beitritt noch keine (die erste bleibt still) */
+  private soundRoster: RosterEntry[] | null = null;
+  /** close() wurde aufgerufen: das folgende Schließen ist kein Verbindungsverlust */
+  private closing = false;
 
   private socket: SocketLike | null = null;
   private map: MapData | null = null;
@@ -142,6 +153,7 @@ export class OnlineConnection implements GameConnection {
 
   connect(): void {
     this.status = 'connecting';
+    this.closing = false;
     let socket: SocketLike;
     try {
       socket = this.factory(this.url);
@@ -177,6 +189,7 @@ export class OnlineConnection implements GameConnection {
       }
     }
     this.status = 'connecting';
+    this.closing = false;
     let socket: SocketLike;
     try {
       socket = this.factory(this.url);
@@ -199,13 +212,25 @@ export class OnlineConnection implements GameConnection {
     };
     socket.onclose = () => {
       if (this.socket !== socket) return; // ersetztes Socket: späte Meldung ignorieren
+      // Nur ein Abbruch einer offenen Verbindung in einem Raum klingt: nicht ein gescheiterter
+      // Wiederverbindungsversuch und nicht das Schließen eines ungenutzten Sockets ohne Raum (Server nach 30 s)
+      if (this.status === 'open' && !this.closing && this.room !== '') this.play('error');
       this.status = 'closed';
       this.onClosed?.();
     };
   }
 
   close(): void {
+    this.closing = true;
     this.socket?.close();
+  }
+
+  private play(id: SoundId): void {
+    try {
+      this.sound?.(id);
+    } catch {
+      // Ton darf die Verbindung nie stören
+    }
   }
 
   private sendMsg(msg: ClientMessage): void {
@@ -297,6 +322,7 @@ export class OnlineConnection implements GameConnection {
   /** Raum absichtlich verlassen: der Server gibt den Platz sofort frei. Schließt die Verbindung nicht selbst. */
   leave(): void {
     if (this.status !== 'open') return;
+    this.closing = true; // der Server schließt danach: kein Verbindungsverlust
     try {
       this.sendMsg({ t: 'leave' });
     } catch {
@@ -329,11 +355,16 @@ export class OnlineConnection implements GameConnection {
         this.you = msg.you;
         this.token = msg.token;
         this.localPlayerIds = [msg.you];
+        this.soundRoster = null;
         this.onJoined?.();
         break;
       case 'lobby':
         this.host = msg.host;
         this.roster = msg.players;
+        if (Array.isArray(msg.players)) {
+          for (const id of rosterSounds(this.soundRoster, msg.players, this.you)) this.play(id);
+          this.soundRoster = [...msg.players];
+        }
         this.roomPhase = msg.phase;
         if (typeof msg.roundMs === 'number' && Number.isFinite(msg.roundMs) && msg.roundMs > 0) this.roundMs = msg.roundMs;
         if (typeof msg.roomName === 'string') this.roomName = msg.roomName;
@@ -350,6 +381,7 @@ export class OnlineConnection implements GameConnection {
         this.you = msg.you;
         this.localPlayerIds = [msg.you];
         this.roster = msg.players;
+        if (Array.isArray(msg.players)) this.soundRoster = [...msg.players];
         this.buffer = [{ at: this.clock, snap: msg.snap }];
         this.rendered = stateFromSnapshot(msg.map, msg.snap);
         this.predictor.reset(msg.snap.players[msg.you] ?? null);
@@ -377,6 +409,10 @@ export class OnlineConnection implements GameConnection {
         if (!chat) break;
         this.chat.push(chat);
         if (this.chat.length > CLIENT_CHAT_SIZE) this.chat.splice(0, this.chat.length - CLIENT_CHAT_SIZE);
+        {
+          const id = chatSound(chat, this.you);
+          if (id) this.play(id);
+        }
         this.onChat?.();
         break;
       }
@@ -417,6 +453,7 @@ export class OnlineConnection implements GameConnection {
         break;
       }
       case 'error':
+        this.play(errorSound(msg.code));
         this.onError?.(msg.code, msg.message);
         break;
       default:
