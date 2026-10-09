@@ -65,10 +65,11 @@ function infoText(item: ShopItemId): string {
       return `+${CONFIG.shop.cardPlusBonusPct} % Pfand je Flasche`;
     case 'glove':
       return `+${CONFIG.fight.gloveBonus} Schaden je Schlag`;
+    // kurz, damit die Zeilen mit Menge und Preis auch im Viertel-Splitscreen nicht umbrechen
     case 'pepper':
-      return `${unitOf('pepper')} Ladungen je Flasche`;
+      return `${unitOf('pepper')} Ladungen`;
     case 'id_papers':
-      return 'keine Polizeikontrolle, nur für die nächste Runde';
+      return 'nur für die nächste Runde';
     default:
       return '';
   }
@@ -231,8 +232,7 @@ export class ShopModel {
       if (owned >= max) return { ...row, state: 'grey' };
     } else {
       const qty = selected ? `◄ ${this.qty} ►  ` : '';
-      const has = item === 'pepper' ? `(hast ${owned} Ladungen)` : `(hast ${owned})`;
-      row.detail = `${info ? `${info}  ` : ''}${qty}${has}`;
+      row.detail = `${info ? `${info}  ` : ''}${qty}(hast ${owned})`;
     }
     const qty = selected && def.kind === 'stack' ? Math.min(this.qty, this.maxQty(p)) : 1;
     const check = checkShopBuy(p, def.category, item, qty);

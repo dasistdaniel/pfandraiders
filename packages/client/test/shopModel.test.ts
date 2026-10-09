@@ -200,7 +200,7 @@ describe('ShopModel rows', () => {
     p.items.pepper = 15;
     m.selectCategory(3);
     m.changeQty(1, p);
-    expect(m.rows(p)[0]).toMatchObject({ name: 'Pfefferspray', detail: '10 Ladungen je Flasche  ◄ 2 ►  (hast 15 Ladungen)', price: '6,00 €' });
+    expect(m.rows(p)[0]).toMatchObject({ name: 'Pfefferspray', detail: '10 Ladungen  ◄ 2 ►  (hast 15)', price: '6,00 €' });
     expect(m.maxQty(p)).toBe(8);
     expect(m.activate(p)).toEqual({ kind: 'buy', category: 'defense', item: 'pepper', qty: 2 });
     p.items.pepper = 95;
@@ -212,7 +212,7 @@ describe('ShopModel rows', () => {
     const m = new ShopModel();
     const p = rich();
     m.selectCategory(3);
-    expect(m.rows(p)[1]).toMatchObject({ name: 'Ausweisdokumente', detail: 'keine Polizeikontrolle, nur für die nächste Runde', price: '3,00 €' });
+    expect(m.rows(p)[1]).toMatchObject({ name: 'Ausweisdokumente', detail: 'nur für die nächste Runde', price: '3,00 €' });
     p.items.id_papers = 1;
     expect(m.rows(p)[1]).toMatchObject({ detail: 'gilt für die nächste Runde', price: '', state: 'grey' });
   });
