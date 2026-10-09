@@ -2,7 +2,7 @@ import type { ChatMessage, ErrorCode, RosterEntry } from '@pfandraiders/core';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
 import { MAX_CHAT_LENGTH, ROOM_CODE_LENGTH, ROUND_MS_CHOICES } from '@pfandraiders/core';
 import { chatColorHex, rosterDiff } from './chatLogic';
-import { nextTab, parseTab, sanitizeRoomCode } from './onlineMenuLogic';
+import { nextTab, parseTab, sanitizeRoomCode, TAB_LABELS } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
 import { roundMsLabel } from './roundTime';
@@ -180,7 +180,7 @@ export function showOnlineMenu(
 
       const tabBar = el('div', { role: 'tablist' }, 'display:flex;margin-bottom:12px;border-bottom:1px solid #555');
       const tabButtons = new Map<MenuTab, HTMLButtonElement>();
-      const tabLabels: Record<MenuTab, string> = { host: 'Raum erstellen', join: 'Beitreten' };
+      const tabLabels = TAB_LABELS;
       for (const id of ['host', 'join'] as MenuTab[]) {
         const active = form.tab === id;
         const b = el(
