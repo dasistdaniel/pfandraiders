@@ -7,6 +7,7 @@ import { alertText, hintLines, resultFooter, resultHeader, resultRows, statusLin
 import { formatMoney } from './format';
 import { knockoutFontSizes, knockoutText } from './knockoutView';
 import { HEALTH_COLORS, healthBar, healthLabel } from './healthBar';
+import { charFrameIndex } from './playerChars';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 const BAR_WIDTH = 80;
@@ -35,6 +36,8 @@ class ResultsPanel {
   private readonly title: Phaser.GameObjects.Text;
   private readonly header: Phaser.GameObjects.Text;
   private readonly rows: Phaser.GameObjects.Text[];
+  /** Figur je Zeile (Bild 0 des Bogens); unsichtbar ohne Bogen */
+  private readonly images: Phaser.GameObjects.Image[];
   private readonly footer: Phaser.GameObjects.Text;
   private readonly panelW: number;
 
@@ -54,7 +57,8 @@ class ResultsPanel {
     this.footer = scene.add
       .text(view.w / 2, 0, '', { ...FONT, fontSize: '14px', color: '#aaaaaa', align: 'center', wordWrap: { width: inner } })
       .setOrigin(0.5, 0);
-    this.objects = [this.bg, this.title, this.header, ...this.rows, this.footer];
+    this.images = Array.from({ length: MAX_RESULT_ROWS }, () => scene.add.image(0, 0, '__DEFAULT').setOrigin(0, 0));
+    this.objects = [this.bg, this.title, this.header, ...this.rows, ...this.images, this.footer];
     this.objects.forEach((o, i) => {
       (o as Phaser.GameObjects.Text).setScrollFactor(0).setDepth(i === 0 ? 20 : 21);
     });
@@ -72,9 +76,11 @@ class ResultsPanel {
     labels: KeyLabels,
     nameOf: (id: string) => string,
     colorOf: (id: string) => number,
+    final: boolean,
+    charOf: (id: string) => string | null,
   ): void {
     const rows = resultRows(state, viewerId, nameOf).slice(0, MAX_RESULT_ROWS);
-    const footerLines = resultFooter(role, labels);
+    const footerLines = resultFooter(role, labels, final);
     const height = PANEL_PAD + TITLE_H + rows.length * ROW_H + 8 + footerLines.length * FOOTER_LINE_H + PANEL_PAD;
     const top = Math.max(0, Math.round((this.view.h - height) / 2));
     const left = Math.round((this.view.w - this.panelW) / 2) + PANEL_PAD;
@@ -84,6 +90,7 @@ class ResultsPanel {
     this.rows.forEach((t, i) => {
       const row = rows[i];
       t.setVisible(row !== undefined);
+      if (!row) this.images[i].setVisible(false);
       if (!row) return;
       const mark = (row.isWinner ? '★' : ' ') + (row.isViewer ? '>' : ' ');
       const place = `${mark}${row.place}.`.padEnd(7);
@@ -91,6 +98,14 @@ class ResultsPanel {
       t.setText(`${place}${name}${formatMoney(row.round).padStart(9)}  ${formatMoney(row.total).padStart(9)}`);
       t.setColor(toCss(colorOf(row.id)));
       t.setPosition(left, top + PANEL_PAD + TITLE_H + i * ROW_H);
+      const img = this.images[i];
+      const key = charOf(row.id);
+      img.setVisible(key !== null);
+      if (key !== null) {
+        // Breite eines Zeichens aus der Kopfzeile (gleiche Monospace-Schrift); Bild in der Lücke der Platz-Spalte
+        const charW = this.header.width / resultHeader().length;
+        img.setTexture(key, charFrameIndex('down', 0)).setPosition(left + charW * 4.6, top + PANEL_PAD + TITLE_H + i * ROW_H + 2);
+      }
     });
     this.footer.setText(footerLines.join('\n'));
     this.footer.setPosition(this.view.w / 2, top + PANEL_PAD + TITLE_H + rows.length * ROW_H + 8);
@@ -126,6 +141,10 @@ export class PlayerHud {
     private readonly role: () => HudRole,
     private readonly colorOf: (id: string) => number = () => 0xffffff,
     viewerId = '',
+    /** Online nach der letzten Runde: Fußzeile "Weiter zur Endwertung" */
+    private readonly isFinal: () => boolean = () => false,
+    /** Bogen-Textur der Figur eines Spielers (null = keine), für das Ergebnisfeld */
+    private readonly charOf: (id: string) => string | null = () => null,
   ) {
     this.viewerId = viewerId;
     const wrap = { wordWrap: { width: view.w - 16 } };
@@ -249,7 +268,7 @@ export class PlayerHud {
     this.bar.setSize(BAR_WIDTH * Math.min(progress, 1), 8);
 
     if (state.phase === 'ended') {
-      this.results.show(state, this.viewerId || p.id, this.role(), this.labels, this.nameOf, this.colorOf);
+      this.results.show(state, this.viewerId || p.id, this.role(), this.labels, this.nameOf, this.colorOf, this.isFinal(), this.charOf);
     } else {
       this.results.hide();
     }

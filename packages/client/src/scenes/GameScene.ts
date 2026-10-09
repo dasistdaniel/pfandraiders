@@ -9,7 +9,7 @@ import { LocalShop } from '../localShop';
 import type { PlayerSlot } from '../devices';
 import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
 import type { PoseState } from '../pose';
-import { CHAR_ORIGIN_Y, charFrameIndex, characterFor, characterIndex } from '../playerChars';
+import { CHAR_ORIGIN_Y, charFrameIndex, characterFor, characterIndex, characterOfAvatar } from '../playerChars';
 import { bakeMapLayers, ensurePlayerTextures } from '../textures';
 import { charTexture, dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
 import { advanceClock, dogAnim, npcLook, policeAnim } from '../npcAnim';
@@ -197,9 +197,9 @@ export class GameScene extends Phaser.Scene {
       // Neue Runde (Server schickt erneut `start`) und Verbindungsverlust
       online.onStart = () => this.scene.restart({ online });
       online.onClosed = () => this.beginReconnect();
-      // Host beendet die Serie, während hier noch die Rangliste steht
+      // Host holt nach der Endwertung zurück in die Lobby, während hier noch die Rangliste steht
       online.onPhase = () => {
-        if (online.roomPhase === 'lobby') this.leaveToMenu('Der Host hat die Serie beendet.');
+        if (online.roomPhase === 'lobby') this.backToLobby();
       };
       online.onError = (code) => {
         // Nur während des Wiederverbindens: endgültige Fehler beenden den Versuch
@@ -261,12 +261,14 @@ export class GameScene extends Phaser.Scene {
       this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(this.tileset, spot.type, true)));
       this.spotFull.push(true);
     }
-    // Figur je Spieler nach Position: online Reihenfolge der Raumliste, lokal Slot-Index, sonst Reihenfolge im Zustand
+    // Figur je Spieler: online die gewählte Figur aus der Raumliste (sonst nach Position), lokal nach Slot-Index
     const orderIds = this.online ? this.online.roster.map((r) => r.id) : this.slots.map((s) => s.id);
     const playerIds = Object.keys(state.players);
     for (const p of Object.values(state.players)) {
       const color = this.playerColors.get(p.id) ?? 0xffffff;
-      const sheet = charTexture(characterFor(characterIndex(p.id, orderIds, playerIds)));
+      const index = characterIndex(p.id, orderIds, playerIds);
+      const avatar = this.online?.roster.find((r) => r.id === p.id)?.avatar;
+      const sheet = charTexture(this.online ? characterOfAvatar(avatar, index) : characterFor(index));
       const charKey = this.textures.exists(sheet) ? sheet : null;
       this.charKeys.set(p.id, charKey);
       this.rings.set(
@@ -316,8 +318,10 @@ export class GameScene extends Phaser.Scene {
     const nameOf = (id: string): string => online?.roster.find((r) => r.id === id)?.name ?? playerName(id);
     const role = (): 'local' | 'host' | 'guest' => (!online ? 'local' : online.isHost() ? 'host' : 'guest');
     const colorOf = (id: string): number => this.playerColors.get(id) ?? 0xffffff;
+    const isFinal = (): boolean => online?.roomPhase === 'final';
     this.huds = views.map(
-      (v, i) => new PlayerHud(this, v, this.slots[i].color, nameOf(this.slots[i].id), this.sources[i].labels, nameOf, role, colorOf, this.slots[i].id),
+      (v, i) =>
+        new PlayerHud(this, v, this.slots[i].color, nameOf(this.slots[i].id), this.sources[i].labels, nameOf, role, colorOf, this.slots[i].id, isFinal, (id) => this.charKeys.get(id) ?? null),
     );
     this.huds.forEach((hud, i) => {
       cams.forEach((cam) => cam.ignore(hud.objects));
@@ -438,7 +442,8 @@ export class GameScene extends Phaser.Scene {
         online.onClosed = null;
         online.onError = null;
         online.onJoined = null;
-        this.scene.start('shop', { online });
+        // Nach der letzten Runde (oder wenn die Serie inzwischen beendet ist) zur Endwertung, sonst in den Shop
+        this.scene.start(online.roomPhase === 'final' ? 'final' : 'shop', { online });
       } else {
         const ids = this.slots.map((s) => s.id);
         this.scene.start('shop', { slots: this.slots, progress: LocalShop.fromState(state, ids), roundMs: this.roundMs });
@@ -701,6 +706,18 @@ export class GameScene extends Phaser.Scene {
     this.scene.start('menu', notice ? { notice } : undefined);
   }
 
+  /** Raum ist wieder in der Lobby (nach der Endwertung): Verbindung behalten, Lobby im Online-Dialog zeigen. */
+  private backToLobby(): void {
+    const online = this.online;
+    if (!online) return;
+    online.onClosed = null;
+    online.onStart = null;
+    online.onError = null;
+    online.onJoined = null;
+    online.onPhase = null;
+    this.scene.start('menu', { resumeOnline: online });
+  }
+
   private updateOverlay(): void {
     const plan = this.plan;
     if (!plan || !this.overlay) return;
@@ -722,12 +739,21 @@ export class GameScene extends Phaser.Scene {
     }
     if (Phaser.Input.Keyboard.JustDown(this.enterKey) && plan.phase === 'asking') plan.continueTrying();
     if (online.status !== 'open') this.joinedWatch = null;
-    // Zurück, aber die Runde ist schon vorbei und der Raum im Shop: dorthin
-    // Zurück, aber die Serie ist vorbei: Endwertung gibt es erst mit Plan 2, also ins Menü
+    // Zurück, aber die Serie ist vorbei: zur Endwertung; ist der Raum schon wieder in der Lobby: dorthin
     if (this.joinedSeen && online.roomPhase === 'final') {
-      this.leaveToMenu('Die Serie ist vorbei.');
+      this.plan = null;
+      online.onClosed = null;
+      online.onError = null;
+      online.onJoined = null;
+      this.scene.start('final', { online });
       return true;
     }
+    if (this.joinedSeen && online.roomPhase === 'lobby') {
+      this.plan = null;
+      this.backToLobby();
+      return true;
+    }
+    // Zurück, aber die Runde ist schon vorbei und der Raum im Shop: dorthin
     if (this.joinedSeen && online.roomPhase === 'shop' && online.shop) {
       this.plan = null;
       online.onClosed = null;
