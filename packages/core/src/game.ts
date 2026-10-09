@@ -51,7 +51,7 @@ export function createGame(
 }
 
 function newPlayer(id: string, at: Point, prog: Progress): Player {
-  // Kopie: die Runde verändert Geld und Inventar, der Aufrufer behält seinen Stand
+  // Kopie: die Runde verändert Geld und Besitz, der Aufrufer behält seinen Stand
   const own = progressOf(prog);
   return {
     id,
@@ -59,23 +59,20 @@ function newPlayer(id: string, at: Point, prog: Progress): Player {
     y: at.y,
     money: own.money,
     bottles: emptyBottles(),
-    containerLevel: own.containerLevel,
+    items: own.items,
     mode: 'walking',
     searchSpotId: null,
     searchProgressMs: 0,
     depositMs: 0,
     actionHeld: false,
     stealHeld: false,
-    eatHeld: false,
     attackHeld: false,
-    inventory: own.inventory,
-    upgrades: own.upgrades,
-    weapon: 'fist',
     attackCooldownMs: 0,
     shieldMs: 0,
     health: CONFIG.health.max,
     unconsciousMs: 0,
     robbed: false,
+    lastFood: null,
     earnedRound: 0,
     earnedTotal: own.earnedTotal,
     spawn: { x: at.x, y: at.y },

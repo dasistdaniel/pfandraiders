@@ -9,9 +9,13 @@ import {
   isShopCategory,
   isShopItemId,
   maxOf,
+  noItems,
   ownedOf,
+  progressAfterRound,
   progressOf,
   SHOP_CATEGORIES,
+  SHOP_CATEGORY_NAMES,
+  SHOP_ITEM_IDS,
   shopBuy,
   shopItemsOf,
   upgradeValue,
@@ -24,160 +28,172 @@ function rich(money = 100_000): Progress {
 
 describe('shop catalog', () => {
   it('has the four categories with their entries in menu order', () => {
-    expect(SHOP_CATEGORIES).toEqual(['bags', 'upgrades', 'attack', 'defense']);
-    expect(shopItemsOf('bags')).toEqual(['bag']);
-    expect(shopItemsOf('upgrades')).toEqual(['knockout', 'speed', 'search']);
-    expect(shopItemsOf('attack')).toEqual(['punch', 'bolt_cutters', 'sling', 'pistol']);
-    expect(shopItemsOf('defense')).toEqual(['dog_treat', 'food', 'armor']);
+    expect(SHOP_CATEGORIES).toEqual(['bags', 'upgrades', 'weapons', 'defense']);
+    expect(SHOP_CATEGORIES.map((c) => SHOP_CATEGORY_NAMES[c])).toEqual(['Taschen', 'Upgrades', 'Waffen', 'Verteidigung']);
+    expect(shopItemsOf('bags')).toEqual(['bag', 'backpack', 'cart']);
+    expect(shopItemsOf('upgrades')).toEqual(['flashlight', 'card', 'card_plus']);
+    expect(shopItemsOf('weapons')).toEqual(['punch']);
+    expect(shopItemsOf('defense')).toEqual(['dog_treat']);
+    expect(SHOP_ITEM_IDS).toEqual(['bag', 'backpack', 'cart', 'flashlight', 'card', 'card_plus', 'punch', 'dog_treat']);
   });
 
-  it('prices the bags like upgradePrices and marks ranged weapons as not available', () => {
-    expect(CONFIG.shop.items.bag.prices).toEqual(CONFIG.upgradePrices);
-    expect(CONFIG.shop.items.sling.available).toBe(false);
-    expect(CONFIG.shop.items.pistol.available).toBe(false);
+  it('pins the start prices and limits', () => {
+    const items = CONFIG.shop.items;
+    expect([items.bag.prices[0], items.bag.kind, items.bag.max]).toEqual([150, 'count', 4]);
+    expect([items.backpack.prices[0], items.backpack.kind, items.backpack.max]).toEqual([400, 'count', 2]);
+    expect([items.cart.prices[0], items.cart.kind, items.cart.perRound]).toEqual([100, 'once', true]);
+    expect(items.flashlight).toMatchObject({ name: 'Taschenlampe', kind: 'level', prices: [200, 500, 1000], values: [1, 0.85, 0.7, 0.55] });
+    expect(items.card).toMatchObject({ name: 'Kundenkarte', kind: 'once', prices: [300] });
+    expect(items.card_plus).toMatchObject({ name: 'Kundenkarte+', kind: 'once', prices: [600], requires: 'card' });
+    expect(items.dog_treat).toMatchObject({ name: 'Leckerli', kind: 'stack', prices: [100] });
     expect(CONFIG.shop.maxStack).toBe(99);
+    expect(CONFIG.shop.cardPlusBonusPct).toBe(10);
   });
 
-  it('has a value for every level of every leveled upgrade', () => {
-    for (const id of ['knockout', 'speed', 'search', 'punch', 'armor'] as const) {
+  it('has a value for every level of every leveled entry', () => {
+    for (const id of SHOP_ITEM_IDS) {
       const def = CONFIG.shop.items[id];
-      expect(def.kind).toBe('level');
-      expect(def.values.length).toBe(def.prices.length + 1);
+      if (def.kind === 'level') expect(def.values.length).toBe(def.prices.length + 1);
     }
-    expect(CONFIG.shop.items.knockout.values).toEqual([20000, 15000, 10000, 5000]);
   });
 
   it('recognises categories and items and nothing else', () => {
-    expect(isShopCategory('defense')).toBe(true);
+    expect(isShopCategory('weapons')).toBe(true);
+    expect(isShopCategory('attack')).toBe(false);
     expect(isShopCategory('__proto__')).toBe(false);
-    expect(isShopItemId('food')).toBe(true);
-    expect(isShopItemId('toString')).toBe(false);
-    expect(isShopItemId(5)).toBe(false);
+    expect(isShopItemId('cart')).toBe(true);
+    for (const gone of ['food', 'armor', 'speed', 'knockout', 'search', 'bolt_cutters', 'sling', 'pistol', 'toString', 5]) {
+      expect(isShopItemId(gone)).toBe(false);
+    }
   });
 
   it('has a German text for every refusal', () => {
     for (const text of Object.values(BUY_REFUSAL_TEXT)) expect(text.length).toBeGreaterThan(3);
+    expect(BUY_REFUSAL_TEXT.requires).toBe('Erst die Kundenkarte kaufen.');
   });
 });
 
 describe('shopBuy', () => {
-  it('buys the next bag level for its price', () => {
+  it('stacks bags up to four, one per purchase', () => {
     const p = rich(1000);
-    expect(shopBuy(p, 'bags', 'bag', 1)).toEqual({ ok: true, cost: 150 });
-    expect(p.containerLevel).toBe(1);
-    expect(p.money).toBe(850);
-    expect(shopBuy(p, 'bags', 'bag', 1)).toEqual({ ok: true, cost: 400 });
-    expect(p.containerLevel).toBe(2);
-  });
-
-  it('refuses the bag beyond the shopping cart', () => {
-    const p = rich();
-    p.containerLevel = CONFIG.containers.length - 1;
+    expect(shopBuy(p, 'bags', 'bag', 2)).toEqual({ ok: false, reason: 'bad_qty' });
+    for (let i = 0; i < 4; i++) expect(shopBuy(p, 'bags', 'bag', 1)).toEqual({ ok: true, cost: 150 });
+    expect(p.items.bag).toBe(4);
     expect(shopBuy(p, 'bags', 'bag', 1)).toEqual({ ok: false, reason: 'maxed' });
+    expect(maxOf('bag')).toBe(4);
+    expect(p.money).toBe(400);
   });
 
-  it('raises an upgrade level and its value', () => {
+  it('stacks backpacks up to two', () => {
     const p = rich();
-    shopBuy(p, 'upgrades', 'knockout', 1);
-    expect(p.upgrades.knockout).toBe(1);
-    expect(upgradeValue(p, 'knockout')).toBe(15000);
-    shopBuy(p, 'upgrades', 'knockout', 1);
-    shopBuy(p, 'upgrades', 'knockout', 1);
-    expect(upgradeValue(p, 'knockout')).toBe(5000);
-    expect(shopBuy(p, 'upgrades', 'knockout', 1)).toEqual({ ok: false, reason: 'maxed' });
+    expect(shopBuy(p, 'bags', 'backpack', 1)).toEqual({ ok: true, cost: 400 });
+    expect(shopBuy(p, 'bags', 'backpack', 1)).toEqual({ ok: true, cost: 400 });
+    expect(shopBuy(p, 'bags', 'backpack', 1)).toEqual({ ok: false, reason: 'maxed' });
+    expect(maxOf('backpack')).toBe(2);
   });
 
-  it('buys several consumables at once for quantity times price', () => {
-    const p = rich(1000);
-    expect(shopBuy(p, 'defense', 'food', 7)).toEqual({ ok: true, cost: 700 });
-    expect(p.inventory.food).toBe(7);
-    expect(p.money).toBe(300);
+  it('rents one cart', () => {
+    const p = rich();
+    expect(shopBuy(p, 'bags', 'cart', 1)).toEqual({ ok: true, cost: 100 });
+    expect(ownedOf(p, 'cart')).toBe(1);
+    expect(shopBuy(p, 'bags', 'cart', 1)).toEqual({ ok: false, reason: 'maxed' });
+    expect(shopBuy(rich(), 'bags', 'cart', 2)).toEqual({ ok: false, reason: 'bad_qty' });
+  });
+
+  it('raises the flashlight level and its value', () => {
+    const p = rich();
+    expect(upgradeValue(p, 'flashlight')).toBe(1);
+    expect(shopBuy(p, 'upgrades', 'flashlight', 1)).toEqual({ ok: true, cost: 200 });
+    expect(upgradeValue(p, 'flashlight')).toBe(0.85);
+    expect(shopBuy(p, 'upgrades', 'flashlight', 1)).toEqual({ ok: true, cost: 500 });
+    expect(shopBuy(p, 'upgrades', 'flashlight', 1)).toEqual({ ok: true, cost: 1000 });
+    expect(upgradeValue(p, 'flashlight')).toBe(0.55);
+    expect(shopBuy(p, 'upgrades', 'flashlight', 1)).toEqual({ ok: false, reason: 'maxed' });
+  });
+
+  it('sells Kundenkarte+ only after the Kundenkarte', () => {
+    const p = rich();
+    expect(shopBuy(p, 'upgrades', 'card_plus', 1)).toEqual({ ok: false, reason: 'requires' });
+    expect(p).toEqual(rich());
+    expect(shopBuy(p, 'upgrades', 'card', 1)).toEqual({ ok: true, cost: 300 });
+    expect(shopBuy(p, 'upgrades', 'card_plus', 1)).toEqual({ ok: true, cost: 600 });
+    expect(shopBuy(p, 'upgrades', 'card_plus', 1)).toEqual({ ok: false, reason: 'maxed' });
+  });
+
+  it('keeps the punch levels under Waffen', () => {
+    const p = rich();
+    expect(shopBuy(p, 'weapons', 'punch', 1)).toEqual({ ok: true, cost: 250 });
+    expect(upgradeValue(p, 'punch')).toBe(5);
   });
 
   it('refuses without partial purchase when the money is short', () => {
     const p = rich(250);
     expect(shopBuy(p, 'defense', 'dog_treat', 3)).toEqual({ ok: false, reason: 'no_money' });
-    expect(p.inventory.dog_treat).toBe(0);
+    expect(p.items.dog_treat).toBe(0);
     expect(p.money).toBe(250);
   });
 
-  it('refuses more than 99 of a consumable in total, also at the border', () => {
+  it('refuses more than 99 treats in total, also at the border', () => {
     const p = rich();
-    p.inventory.food = 98;
-    expect(shopBuy(p, 'defense', 'food', 2)).toEqual({ ok: false, reason: 'maxed' });
-    expect(p.inventory.food).toBe(98);
-    expect(shopBuy(p, 'defense', 'food', 1)).toEqual({ ok: true, cost: 100 });
-    expect(p.inventory.food).toBe(99);
-    expect(maxOf('food')).toBe(99);
+    p.items.dog_treat = 98;
+    expect(shopBuy(p, 'defense', 'dog_treat', 2)).toEqual({ ok: false, reason: 'maxed' });
+    expect(shopBuy(p, 'defense', 'dog_treat', 1)).toEqual({ ok: true, cost: 100 });
+    expect(p.items.dog_treat).toBe(99);
+    expect(maxOf('dog_treat')).toBe(99);
   });
 
-  it('allows exactly one bolt cutters', () => {
-    const p = rich();
-    expect(shopBuy(p, 'attack', 'bolt_cutters', 1)).toEqual({ ok: true, cost: 600 });
-    expect(p.inventory.bolt_cutters).toBe(true);
-    expect(ownedOf(p, 'bolt_cutters')).toBe(1);
-    expect(shopBuy(p, 'attack', 'bolt_cutters', 1)).toEqual({ ok: false, reason: 'maxed' });
-  });
-
-  it('refuses quantities other than one for leveled and single entries', () => {
-    const p = rich();
-    expect(shopBuy(p, 'bags', 'bag', 2)).toEqual({ ok: false, reason: 'bad_qty' });
-    expect(shopBuy(p, 'attack', 'bolt_cutters', 2)).toEqual({ ok: false, reason: 'bad_qty' });
-  });
-
-  it('refuses bad quantities, unknown items, wrong categories and unavailable weapons', () => {
+  it('refuses bad quantities, unknown items and wrong categories', () => {
     const p = rich();
     for (const qty of [0, -1, 1.5, 100, Number.NaN, '3']) {
-      expect(checkShopBuy(p, 'defense', 'food', qty)).toEqual({ ok: false, reason: 'bad_qty' });
+      expect(checkShopBuy(p, 'defense', 'dog_treat', qty)).toEqual({ ok: false, reason: 'bad_qty' });
     }
-    expect(checkShopBuy(p, 'defense', 'cake', 1)).toEqual({ ok: false, reason: 'unknown_item' });
-    expect(checkShopBuy(p, 'kitchen', 'food', 1)).toEqual({ ok: false, reason: 'unknown_item' });
-    expect(checkShopBuy(p, 'attack', 'food', 1)).toEqual({ ok: false, reason: 'wrong_category' });
-    expect(checkShopBuy(p, 'attack', 'sling', 1)).toEqual({ ok: false, reason: 'unavailable' });
+    expect(checkShopBuy(p, 'upgrades', 'flashlight', 2)).toEqual({ ok: false, reason: 'bad_qty' });
+    expect(checkShopBuy(p, 'defense', 'food', 1)).toEqual({ ok: false, reason: 'unknown_item' });
+    expect(checkShopBuy(p, 'attack', 'punch', 1)).toEqual({ ok: false, reason: 'unknown_item' });
+    expect(checkShopBuy(p, 'bags', 'dog_treat', 1)).toEqual({ ok: false, reason: 'wrong_category' });
     expect(p).toEqual(rich());
   });
 });
 
 describe('progress', () => {
   it('starts empty', () => {
-    expect(freshProgress()).toEqual({
-      money: 0,
-      containerLevel: 0,
-      upgrades: { knockout: 0, speed: 0, search: 0, punch: 0, armor: 0 },
-      inventory: { dog_treat: 0, food: 0, bolt_cutters: false },
-      earnedTotal: 0,
-    });
+    expect(freshProgress()).toEqual({ money: 0, items: noItems(), earnedTotal: 0 });
+    expect(noItems()).toEqual({ bag: 0, backpack: 0, cart: 0, flashlight: 0, card: 0, card_plus: 0, punch: 0, dog_treat: 0 });
   });
 
   it('copies deeply', () => {
     const a = rich(5);
     const b = progressOf(a);
-    b.upgrades.speed = 2;
-    b.inventory.food = 3;
-    expect(a.upgrades.speed).toBe(0);
-    expect(a.inventory.food).toBe(0);
+    b.items.bag = 2;
+    expect(a.items.bag).toBe(0);
+  });
+
+  it('drops the rented cart after a round and keeps everything else', () => {
+    const p = rich(500);
+    p.items = { ...noItems(), bag: 4, backpack: 2, cart: 1, flashlight: 2, card: 1, card_plus: 1, punch: 1, dog_treat: 7 };
+    const after = progressAfterRound(p);
+    expect(after.items).toEqual({ ...p.items, cart: 0 });
+    expect(after.money).toBe(500);
+    expect(p.items.cart).toBe(1); // das Original bleibt
   });
 
   it('is carried into a new game and only the per-round fields are fresh', () => {
     const prog = rich(777);
-    prog.containerLevel = 2;
-    prog.upgrades.armor = 1;
-    prog.inventory.dog_treat = 4;
+    prog.items.bag = 2;
+    prog.items.dog_treat = 4;
     prog.earnedTotal = 1234;
     const s = createGame(1, CITY_MAP, ['a', 'b'], { progress: { a: prog } });
     expect(s.players.a).toMatchObject({
       money: 777,
-      containerLevel: 2,
-      upgrades: { armor: 1 },
-      inventory: { dog_treat: 4, food: 0, bolt_cutters: false },
+      items: { bag: 2, dog_treat: 4, cart: 0 },
       earnedTotal: 1234,
       earnedRound: 0,
-      weapon: 'fist',
+      lastFood: null,
       health: CONFIG.health.max,
       bottles: { plastic: 0, glass: 0, crate: 0 },
     });
     expect(s.players.b.money).toBe(0);
-    s.players.a.inventory.dog_treat = 0;
-    expect(prog.inventory.dog_treat).toBe(4); // keine geteilten Objekte
+    s.players.a.items.dog_treat = 0;
+    expect(prog.items.dog_treat).toBe(4); // keine geteilten Objekte
   });
 });

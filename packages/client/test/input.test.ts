@@ -10,7 +10,6 @@ const NONE: KeyState = {
   action: false,
   steal: false,
   attack: false,
-  eat: false,
 };
 
 describe('buildInput', () => {
@@ -25,15 +24,14 @@ describe('buildInput', () => {
     expect(buildInput({ ...NONE, up: true, down: true })).toMatchObject({ moveY: 0 });
   });
 
-  it('passes action, steal, attack and eat through as held keys', () => {
-    expect(buildInput({ ...NONE, action: true, steal: true, attack: true, eat: true })).toEqual({
+  it('passes action, steal and attack through as held keys', () => {
+    expect(buildInput({ ...NONE, action: true, steal: true, attack: true })).toEqual({
       moveX: 0,
       moveY: 0,
       action: true,
       steal: true,
       attack: true,
-      eat: true,
     });
-    expect(buildInput(NONE)).toEqual({ moveX: 0, moveY: 0, action: false, steal: false, attack: false, eat: false });
+    expect(buildInput(NONE)).toEqual({ moveX: 0, moveY: 0, action: false, steal: false, attack: false });
   });
 });

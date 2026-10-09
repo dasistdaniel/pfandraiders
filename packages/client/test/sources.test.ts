@@ -23,15 +23,15 @@ describe('padToHeld', () => {
     expect(padToHeld(IDLE)).toMatchObject({ steal: false });
   });
 
-  it('maps buttons: A action, B steal, X attack, Y eat, shoulders do nothing', () => {
-    expect(padToHeld({ ...IDLE, a: true })).toMatchObject({ action: true, attack: false, eat: false });
-    expect(padToHeld({ ...IDLE, x: true })).toMatchObject({ attack: true, eat: false });
-    expect(padToHeld({ ...IDLE, y: true })).toMatchObject({ eat: true, attack: false });
+  it('maps buttons: A action, B steal, X attack; Y and the shoulders do nothing', () => {
+    expect(padToHeld({ ...IDLE, a: true })).toMatchObject({ action: true, attack: false });
+    expect(padToHeld({ ...IDLE, x: true })).toMatchObject({ attack: true });
+    expect(padToHeld({ ...IDLE, y: true })).toEqual(padToHeld(IDLE));
     expect(padToHeld({ ...IDLE, l1: true, r1: true })).toEqual(padToHeld(IDLE));
   });
 
   it('labels the pad buttons like padToHeld maps them', () => {
-    expect(PAD_LABELS).toEqual({ action: 'A', steal: 'B', attack: 'X', eat: 'Y' });
+    expect(PAD_LABELS).toEqual({ action: 'A', steal: 'B', attack: 'X' });
   });
 
   it('maps the d-pad', () => {

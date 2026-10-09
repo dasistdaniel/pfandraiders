@@ -128,7 +128,7 @@ describe('dog', () => {
 
   it('a treat distracts the dog without making it sit', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.inventory.dog_treat = 1;
+    s.players.p1.items.dog_treat = 1;
     const dog = addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
     expect(dog.mood).toBe('active');
@@ -149,10 +149,10 @@ describe('dog', () => {
 
   it('is distracted by a treat instead of biting, and the treat is used up', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.inventory.dog_treat = 1;
+    s.players.p1.items.dog_treat = 1;
     const dog = addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
-    expect(s.players.p1.inventory.dog_treat).toBe(0);
+    expect(s.players.p1.items.dog_treat).toBe(0);
     expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
     expect(dog.distractedMs).toBeGreaterThan(CONFIG.npc.dog.distractedMs - 100);
     runFor(s, {}, 3000); // beschäftigt: kein Biss
@@ -161,29 +161,20 @@ describe('dog', () => {
 
   it('uses only one of several treats per bite attempt', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.inventory.dog_treat = 3;
+    s.players.p1.items.dog_treat = 3;
     addNpc(s, 'dog', 30, 24);
     runSteps(s, {}, 3, 20);
-    expect(s.players.p1.inventory.dog_treat).toBe(2);
+    expect(s.players.p1.items.dog_treat).toBe(2);
     expect(s.players.p1.health).toBeGreaterThan(CONFIG.health.max - 1);
   });
 
   it('bites after the treat distraction is over and then sits', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.inventory.dog_treat = 1;
+    s.players.p1.items.dog_treat = 1;
     const dog = addNpc(s, 'dog', 30, 24);
     runFor(s, {}, CONFIG.npc.dog.distractedMs + 200);
     expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
     expect(dog.mood).toBe('idle');
-  });
-
-  it('does not use a bolt cutters item up on a bite', () => {
-    const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.inventory.bolt_cutters = true;
-    addNpc(s, 'dog', 30, 24);
-    runSteps(s, {}, 3, 20);
-    expect(s.players.p1.inventory.bolt_cutters).toBe(true);
-    expect(s.players.p1.health).toBeLessThan(CONFIG.health.max - 10);
   });
 
   it('ignores players with protection and bites them once the protection is over', () => {
@@ -363,7 +354,7 @@ describe('roaming npcs', () => {
 describe('police', () => {
   function carrying(rows = openRows(30, 5)) {
     const s = quiet(newGame(rows));
-    s.players.p1.containerLevel = 1;
+    s.players.p1.items.bag = 3;
     s.players.p1.bottles = { plastic: 4, glass: 0, crate: 0 };
     return s;
   }
@@ -574,7 +565,7 @@ const BEHIND_WALL = { x: 184, y: 88 };
 describe('pathfinding around walls', () => {
   function walled(): GameState {
     const s = quiet(newGame(WALLED));
-    s.players.p1.containerLevel = 1;
+    s.players.p1.items.bag = 3;
     s.players.p1.bottles = { plastic: 4, glass: 0, crate: 0 };
     return s;
   }
@@ -703,7 +694,7 @@ describe('one dog per player', () => {
 
   it('a dog distracted by a treat keeps its claim', () => {
     const s = quiet(newGame(openRows(30, 5)));
-    s.players.p1.inventory.dog_treat = 1;
+    s.players.p1.items.dog_treat = 1;
     const first = addNpc(s, 'dog', 30, 24);
     const second = addNpc(s, 'dog', 120, 24);
     runSteps(s, {}, 3, 20);

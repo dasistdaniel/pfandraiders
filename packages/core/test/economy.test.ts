@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
 import { CONFIG } from '../src/config';
+import { bottleValueFor, bottlesValueFor, depositEveryMsOf } from '../src/economy';
 import { DEPOSIT_ROWS, input, newGame, SEARCH_ROWS, setSpot, teleport, runFor, runSteps } from './helpers';
 
 const PRESS = { p1: input({ action: true }) };
@@ -51,7 +52,7 @@ describe('timed deposit', () => {
 
   it('needs exactly 29 intervals for a full shopping cart of 30 bottles', () => {
     const s = atDropoff();
-    s.players.p1.containerLevel = CONFIG.containers.length - 1;
+    s.players.p1.items = { ...s.players.p1.items, bag: 4, backpack: 2, cart: 1 }; // 31 Plätze
     s.players.p1.bottles = { plastic: 30, glass: 0, crate: 0 };
     runSteps(s, PRESS, 1);
     runSteps(s, PRESS, stepsUntilBottle(29) - 1);
@@ -183,5 +184,41 @@ describe('timed deposit', () => {
     expect(s.players.p1.money).toBe(40 + value);
     expect(s.players.p1.earnedRound).toBe(value);
     expect(s.players.p1.earnedTotal).toBe(1000 + value);
+  });
+});
+
+describe('Kundenkarte', () => {
+  it('deposits every 100 ms instead of 150 ms', () => {
+    const s = atDropoff();
+    expect(depositEveryMsOf(s.players.p1)).toBe(150);
+    s.players.p1.items.card = 1;
+    expect(depositEveryMsOf(s.players.p1)).toBe(100);
+    s.players.p1.bottles = { plastic: 3, glass: 0, crate: 0 };
+    runSteps(s, PRESS, 1); // erste Flasche sofort
+    runSteps(s, PRESS, 4); // 80 ms: noch keine zweite
+    expect(totalBottles(s.players.p1.bottles)).toBe(2);
+    runSteps(s, PRESS, 1); // 100 ms
+    expect(totalBottles(s.players.p1.bottles)).toBe(1);
+    runSteps(s, PRESS, 5);
+    expect(totalBottles(s.players.p1.bottles)).toBe(0);
+  });
+});
+
+describe('Kundenkarte+', () => {
+  it('adds the Kundenkarte+ bonus per bottle, rounded', () => {
+    const s = atDropoff();
+    const p = s.players.p1;
+    expect([bottleValueFor(p, 'plastic'), bottleValueFor(p, 'glass'), bottleValueFor(p, 'crate')]).toEqual([8, 15, 25]);
+    p.items.card = 1;
+    p.items.card_plus = 1;
+    expect([bottleValueFor(p, 'plastic'), bottleValueFor(p, 'glass'), bottleValueFor(p, 'crate')]).toEqual([9, 17, 28]);
+    expect(bottlesValueFor(p, { plastic: 2, glass: 1, crate: 1 })).toBe(2 * 9 + 17 + 28);
+    p.bottles = { plastic: 1, glass: 1, crate: 1 };
+    p.earnedTotal = 100;
+    runFor(s, PRESS, 400);
+    expect(totalBottles(p.bottles)).toBe(0);
+    expect(p.money).toBe(9 + 17 + 28);
+    expect(p.earnedRound).toBe(9 + 17 + 28);
+    expect(p.earnedTotal).toBe(100 + 9 + 17 + 28);
   });
 });

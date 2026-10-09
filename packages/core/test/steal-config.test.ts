@@ -13,10 +13,8 @@ describe('robbing and shop config', () => {
     expect(Object.keys(CONFIG.steal).sort()).toEqual(['fraction', 'radius']);
   });
 
-  it('has priced bolt cutters in the attack category', () => {
-    expect(CONFIG.shop.items.bolt_cutters.prices[0]).toBeGreaterThan(0);
-    expect(CONFIG.shop.items.bolt_cutters.name).toBe('Bolzenschneider');
-    expect(CONFIG.shop.items.bolt_cutters.category).toBe('attack');
+  it('has no bolt cutters any more', () => {
+    expect(Object.hasOwn(CONFIG.shop.items, 'bolt_cutters')).toBe(false);
   });
 
   it('keeps the steal radius within a tile and a half so players must really be next to each other', () => {

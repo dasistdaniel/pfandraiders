@@ -227,19 +227,19 @@ describe('OnlineConnection input', () => {
     expect(socket.sent.filter((m) => m.t === 'input')).toHaveLength(0);
   });
 
-  it('sends a changed attack or eat key at once, not only with the heartbeat', () => {
+  it('sends a changed attack or steal key at once, not only with the heartbeat', () => {
     const { socket, conn } = setup();
     socket.receive(startMessage());
     conn.update(10);
     const before = socket.sent.filter((m) => m.t === 'input').length;
     conn.setInput('p1', { ...NO_INPUT, attack: true });
     conn.update(10);
-    conn.setInput('p1', { ...NO_INPUT, eat: true });
+    conn.setInput('p1', { ...NO_INPUT, steal: true });
     conn.update(10);
     const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
     expect(inputs.length).toBe(before + 2);
     expect(inputs.at(-2)!.input.attack).toBe(true);
-    expect(inputs.at(-1)!.input.eat).toBe(true);
+    expect(inputs.at(-1)!.input.steal).toBe(true);
   });
 
   it('tracks the room phase and sends ready', () => {
@@ -736,10 +736,10 @@ describe('shop phase messages', () => {
     socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
     socket.receive(lobbyMsg('p1', 'lobby', 420_000));
     expect(conn.roundMs).toBe(420_000);
-    conn.shopBuy('defense', 'food', 3);
+    conn.shopBuy('defense', 'dog_treat', 3);
     conn.setRoundMs(180_000);
     conn.endSeries();
-    expect(socket.sent.filter((m) => m.t !== 'join')).toEqual([{ t: 'shopBuy', category: 'defense', item: 'food', qty: 3 }]);
+    expect(socket.sent.filter((m) => m.t !== 'join')).toEqual([{ t: 'shopBuy', category: 'defense', item: 'dog_treat', qty: 3 }]);
     socket.receive(lobbyMsg('p2', 'shop', 420_000));
     conn.setRoundMs(180_000);
     conn.endSeries();

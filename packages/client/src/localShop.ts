@@ -1,4 +1,4 @@
-import { freshProgress, progressOf, shopBuy } from '@pfandraiders/core';
+import { freshProgress, progressAfterRound, progressOf, shopBuy } from '@pfandraiders/core';
 import type { BuyResult, GameState, Progress } from '@pfandraiders/core';
 
 /** Shop-Phase im lokalen Spiel: Fortschritt und "bereit" je lokalem Spieler. Rein, ohne Phaser. */
@@ -16,12 +16,12 @@ export class LocalShop {
     }
   }
 
-  /** Fortschritt aller lokalen Spieler aus dem Zustand am Rundenende (tiefe Kopie). */
+  /** Fortschritt aller lokalen Spieler aus dem Zustand am Rundenende (tiefe Kopie, ohne Mietsachen). */
   static fromState(state: GameState, ids: string[]): Record<string, Progress> {
     const out: Record<string, Progress> = {};
     for (const id of ids) {
       const p = state.players[id];
-      out[id] = p ? progressOf(p) : freshProgress();
+      out[id] = p ? progressAfterRound(p) : freshProgress();
     }
     return out;
   }

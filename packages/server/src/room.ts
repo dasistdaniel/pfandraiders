@@ -15,6 +15,7 @@ import {
   MIN_START_PLAYERS,
   NO_INPUT,
   pickAvatar,
+  progressAfterRound,
   progressOf,
   projectSnapshot,
   ranking,
@@ -120,7 +121,7 @@ export class Room {
   phase: RoomPhase = 'lobby';
   members: Member[] = [];
   state: GameState | null = null;
-  /** Fortschritt der Serie je Spieler-id (Geld, Tasche, Upgrades, Inventar, Gesamtverdienst); leer in der Lobby */
+  /** Fortschritt der Serie je Spieler-id (Geld, Besitz, Gesamtverdienst); leer in der Lobby */
   readonly progress = new Map<string, Progress>();
   /** Raumname (fest) */
   readonly name: string;
@@ -609,13 +610,14 @@ export class Room {
     this.startRound();
   }
 
-  /** Runde vorbei: Fortschritt sichern, dann Shop-Phase oder (nach der letzten Runde) Endwertung. */
+  /** Runde vorbei: Fortschritt ohne Mietsachen sichern, dann Shop-Phase oder (nach der letzten Runde) Endwertung. */
   private endRound(): void {
     const state = this.state;
     if (!state) return;
     for (const m of this.members) {
       const p = state.players[m.id];
-      if (p) this.progress.set(m.id, progressOf(p));
+      // Mietsachen (Einkaufswagen) gelten nur für eine Runde
+      if (p) this.progress.set(m.id, progressAfterRound(p));
     }
     this.lastRanking = ranking(state);
     for (const m of this.members) m.ready = false;

@@ -1,5 +1,5 @@
-import { CONFIG, noUpgrades } from '@pfandraiders/core';
-import type { Progress, RankEntry, UpgradeId } from '@pfandraiders/core';
+import { maxOf, noItems, SHOP_ITEM_IDS } from '@pfandraiders/core';
+import type { Progress, RankEntry } from '@pfandraiders/core';
 
 function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -9,23 +9,21 @@ function nonNegInt(x: unknown): x is number {
   return typeof x === 'number' && Number.isInteger(x) && x >= 0;
 }
 
-/** Prüft den eigenen Shop-Stand vom Server; null = verwerfen (alter Stand bleibt). */
+/**
+ * Prüft den eigenen Shop-Stand vom Server; null = verwerfen (alter Stand bleibt).
+ * items braucht jede bekannte Kennung als ganze Zahl von 0 bis maxOf; unbekannte Schlüssel werden nicht übernommen.
+ */
 export function parseProgress(x: unknown): Progress | null {
   if (!isObj(x)) return null;
-  const { money, containerLevel, upgrades, inventory, earnedTotal } = x;
-  if (!nonNegInt(money) || !nonNegInt(earnedTotal)) return null;
-  if (!nonNegInt(containerLevel) || containerLevel >= CONFIG.containers.length) return null;
-  if (!isObj(upgrades) || !isObj(inventory)) return null;
-  const up = noUpgrades();
-  for (const id of Object.keys(up) as UpgradeId[]) {
-    const v = upgrades[id];
-    if (!nonNegInt(v) || v > CONFIG.shop.items[id].prices.length) return null;
-    up[id] = v;
+  const { money, items, earnedTotal } = x;
+  if (!nonNegInt(money) || !nonNegInt(earnedTotal) || !isObj(items)) return null;
+  const out = noItems();
+  for (const id of SHOP_ITEM_IDS) {
+    const v = items[id];
+    if (!nonNegInt(v) || v > maxOf(id)) return null;
+    out[id] = v;
   }
-  const { dog_treat, food, bolt_cutters } = inventory;
-  if (!nonNegInt(dog_treat) || !nonNegInt(food) || typeof bolt_cutters !== 'boolean') return null;
-  if (dog_treat > CONFIG.shop.maxStack || food > CONFIG.shop.maxStack) return null;
-  return { money, containerLevel, upgrades: up, inventory: { dog_treat, food, bolt_cutters }, earnedTotal };
+  return { money, items: out, earnedTotal };
 }
 
 /** Prüft die Rangliste vom Server; null = verwerfen. */

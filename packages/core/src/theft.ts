@@ -47,20 +47,14 @@ function moveLoot(thief: Player, victim: Player, fraction: number): void {
 /**
  * Ausrauben im Schritt, in dem die Ausrauben-Taste (Eingabe `steal`) neu gedrückt wurde (Spec §4.4): nimmt dem nächsten
  * Ausgeknockten CONFIG.steal.fraction seiner Flaschen (aufgerundet, begrenzt durch den freien Platz)
- * und setzt `robbed`. Mit Bolzenschneider alle Flaschen (so viele passen), der Bolzenschneider wird
- * verbraucht. Ohne Abklingzeit, ohne Schutz. Mit vollem Container passiert nichts (der Ausgeknockte
- * bleibt ausraubbar, der Bolzenschneider bleibt). Gibt true zurück, wenn ausgeraubt wurde.
+ * und setzt `robbed`. Ohne Abklingzeit, ohne Schutz. Mit vollem Container passiert nichts (der Ausgeknockte
+ * bleibt ausraubbar). Gibt true zurück, wenn ausgeraubt wurde.
  */
 export function tryLoot(state: GameState, thief: Player): boolean {
   if (totalBottles(thief.bottles) >= capacityOf(thief)) return false;
   const target = findLootTarget(state, thief);
   if (target === null) return false;
-  if (thief.inventory.bolt_cutters) {
-    moveLoot(thief, target, 1);
-    thief.inventory.bolt_cutters = false;
-  } else {
-    moveLoot(thief, target, CONFIG.steal.fraction);
-  }
+  moveLoot(thief, target, CONFIG.steal.fraction);
   target.robbed = true;
   return true;
 }

@@ -14,7 +14,7 @@ function fakeConn() {
 function fakeSock() {
   return { close: vi.fn(), terminate: vi.fn() };
 }
-const INPUT = { t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false, eat: false } };
+const INPUT = { t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false } };
 
 function setup() {
   let t = 1000;
@@ -240,16 +240,16 @@ describe('series messages', () => {
     send(sa, a, { t: 'start', roundMs: 420_000 });
     expect(room.phase).toBe('playing');
     expect(room.state!.timeLeftMs).toBe(420_000);
-    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'food', qty: 1 });
+    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'dog_treat', qty: 1 });
     expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'wrong_phase' });
 
     room.state!.players.p1.money = 500;
     room.state!.timeLeftMs = 1;
     room.tick();
     expect(room.phase).toBe('shop');
-    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'food', qty: 2 });
-    expect(room.progress.get('p1')!.inventory.food).toBe(2);
-    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'food', qty: 100 });
+    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'dog_treat', qty: 2 });
+    expect(room.progress.get('p1')!.items.dog_treat).toBe(2);
+    send(sa, a, { t: 'shopBuy', category: 'defense', item: 'dog_treat', qty: 100 });
     expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'bad_message' });
     send(sa, a, { t: 'ready', ready: true });
     expect(room.members[0].ready).toBe(true);

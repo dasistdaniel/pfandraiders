@@ -1,6 +1,6 @@
 import type { Input } from '@pfandraiders/core';
 
-/** Tastenzustand eines Geräts in einem Frame. Alles gehalten; Flanken (Ausrauben, Schlagen, Essen) erkennt der Kern. */
+/** Tastenzustand eines Geräts in einem Frame. Alles gehalten; Flanken (Ausrauben, Schlagen) erkennt der Kern. */
 export interface KeyState {
   left: boolean;
   right: boolean;
@@ -11,8 +11,6 @@ export interface KeyState {
   steal: boolean;
   /** Schlagen-Taste gehalten */
   attack: boolean;
-  /** Essen-Taste gehalten */
-  eat: boolean;
 }
 
 function axis(negative: boolean, positive: boolean): -1 | 0 | 1 {
@@ -26,6 +24,5 @@ export function buildInput(k: KeyState): Input {
     action: k.action,
     steal: k.steal,
     attack: k.attack,
-    eat: k.eat,
   };
 }

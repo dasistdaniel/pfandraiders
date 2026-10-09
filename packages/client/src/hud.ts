@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
-import { CONFIG, searchMsOf } from '@pfandraiders/core';
+import { capacityOf, CONFIG, searchMsOf } from '@pfandraiders/core';
 import type { GameState, Player } from '@pfandraiders/core';
 import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
+import { BOTTLE_ICON, BOTTLE_ICON_COLORS, bottleIcons, bottleIconsKey } from './bottleIcons';
 import { alertText, hintLines, resultFooter, resultHeader, resultRows, statusLines } from './text';
 import { formatMoney } from './format';
 import { knockoutFontSizes, knockoutText } from './knockoutView';
@@ -11,9 +12,11 @@ import { charFrameIndex } from './playerChars';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 const BAR_WIDTH = 80;
-// Statusblock belegt y 8..68, Hinweise wachsen von unten (bis 4 Zeilen); Balken und Warnung liegen dazwischen.
-const BAR_Y = 76;
-const ALERT_Y = 92;
+// Status (3 Zeilen) belegt y 8..65, Flaschensymbole y 68..90, Suchbalken ab 94, Warnung ab 110 (bis 3 Zeilen);
+// Hinweise wachsen von unten (bis 4 Zeilen). Passt in die kleinste Ansicht 478 x 268.
+const ICONS = { x: 8, y: 68 };
+const BAR_Y = 94;
+const ALERT_Y = 110;
 const MAX_RESULT_ROWS = 8;
 const PANEL_MAX_W = 440;
 const PANEL_PAD = 12;
@@ -135,6 +138,9 @@ export class PlayerHud {
   private readonly hp: { bg: Phaser.GameObjects.Rectangle; fill: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text };
   /** Große Ausgeknockt-Anzeige mitten im eigenen Viewport: Titel, Restsekunden, "Ausgeraubt!" */
   private readonly knockout: { title: Phaser.GameObjects.Text; seconds: Phaser.GameObjects.Text; robbed: Phaser.GameObjects.Text };
+  /** Flaschensymbole des eigenen Containers */
+  private readonly icons: Phaser.GameObjects.Graphics;
+  private iconsKey = '';
 
   constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private labels: KeyLabels,
     private readonly nameOf: (id: string) => string,
@@ -207,11 +213,12 @@ export class PlayerHud {
       seconds: big(ko.seconds, '#ffee58', view.h / 2, 0.5),
       robbed: big(ko.robbed, '#ffffff', view.h / 2 + ko.seconds / 2 + 4, 0),
     };
+    this.icons = scene.add.graphics().setPosition(ICONS.x, ICONS.y);
 
     this.objects = [
       this.status, this.hint, this.alert, this.barBg, this.bar, tag, this.countdown,
       this.knockout.title, this.knockout.seconds, this.knockout.robbed,
-      this.hp.bg, this.hp.fill, this.hp.label,
+      this.hp.bg, this.hp.fill, this.hp.label, this.icons,
     ];
     for (const o of this.objects) {
       (o as Phaser.GameObjects.Text).setScrollFactor(0).setDepth(10);
@@ -234,6 +241,29 @@ export class PlayerHud {
     this.hp.label.setText(healthLabel(p.health, CONFIG.health.max));
   }
 
+  /** Zeichnet die Plätze neu, wenn sich Inhalt oder Kapazität geändert haben. */
+  private updateIcons(p: Player): void {
+    const capacity = capacityOf(p);
+    const key = bottleIconsKey(p.bottles, capacity);
+    if (key === this.iconsKey) return;
+    this.iconsKey = key;
+    const g = this.icons.clear();
+    const { w, h } = BOTTLE_ICON;
+    for (const icon of bottleIcons(p.bottles, capacity)) {
+      const color = BOTTLE_ICON_COLORS[icon.kind ?? 'free'];
+      if (icon.kind === 'crate') {
+        // Kasten: breites Rechteck mit dunklem Rand
+        g.fillStyle(color, 1).fillRect(icon.x, icon.y + 2, w, h - 2);
+        g.lineStyle(1, 0x000000, 0.6).strokeRect(icon.x + 0.5, icon.y + 2.5, w - 1, h - 3);
+      } else {
+        // Flasche: Hals und Bauch; freie Plätze halb durchsichtig
+        const alpha = icon.kind === null ? 0.6 : 1;
+        g.fillStyle(color, alpha).fillRect(icon.x + 3, icon.y, 2, 3);
+        g.fillStyle(color, alpha).fillRect(icon.x + 1, icon.y + 3, w - 2, h - 3);
+      }
+    }
+  }
+
   private updateKnockout(ko: ReturnType<typeof knockoutText>): void {
     const { title, seconds, robbed } = this.knockout;
     title.setText(ko?.title ?? '').setVisible(ko !== null);
@@ -254,6 +284,7 @@ export class PlayerHud {
     this.countdown.setText(countdown).setVisible(countdown !== '');
     this.updateKnockout(countdown === '' ? knockoutText(p, state.phase) : null);
     this.updateHealth(p);
+    this.updateIcons(p);
     this.status.setText(statusLines(state, p).join('\n'));
     this.hint.setText(hintLines(state, p, this.labels).join('\n'));
     this.alert.setText(alertText(state, p, notices));

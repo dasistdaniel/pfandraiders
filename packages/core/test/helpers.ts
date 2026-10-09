@@ -1,6 +1,7 @@
 import { createGame } from '../src/game';
 import { parseMap } from '../src/map';
 import { step } from '../src/step';
+import { nextRandom } from '../src/rng';
 import { NO_INPUT } from '../src/types';
 import type { Bottles, GameState, Input, Point } from '../src/types';
 
@@ -65,4 +66,10 @@ export function teleport(state: GameState, id: string, to: Point): void {
 export function setSpot(state: GameState, spotId: number, contents: Partial<Bottles>): void {
   state.spots[spotId].contents = { plastic: 0, glass: 0, crate: 0, ...contents };
   state.spots[spotId].refillInMs = 0;
+}
+
+/** Erster rngState ab `from`, dessen nächster Wurf `pred` erfüllt (für Tests mit Zufall, etwa Essensfunde). */
+export function seedWhere(pred: (r: number) => boolean, from = 1): number {
+  for (let s = from; s < from + 1_000_000; s++) if (pred(nextRandom({ rngState: s }))) return s;
+  throw new Error('no seed found');
 }

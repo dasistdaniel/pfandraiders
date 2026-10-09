@@ -3,6 +3,7 @@ import { totalBottles } from '../src/bottles';
 import { CONFIG } from '../src/config';
 import { createGame } from '../src/game';
 import { CITY_MAP } from '../src/maps';
+import { noItems } from '../src/shop';
 
 describe('createGame', () => {
   it('puts players on spawn points in order and wraps around', () => {
@@ -14,7 +15,7 @@ describe('createGame', () => {
         x: spawn.x,
         y: spawn.y,
         money: 0,
-        containerLevel: 0,
+        items: noItems(),
         mode: 'walking',
         searchSpotId: null,
       });
@@ -57,12 +58,11 @@ describe('createGame', () => {
     expect(() => createGame(1, noSpawn, ['a'])).toThrow(/spawn/);
   });
 
-  it('starts players with an empty inventory, the fist and without cooldown or shield', () => {
+  it('starts players without items, food find, cooldown or shield', () => {
     const s = createGame(1, CITY_MAP, ['a']);
     expect(s.players.a).toMatchObject({
-      inventory: { dog_treat: 0, food: 0, bolt_cutters: false },
-      upgrades: { knockout: 0, speed: 0, search: 0, punch: 0, armor: 0 },
-      weapon: 'fist',
+      items: noItems(),
+      lastFood: null,
       earnedRound: 0,
       earnedTotal: 0,
       shieldMs: 0,

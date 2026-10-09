@@ -6,11 +6,10 @@ export interface KeyLabels {
   action: string;
   steal: string;
   attack: string;
-  eat: string;
 }
 
 /** Beschriftung der Gamepad-Tasten, passend zu padToHeld. */
-export const PAD_LABELS: KeyLabels = { action: 'A', steal: 'B', attack: 'X', eat: 'Y' };
+export const PAD_LABELS: KeyLabels = { action: 'A', steal: 'B', attack: 'X' };
 
 /** Ein Gerät, das einem Spieler gehört. Phaser-Anbindung steht in devices.ts. */
 export interface InputSource {
@@ -40,7 +39,7 @@ export interface PadSnapshot {
 /** Sticks unterhalb dieses Betrags zählen als in Ruhe. */
 export const STICK_DEADZONE = 0.4;
 
-/** A = Aktion, B = Ausrauben, X = Schlagen, Y = Essen. Stick und Steuerkreuz laufen. Schultertasten sind frei. */
+/** A = Aktion, B = Ausrauben, X = Schlagen. Stick und Steuerkreuz laufen. Y und Schultertasten sind frei. */
 export function padToHeld(s: PadSnapshot): KeyState {
   return {
     left: s.left || s.stickX < -STICK_DEADZONE,
@@ -50,7 +49,6 @@ export function padToHeld(s: PadSnapshot): KeyState {
     action: s.a,
     steal: s.b,
     attack: s.x,
-    eat: s.y,
   };
 }
 

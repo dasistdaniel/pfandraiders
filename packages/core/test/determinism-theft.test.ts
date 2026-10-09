@@ -12,28 +12,17 @@ function base(seed: number): GameState {
   const s = createGame(seed, parseMap(THIEF_ROWS), ['p1', 'p2'], { roundMs: 60000, countdownMs: 0 });
   s.spots[0].contents = { plastic: 1, glass: 0, crate: 0 };
   s.spots[0].refillInMs = 0;
-  s.players.p2.containerLevel = 1;
+  s.players.p2.items.bag = 3;
   s.players.p2.bottles = { plastic: 4, glass: 0, crate: 0 };
   damage(s.players.p2, 1000);
   return s;
 }
 
-/** Ausrauben ohne Bolzenschneider, wiederholte Tastendrücke: nur der erste wirkt (einmal pro Knockout) */
+/** Ausrauben mit wiederholten Tastendrücken: nur der erste wirkt (einmal pro Knockout) */
 function loot(seed: number): GameState {
   const s = base(seed);
   for (let t = 0; t < 400; t++) {
     step(s, { p1: input({ steal: t % 100 < 2 }) }, 20);
-  }
-  return s;
-}
-
-/** Ausrauben mit dem Bolzenschneider */
-function cutters(seed: number): GameState {
-  const s = base(seed);
-  s.players.p1.containerLevel = 3;
-  s.players.p1.inventory.bolt_cutters = true;
-  for (let t = 0; t < 200; t++) {
-    step(s, { p1: input({ steal: t === 0 }) }, 20);
   }
   return s;
 }
@@ -45,13 +34,5 @@ describe('determinism with robbing', () => {
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
     expect(totalBottles(a.players.p1.bottles)).toBe(2);
     expect(a.players.p2.robbed).toBe(true);
-  });
-
-  it('replays a bolt cutters robbery identically and the cutters were used', () => {
-    const a = cutters(7);
-    const b = cutters(7);
-    expect(JSON.stringify(b)).toBe(JSON.stringify(a));
-    expect(totalBottles(a.players.p1.bottles)).toBe(4);
-    expect(a.players.p1.inventory.bolt_cutters).toBe(false);
   });
 });

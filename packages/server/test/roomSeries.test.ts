@@ -50,19 +50,19 @@ describe('series phases', () => {
     expect(conns[2].last('phase').phase).toBe('shop');
     expect(conns[0].last('lobby').phase).toBe('shop');
     expect(conns[0].last('ranking').entries.map((e) => e.id).sort()).toEqual(['p1', 'p2', 'p3']);
-    expect(conns[0].last('shopState')).toMatchObject({ ready: false, you: { money: 0, containerLevel: 0 } });
+    expect(conns[0].last('shopState')).toMatchObject({ ready: false, you: { money: 0, items: { bag: 0, cart: 0 } } });
   });
 
-  it('keeps money, levels and inventory into the next round and resets the rest', () => {
+  it('keeps money, items and earnings into the next round and resets the rest', () => {
     const { room, members, endRound } = series();
     room.start('p1');
     const p = room.state!.players.p1;
     p.money = 900;
     p.earnedRound = 900;
     p.earnedTotal = 900;
-    p.containerLevel = 1;
-    p.upgrades.speed = 2;
-    p.inventory.food = 3;
+    p.items.bag = 2;
+    p.items.flashlight = 2;
+    p.items.dog_treat = 3;
     p.bottles = { plastic: 2, glass: 0, crate: 0 };
     p.health = 12;
     endRound();
@@ -71,9 +71,7 @@ describe('series phases', () => {
     const q = room.state!.players.p1;
     expect(q).toMatchObject({
       money: 900,
-      containerLevel: 1,
-      upgrades: { speed: 2 },
-      inventory: { food: 3 },
+      items: { bag: 2, flashlight: 2, dog_treat: 3 },
       earnedTotal: 900,
       earnedRound: 0,
       bottles: { plastic: 0, glass: 0, crate: 0 },
@@ -212,39 +210,54 @@ describe('buying in the shop phase', () => {
   it('buys with enough money and answers with the new own state only to the buyer', () => {
     const { room, members, conns } = inShop();
     const before = conns[1].of('shopState').length;
-    expect(room.shopBuy(members[0], 'defense', 'food', 3).ok).toBe(true);
-    expect(room.progress.get('p1')).toMatchObject({ money: 700, inventory: { food: 3 } });
-    expect(conns[0].last('shopState').you).toMatchObject({ money: 700, inventory: { food: 3 } });
+    expect(room.shopBuy(members[0], 'defense', 'dog_treat', 3).ok).toBe(true);
+    expect(room.progress.get('p1')).toMatchObject({ money: 700, items: { dog_treat: 3 } });
+    expect(conns[0].last('shopState').you).toMatchObject({ money: 700, items: { dog_treat: 3 } });
     expect(conns[1].of('shopState')).toHaveLength(before);
   });
 
   it('refuses without money and without partial purchase', () => {
     const { room, members } = inShop();
-    const r = room.shopBuy(members[0], 'defense', 'food', 11);
+    const r = room.shopBuy(members[0], 'defense', 'dog_treat', 11);
     expect(r).toMatchObject({ ok: false, code: 'cannot_buy', message: 'Nicht genug Geld.' });
-    expect(room.progress.get('p1')).toMatchObject({ money: 1000, inventory: { food: 0 } });
+    expect(room.progress.get('p1')).toMatchObject({ money: 1000, items: { dog_treat: 0 } });
   });
 
   it('never lets two purchases together spend more than the money', () => {
     const { room, members } = inShop();
-    expect(room.shopBuy(members[0], 'defense', 'food', 6).ok).toBe(true);
-    expect(room.shopBuy(members[0], 'defense', 'food', 6)).toMatchObject({ ok: false, code: 'cannot_buy' });
+    expect(room.shopBuy(members[0], 'defense', 'dog_treat', 6).ok).toBe(true);
+    expect(room.shopBuy(members[0], 'defense', 'dog_treat', 6)).toMatchObject({ ok: false, code: 'cannot_buy' });
     expect(room.progress.get('p1')!.money).toBe(400);
   });
 
   it('refuses buying outside the shop phase', () => {
     const { room, members } = series();
-    expect(room.shopBuy(members[0], 'defense', 'food', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
+    expect(room.shopBuy(members[0], 'defense', 'dog_treat', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
     room.start('p1');
-    expect(room.shopBuy(members[0], 'defense', 'food', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
+    expect(room.shopBuy(members[0], 'defense', 'dog_treat', 1)).toMatchObject({ ok: false, code: 'wrong_phase' });
   });
 
   it('carries bought items into the next round', () => {
     const { room, members } = inShop();
-    room.shopBuy(members[0], 'attack', 'bolt_cutters', 1);
+    room.shopBuy(members[0], 'upgrades', 'card', 1);
+    room.shopBuy(members[0], 'bags', 'bag', 1);
     room.shopBuy(members[0], 'bags', 'bag', 1);
     for (const m of members) room.setReady(m, true);
-    expect(room.state!.players.p1).toMatchObject({ money: 250, containerLevel: 1, inventory: { bolt_cutters: true } });
+    expect(room.state!.players.p1).toMatchObject({ money: 400, items: { card: 1, bag: 2 } });
+  });
+
+  it('rents the cart for exactly one round', () => {
+    const { room, members, conns, endRound } = inShop();
+    expect(room.shopBuy(members[0], 'bags', 'cart', 1).ok).toBe(true);
+    expect(conns[0].last('shopState').you.items.cart).toBe(1);
+    for (const m of members) room.setReady(m, true);
+    expect(room.state!.players.p1.items.cart).toBe(1);
+    room.state!.players.p1.items.bag = 2; // bleibt
+    endRound();
+    expect(room.progress.get('p1')!.items).toMatchObject({ cart: 0, bag: 2 });
+    expect(conns[0].last('shopState').you.items).toMatchObject({ cart: 0, bag: 2 });
+    for (const m of members) room.setReady(m, true);
+    expect(room.state!.players.p1.items.cart).toBe(0);
   });
 });
 

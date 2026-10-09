@@ -37,11 +37,16 @@ describe('movement', () => {
     expect(s.players.p1.y).toBeGreaterThan(24);
   });
 
-  it('is slower with the shopping cart', () => {
+  it('is slower with the shopping cart, but not with bags and backpacks', () => {
     const s = newGame(openRows(20, 5));
-    s.players.p1.containerLevel = 3;
+    s.players.p1.items.cart = 1;
     runSteps(s, { p1: input({ moveX: 1 }) }, 50, 20);
-    expect(s.players.p1.x - 24).toBeCloseTo(CONFIG.playerSpeed * CONFIG.containers[3].speedMult, 5);
+    expect(s.players.p1.x - 24).toBeCloseTo(CONFIG.playerSpeed * CONFIG.carry.cartSpeedMult, 5);
+    const t = newGame(openRows(20, 5));
+    t.players.p1.items.bag = 4;
+    t.players.p1.items.backpack = 2;
+    runSteps(t, { p1: input({ moveX: 1 }) }, 50, 20);
+    expect(t.players.p1.x - 24).toBeCloseTo(CONFIG.playerSpeed, 5);
   });
 
   it('clamps a huge time step so the player cannot jump through walls', () => {
@@ -184,18 +189,5 @@ describe('corner sliding', () => {
     s.players.p1.y = 72 + 2;
     runSteps(s, { p1: input({ moveX: 1 }) }, 100, 20);
     expect(s.players.p1.x).toBeGreaterThan(160);
-  });
-});
-
-describe('speed upgrade', () => {
-  it('walks faster by the factor of each level', () => {
-    for (const level of [0, 1, 2, 3]) {
-      const s = newGame(openRows(60, 5));
-      s.players.p1.upgrades.speed = level;
-      const x0 = s.players.p1.x;
-      runSteps(s, { p1: input({ moveX: 1 }) }, 10, 20);
-      const expected = (CONFIG.playerSpeed * CONFIG.shop.items.speed.values[level] * 200) / 1000;
-      expect(s.players.p1.x - x0).toBeCloseTo(expected, 6);
-    }
   });
 });

@@ -16,6 +16,7 @@ export * from './shop';
 export * from './ranking';
 export * from './avatars';
 export * from './search';
+export * from './food';
 export * from './theft';
 export * from './fight';
 export * from './health';

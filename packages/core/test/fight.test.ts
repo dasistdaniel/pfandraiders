@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { findAttackTarget, punchDamage } from '../src/fight';
-import { damage, knockoutMsOf } from '../src/health';
+import { damage } from '../src/health';
 import { input, newGame, runSteps, setSpot, teleport, THIEF_ROWS } from './helpers';
 
 const PUNCH = { p1: input({ attack: true }) };
@@ -53,36 +53,19 @@ describe('punch', () => {
     expect(s.players.p2.health).toBeGreaterThan(CONFIG.health.max - 1);
   });
 
-  it('adds the punch upgrade and subtracts the armor of the victim', () => {
+  it('adds the punch upgrade', () => {
     const s = setup();
-    s.players.p1.upgrades.punch = 3;
-    expect(punchDamage(s.players.p1, s.players.p2)).toBe(CONFIG.fight.damage + 15);
-    s.players.p2.upgrades.armor = 3;
-    expect(punchDamage(s.players.p1, s.players.p2)).toBe(CONFIG.fight.damage + 15 - 12);
-    s.players.p1.upgrades.punch = 0;
-    expect(punchDamage(s.players.p1, s.players.p2)).toBe(CONFIG.fight.damage - 12);
-  });
-
-  it('never deals less than the minimum damage', () => {
-    const s = setup();
-    const armor = CONFIG.shop.items.armor.values as number[];
-    const saved = [...armor];
-    try {
-      armor[3] = 100;
-      s.players.p2.upgrades.armor = 3;
-      expect(punchDamage(s.players.p1, s.players.p2)).toBe(CONFIG.fight.minDamage);
-    } finally {
-      armor.splice(0, armor.length, ...saved);
-    }
+    expect(punchDamage(s.players.p1)).toBe(CONFIG.fight.damage);
+    s.players.p1.items.punch = 3;
+    expect(punchDamage(s.players.p1)).toBe(CONFIG.fight.damage + 15);
   });
 
   it('knocks the victim out at zero health for the victim knockout time', () => {
     const s = setup();
     s.players.p2.health = 15;
-    s.players.p2.upgrades.knockout = 1;
     runSteps(s, PUNCH, 1);
     expect(s.players.p2.mode).toBe('unconscious');
-    expect(s.players.p2.unconsciousMs).toBeGreaterThan(knockoutMsOf(s.players.p2) - 100);
+    expect(s.players.p2.unconsciousMs).toBeGreaterThan(CONFIG.health.knockoutMs - 100);
   });
 
   it('ignores unconscious players as targets', () => {

@@ -1,6 +1,6 @@
 import { CONFIG } from './config';
 import { boxBlocked } from './map';
-import { upgradeValue } from './shop';
+import { speedMultOf } from './economy';
 import type { Input, MapData, Player } from './types';
 
 const free = (map: MapData, x: number, y: number): boolean => !boxBlocked(map, x, y, CONFIG.playerHalf);
@@ -63,8 +63,7 @@ function slideOffset(
  * `slideMaxPx` Pixel überlappt (in dem Tick dann ohne Vorwärtsbewegung).
  */
 export function walk(map: MapData, p: Player, input: Input, dtMs: number): void {
-  const speed =
-    CONFIG.playerSpeed * CONFIG.containers[p.containerLevel].speedMult * upgradeValue(p, 'speed');
+  const speed = CONFIG.playerSpeed * speedMultOf(p);
   const diagonal = input.moveX !== 0 && input.moveY !== 0 ? Math.SQRT1_2 : 1;
   const dist = (speed * dtMs * diagonal) / 1000;
   const dx = input.moveX * dist;

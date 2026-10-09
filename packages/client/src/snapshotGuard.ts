@@ -8,10 +8,6 @@ function fin(x: unknown): x is number {
   return typeof x === 'number' && Number.isFinite(x);
 }
 
-function nonNegInt(x: unknown): boolean {
-  return fin(x) && Number.isInteger(x) && x >= 0;
-}
-
 /** Prüft die Form eines vom Server empfangenen Snapshots, bevor er gepuffert oder gerendert wird. */
 export function isValidSnapshot(x: unknown): x is Snapshot {
   if (!isObj(x)) return false;
@@ -23,7 +19,7 @@ export function isValidSnapshot(x: unknown): x is Snapshot {
   for (const p of Object.values(x.players)) {
     if (!isObj(p) || typeof p.id !== 'string') return false;
     if (!fin(p.x) || !fin(p.y) || !fin(p.money) || !fin(p.health)) return false;
-    if (!nonNegInt(p.containerLevel)) return false;
+    if (!isObj(p.items)) return false;
   }
   if (!Array.isArray(x.spots) || !Array.isArray(x.npcs) || !Array.isArray(x.zones)) return false;
   for (const s of x.spots) {

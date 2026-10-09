@@ -1,6 +1,7 @@
 import { totalBottles, transferBottles } from './bottles';
 import { CONFIG } from './config';
 import { capacityOf, distance } from './economy';
+import { rollFood } from './food';
 import { rollContents } from './loot';
 import { upgradeValue } from './shop';
 import { spotMultiplier, spotRefillMs } from './zones';
@@ -26,9 +27,9 @@ export function cancelSearch(p: Player): void {
   p.searchProgressMs = 0;
 }
 
-/** Suchdauer nach der Stufe "Schneller suchen" (ganze ms). */
-export function searchMsOf(p: Pick<Player, 'upgrades'>): number {
-  return Math.round(CONFIG.searchMs * upgradeValue(p, 'search'));
+/** Suchdauer nach der Stufe der Taschenlampe (ganze ms). */
+export function searchMsOf(p: Pick<Player, 'items'>): number {
+  return Math.round(CONFIG.searchMs * upgradeValue(p, 'flashlight'));
 }
 
 /**
@@ -57,6 +58,8 @@ export function updateSearch(state: GameState, p: Player, dtMs: number, canStart
   if (p.searchProgressMs >= searchMsOf(p)) {
     transferBottles(spot.contents, p.bottles, capacityOf(p));
     if (totalBottles(spot.contents) === 0) spot.refillInMs = spotRefillMs(state, spot);
+    // Genau ein Wurf je abgeschlossener Suche: vielleicht liegt auch etwas zu essen dort
+    rollFood(state, p, spot.type);
     cancelSearch(p);
   }
   return true;

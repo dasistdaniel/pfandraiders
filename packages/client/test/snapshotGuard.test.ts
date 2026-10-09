@@ -29,3 +29,20 @@ describe('isValidSnapshot and the countdown', () => {
     }
   });
 });
+
+describe('isValidSnapshot and the player shape', () => {
+  it('accepts a real projected snapshot with items', () => {
+    const state = createGame(1, CITY_MAP, ['p1', 'p2']);
+    state.players.p1.items.cart = 1;
+    state.players.p1.lastFood = { n: 1, spot: 'bin', text: 0, full: false };
+    const s = JSON.parse(JSON.stringify(projectSnapshot(state, 'p1')));
+    expect(isValidSnapshot(s)).toBe(true);
+    expect(s.players.p2.items.cart).toBe(0);
+  });
+
+  it('rejects a player without items', () => {
+    const s = snap();
+    delete (s.players as Record<string, Record<string, unknown>>).p2.items;
+    expect(isValidSnapshot(s)).toBe(false);
+  });
+});
