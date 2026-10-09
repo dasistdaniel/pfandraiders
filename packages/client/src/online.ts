@@ -212,8 +212,9 @@ export class OnlineConnection implements GameConnection {
     };
     socket.onclose = () => {
       if (this.socket !== socket) return; // ersetztes Socket: späte Meldung ignorieren
-      // Nur ein Abbruch einer offenen Verbindung klingt, nicht ein gescheiterter Wiederverbindungsversuch
-      if (this.status === 'open' && !this.closing) this.play('error');
+      // Nur ein Abbruch einer offenen Verbindung in einem Raum klingt: nicht ein gescheiterter
+      // Wiederverbindungsversuch und nicht das Schließen eines ungenutzten Sockets ohne Raum (Server nach 30 s)
+      if (this.status === 'open' && !this.closing && this.room !== '') this.play('error');
       this.status = 'closed';
       this.onClosed?.();
     };
@@ -321,6 +322,7 @@ export class OnlineConnection implements GameConnection {
   /** Raum absichtlich verlassen: der Server gibt den Platz sofort frei. Schließt die Verbindung nicht selbst. */
   leave(): void {
     if (this.status !== 'open') return;
+    this.closing = true; // der Server schließt danach: kein Verbindungsverlust
     try {
       this.sendMsg({ t: 'leave' });
     } catch {

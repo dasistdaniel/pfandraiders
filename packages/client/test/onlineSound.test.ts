@@ -67,6 +67,21 @@ describe('OnlineConnection sounds', () => {
     expect(conn.status).toBe('closed');
   });
 
+  it('stays silent when an idle socket without room closes or after leaving', () => {
+    const socket = new FakeSocket();
+    const conn = new OnlineConnection('ws://test', () => socket);
+    const played: string[] = [];
+    conn.sound = (id) => played.push(id);
+    conn.connect();
+    socket.onopen?.();
+    socket.onclose?.();
+    expect(played).toEqual([]);
+    const left = setup();
+    left.conn.leave();
+    left.socket.onclose?.();
+    expect(left.played).toEqual([]);
+  });
+
   it('a failed connection attempt (never open) stays silent; no sink is harmless', () => {
     const socket = new FakeSocket();
     const conn = new OnlineConnection('ws://test', () => socket);
