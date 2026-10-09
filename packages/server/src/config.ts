@@ -31,6 +31,11 @@ export const SERVER_CONFIG = {
   /** Lobby-Chat: höchstens chatMaxPerWindow Nachrichten pro Spieler in diesem Zeitfenster */
   chatWindowMs: 10_000,
   chatMaxPerWindow: 5,
+  /** Raumliste: mindestens so viele ms zwischen zwei Anfragen einer Verbindung */
+  listRoomsMinGapMs: 1000,
+  /** Falsche Passwörter: höchstens wrongPasswordMax je Verbindung in diesem gleitenden Fenster, danach rate_limited */
+  wrongPasswordWindowMs: 60_000,
+  wrongPasswordMax: 5,
 };
 
 /** Kleinste zulässige Frist für GRACE_MS in ms. */

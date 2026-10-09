@@ -255,5 +255,7 @@ describe('series messages', () => {
     expect(room.members[0].ready).toBe(true);
     send(sa, a, { t: 'endSeries' });
     expect(room.phase).toBe('final');
+    send(sa, a, { t: 'toLobby' });
+    expect(room.phase).toBe('lobby');
   });
 });

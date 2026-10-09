@@ -56,6 +56,10 @@ export interface Session {
   overSince: number | null;
   /** Ausnahmen im Nachrichtenhandler dieser Verbindung */
   errors: number;
+  /** Zeitpunkt der letzten beantworteten Raumliste */
+  lastListRooms: number;
+  /** Zeitpunkte der falschen Passwörter (gleitendes Fenster) */
+  passwordFails: number[];
 }
 
 export function newSession(now: number): Session {
@@ -69,6 +73,8 @@ export function newSession(now: number): Session {
     lastLimited: null,
     overSince: null,
     errors: 0,
+    lastListRooms: -Infinity,
+    passwordFails: [],
   };
 }
 
@@ -204,7 +210,12 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
   switch (msg.t) {
     case 'create': {
       if (session.room) return reply(conn, 'bad_message', 'Du bist schon in einem Raum.');
-      const r = manager.create(msg.name, conn);
+      const r = manager.create(msg.name, conn, {
+        roomName: msg.roomName,
+        visibility: msg.visibility,
+        password: msg.password,
+        avatar: msg.avatar,
+      });
       if (!r.ok) return reply(conn, r.code, r.message);
       session.room = r.value.room;
       session.member = r.value.member;
@@ -214,9 +225,20 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
       if (session.room) return reply(conn, 'bad_message', 'Du bist schon in einem Raum.');
       const room = manager.get(msg.room);
       if (!room) return reply(conn, 'room_not_found', 'Raum nicht gefunden.');
+      // Zu viele falsche Passwörter: gesperrt bis das Fenster frei ist (Rückkehr mit gültigem Token ausgenommen)
+      const needsPassword = room.locked && !room.hasReturnToken(msg.token);
+      if (needsPassword) {
+        session.passwordFails = session.passwordFails.filter((t) => now - t < SERVER_CONFIG.wrongPasswordWindowMs);
+        if (session.passwordFails.length >= SERVER_CONFIG.wrongPasswordMax) {
+          return reply(conn, 'rate_limited', 'Zu viele falsche Passwörter. Bitte kurz warten.');
+        }
+      }
       const prev = msg.token === undefined ? undefined : room.members.find((m) => m.token === msg.token)?.conn;
-      const r = room.join(msg.name, conn, msg.token);
-      if (!r.ok) return reply(conn, r.code, r.message);
+      const r = room.join(msg.name, conn, msg.token, { password: msg.password, avatar: msg.avatar });
+      if (!r.ok) {
+        if (r.code === 'wrong_password') session.passwordFails.push(now);
+        return reply(conn, r.code, r.message);
+      }
       // Rückkehr ersetzt eine noch offene alte Verbindung: diese schliessen
       if (prev && prev !== conn) env.sockets.get(prev)?.close(4000, 'replaced');
       session.room = room;
@@ -277,6 +299,36 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
       if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
       if (!isCurrent()) return;
       const r = session.room.endSeries(session.member.id);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
+    case 'listRooms': {
+      // Jederzeit erlaubt, auch ohne Raum; verlängert die Leerlauffrist nicht
+      if (now - session.lastListRooms < SERVER_CONFIG.listRoomsMinGapMs) {
+        return reply(conn, 'rate_limited', 'Raumliste höchstens einmal pro Sekunde.');
+      }
+      session.lastListRooms = now;
+      conn.send({ t: 'rooms', rooms: manager.listRooms() });
+      return;
+    }
+    case 'setAvatar': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.setAvatar(session.member, msg.avatar);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
+    case 'setRounds': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.setRounds(session.member.id, msg.rounds);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
+    case 'toLobby': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.toLobby(session.member.id);
       if (!r.ok) reply(conn, r.code, r.message);
       return;
     }
