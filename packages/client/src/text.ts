@@ -139,7 +139,8 @@ export function resultHeader(): string {
   return 'Platz  Name              Runde     Gesamt';
 }
 
-/** Fußzeile am Rundenende: in der Serie geht es für alle in den Shop. */
-export function resultFooter(_role: 'local' | 'host' | 'guest', labels: KeyLabels): string[] {
-  return [`Weiter zum Shop: R oder ${labels.action}`, 'Menü: Esc'];
+/** Fußzeile am Rundenende: in der Serie geht es für alle in den Shop, nach der letzten Runde zur Endwertung. */
+export function resultFooter(_role: 'local' | 'host' | 'guest', labels: KeyLabels, final = false): string[] {
+  const next = final ? 'Weiter zur Endwertung' : 'Weiter zum Shop';
+  return [`${next}: R oder ${labels.action}`, 'Menü: Esc'];
 }
