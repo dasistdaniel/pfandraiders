@@ -74,6 +74,10 @@ describe('ReconnectPlan', () => {
     }
   });
 
+  it('treats a wrong password as fatal (expired token in a locked room)', () => {
+    expect(FATAL_CODES).toContain('wrong_password');
+  });
+
   it('fatal is false for rate_limited and changes nothing', () => {
     const p = new ReconnectPlan();
     expect(p.fatal('rate_limited')).toBe(false);

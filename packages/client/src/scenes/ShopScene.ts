@@ -101,7 +101,9 @@ export class ShopScene extends Phaser.Scene {
       };
       online.onStart = () => this.goTo('game', { online });
       online.onPhase = () => {
-        if (online.roomPhase === 'lobby') this.leaveOnline('Der Host hat die Serie beendet.');
+        // Endwertung und Rückkehr in die Lobby zeigt erst Plan 2; bis dahin zurück ins Menü
+        if (online.roomPhase === 'final') this.leaveOnline('Die Serie ist vorbei.');
+        else if (online.roomPhase === 'lobby') this.leaveOnline('Der Host hat die Serie beendet.');
       };
       online.onError = (_code, message) => this.say(this.panels[0], message);
       online.onClosed = () => this.leaveOnline('Verbindung zum Server verloren.');
@@ -109,7 +111,8 @@ export class ShopScene extends Phaser.Scene {
       online.onJoined = null;
       this.panels[0].model.setReady(online.shopReady);
       if (online.status === 'closed') this.leaveOnline('Verbindung zum Server verloren.');
-      // Serie wurde beendet, während dieser Spieler noch auf der Rangliste stand
+      // Serie ist zu Ende (letzte Runde oder vom Host beendet), während dieser Spieler noch auf der Rangliste stand
+      else if (online.roomPhase === 'final') this.leaveOnline('Die Serie ist vorbei.');
       else if (online.roomPhase === 'lobby') this.leaveOnline('Der Host hat die Serie beendet.');
     } else {
       const views = viewportsFor(this.slots.length);
