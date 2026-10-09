@@ -17,8 +17,8 @@ export interface ShopRowView {
   detail: string;
   /** Preis der gewählten Menge, leer wenn nichts zu kaufen ist */
   price: string;
-  /** grey = nicht kaufbar (Geld, Stufe, Besitz), soon = noch nicht im Spiel ("bald") */
-  state: 'normal' | 'grey' | 'soon';
+  /** grey = nicht kaufbar (Geld, Grenze, Voraussetzung, Besitz) */
+  state: 'normal' | 'grey';
   selected: boolean;
 }
 
@@ -33,20 +33,37 @@ export function shopPointerEnabled(online: boolean): boolean {
   return online;
 }
 
-/** Wirkung einer Upgrade-Stufe als kurzer Text. */
+/** Wirkung einer Stufe als kurzer Text. */
 function effectText(item: ShopItemId, level: number): string {
   const v = CONFIG.shop.items[item].values[level];
   switch (item) {
-    case 'knockout':
-      return `${v / 1000} s`;
-    case 'speed':
-      return `+${Math.round((v - 1) * 100)} % Tempo`;
-    case 'search':
+    case 'flashlight':
       return `−${Math.round((1 - v) * 100)} % Suchzeit`;
     case 'punch':
       return `+${v} Schaden`;
-    case 'armor':
-      return `−${v} Schaden`;
+    default:
+      return '';
+  }
+}
+
+/** Sekunden mit zwei Nachkommastellen und Komma ("0,15"). */
+function secs(ms: number): string {
+  return (ms / 1000).toFixed(2).replace('.', ',');
+}
+
+/** Kurzbeschreibung eines Artikels ohne Stufen (vor Menge und Besitz). */
+function infoText(item: ShopItemId): string {
+  switch (item) {
+    case 'bag':
+      return `+${CONFIG.carry.perUnit.bag} Plätze`;
+    case 'backpack':
+      return `+${CONFIG.carry.perUnit.backpack} Plätze`;
+    case 'cart':
+      return `mieten: +${CONFIG.carry.perUnit.cart} Plätze, ${Math.round((1 - CONFIG.carry.cartSpeedMult) * 100)} % langsamer, 1 Runde`;
+    case 'card':
+      return `Abgabe alle ${secs(CONFIG.depositEveryMsCard)} s statt ${secs(CONFIG.depositEveryMs)} s`;
+    case 'card_plus':
+      return `+${CONFIG.shop.cardPlusBonusPct} % Pfand je Flasche`;
     default:
       return '';
   }
@@ -93,7 +110,7 @@ export class ShopModel {
     return SHOP_CATEGORIES.map((c, i) => ({ category: c, name: SHOP_CATEGORY_NAMES[c], selected: i === this.categoryIndex }));
   }
 
-  /** Größte wählbare Menge auf der aktuellen Zeile: freier Bestand eines Verbrauchsguts, sonst 1. */
+  /** Größte wählbare Menge auf der aktuellen Zeile: freier Rest bis zur Grenze bei Stückware, sonst 1. */
   maxQty(p: Progress): number {
     const item = this.currentItem();
     if (!item || CONFIG.shop.items[item].kind !== 'stack') return 1;
@@ -195,19 +212,21 @@ export class ShopModel {
     const owned = ownedOf(p, item);
     const max = maxOf(item);
     const row: ShopRowView = { kind: 'item', item, name: def.name, detail: '', price: '', state: 'normal', selected };
-    if (!def.available) return { ...row, detail: 'bald', state: 'soon' };
-    if (item === 'bag') {
-      if (owned >= max) return { ...row, name: CONFIG.containers[owned].name, detail: 'voll ausgebaut', state: 'grey' };
-      const next = CONFIG.containers[owned + 1];
-      row.name = next.name;
-      row.detail = `${next.capacity} Plätze`;
-    } else if (def.kind === 'level') {
+    const info = infoText(item);
+    if (def.kind === 'level') {
       if (owned >= max) return { ...row, detail: `Stufe ${max} (max)`, state: 'grey' };
       row.detail = `Stufe ${owned} → ${owned + 1}: ${effectText(item, owned + 1)}`;
     } else if (def.kind === 'once') {
-      if (owned >= max) return { ...row, detail: 'vorhanden', state: 'grey' };
+      if (owned >= max) return { ...row, detail: def.perRound ? 'gemietet für die nächste Runde' : 'vorhanden', state: 'grey' };
+      const missing = def.requires !== undefined && ownedOf(p, def.requires) === 0;
+      row.detail = missing ? `braucht ${CONFIG.shop.items[def.requires!].name}` : info;
+    } else if (def.kind === 'count') {
+      // Tasche, Rucksack: je Kauf eins, ohne Mengenwahl
+      row.detail = `${info}  (hast ${owned}/${max})`;
+      if (owned >= max) return { ...row, state: 'grey' };
     } else {
-      row.detail = selected ? `◄ ${this.qty} ►  (hast ${owned})` : `(hast ${owned})`;
+      const qty = selected ? `◄ ${this.qty} ►  ` : '';
+      row.detail = `${info ? `${info}  ` : ''}${qty}(hast ${owned})`;
     }
     const qty = selected && def.kind === 'stack' ? Math.min(this.qty, this.maxQty(p)) : 1;
     const check = checkShopBuy(p, def.category, item, qty);

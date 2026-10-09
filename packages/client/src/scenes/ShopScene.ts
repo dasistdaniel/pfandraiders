@@ -25,9 +25,9 @@ export interface ShopSceneData {
   online?: OnlineConnection;
 }
 
-const COLOR = { text: '#ffffff', grey: '#777777', soon: '#555555', selected: '#ffee58', message: '#ff8a80', hint: '#aaaaaa' };
+const COLOR = { text: '#ffffff', grey: '#777777', selected: '#ffee58', message: '#ff8a80', hint: '#aaaaaa' };
 const MESSAGE_MS = 2500;
-/** Höchstens so viele Zeilen hat eine Kategorie (Angriff: 4 Einträge, Bereit, Serie beenden) */
+/** Höchstens so viele Zeilen hat eine Kategorie (bis 3 Einträge, Bereit, Serie beenden) */
 const MAX_ROWS = 6;
 
 interface PanelUi {
@@ -303,7 +303,6 @@ function rowText(r: ShopRowView): string {
 }
 
 function rowColor(r: ShopRowView): string {
-  if (r.state === 'soon') return COLOR.soon;
   if (r.selected) return COLOR.selected;
   return r.state === 'grey' ? COLOR.grey : COLOR.text;
 }
