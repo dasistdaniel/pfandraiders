@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { KeyState } from '../src/input';
 import { NAV_REPEAT_DELAY_MS, NAV_REPEAT_EVERY_MS, ShopNav } from '../src/shopNav';
 
-const NONE: KeyState = { left: false, right: false, up: false, down: false, action: false, steal: false, attack: false };
+const NONE: KeyState = { left: false, right: false, up: false, down: false, action: false, steal: false, attack: false, spray: false };
 const k = (over: Partial<KeyState>): KeyState => ({ ...NONE, ...over });
 
 describe('ShopNav', () => {
@@ -39,9 +39,9 @@ describe('ShopNav', () => {
     expect(nav.update(k({ left: true, down: true }), 16)).toEqual(['down']);
   });
 
-  it('never uses steal or attack', () => {
+  it('never uses steal, attack or spray', () => {
     const nav = new ShopNav();
     nav.update(NONE, 16);
-    expect(nav.update(k({ steal: true, attack: true }), 16)).toEqual([]);
+    expect(nav.update(k({ steal: true, attack: true, spray: true }), 16)).toEqual([]);
   });
 });

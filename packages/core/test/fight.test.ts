@@ -53,11 +53,13 @@ describe('punch', () => {
     expect(s.players.p2.health).toBeGreaterThan(CONFIG.health.max - 1);
   });
 
-  it('adds the punch upgrade', () => {
+  it('hits 30 instead of 20 with the glove', () => {
     const s = setup();
-    expect(punchDamage(s.players.p1)).toBe(CONFIG.fight.damage);
-    s.players.p1.items.punch = 3;
-    expect(punchDamage(s.players.p1)).toBe(CONFIG.fight.damage + 15);
+    expect(punchDamage(s.players.p1)).toBe(20);
+    s.players.p1.items.glove = 1;
+    expect(punchDamage(s.players.p1)).toBe(30);
+    runSteps(s, PUNCH, 1);
+    expect(s.players.p2.health).toBeCloseTo(CONFIG.health.max - 30, 1);
   });
 
   it('knocks the victim out at zero health for the victim knockout time', () => {

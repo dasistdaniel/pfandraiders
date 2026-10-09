@@ -15,5 +15,6 @@ export function sanitizeInput(raw: unknown): Input {
     action: r.action === true,
     steal: r.steal === true,
     attack: r.attack === true,
+    spray: r.spray === true,
   };
 }

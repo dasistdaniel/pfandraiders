@@ -19,6 +19,7 @@ export * from './search';
 export * from './food';
 export * from './theft';
 export * from './fight';
+export * from './spray';
 export * from './health';
 export * from './zones';
 export * from './npc';

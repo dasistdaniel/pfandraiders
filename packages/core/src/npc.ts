@@ -69,12 +69,12 @@ function claimedByOtherDog(state: GameState, npc: Npc, p: Player): boolean {
 /**
  * Kommt dieser Spieler als Ziel in Frage? Bewusst, nicht der Spieler aus der Ruhe-Erinnerung,
  * Hund: ohne Schutz (nach dem Aufstehen) und nicht schon von einem anderen Hund gejagt,
- * Polizei: trägt Flaschen (beliebig viele Polizisten dürfen denselben Spieler kontrollieren).
+ * Polizei: trägt Flaschen und hat keine Ausweisdokumente (beliebig viele Polizisten dürfen denselben Spieler kontrollieren).
  */
 function wants(state: GameState, npc: Npc, p: Player): boolean {
   if (p.unconsciousMs > 0) return false;
   if (npc.restMs > 0 && p.id === npc.restId) return false;
-  if (npc.kind === 'police') return totalBottles(p.bottles) > 0;
+  if (npc.kind === 'police') return p.items.id_papers === 0 && totalBottles(p.bottles) > 0;
   return p.shieldMs === 0 && !claimedByOtherDog(state, npc, p);
 }
 

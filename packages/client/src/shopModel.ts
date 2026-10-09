@@ -1,4 +1,4 @@
-import { checkShopBuy, CONFIG, maxOf, ownedOf, SHOP_CATEGORIES, SHOP_CATEGORY_NAMES, shopItemsOf } from '@pfandraiders/core';
+import { checkShopBuy, CONFIG, maxOf, ownedOf, SHOP_CATEGORIES, SHOP_CATEGORY_NAMES, shopItemsOf, unitOf } from '@pfandraiders/core';
 import type { BuyRefusal, Progress, ShopCategory, ShopItemId } from '@pfandraiders/core';
 import { formatMoney } from './format';
 
@@ -39,8 +39,6 @@ function effectText(item: ShopItemId, level: number): string {
   switch (item) {
     case 'flashlight':
       return `−${Math.round((1 - v) * 100)} % Suchzeit`;
-    case 'punch':
-      return `+${v} Schaden`;
     default:
       return '';
   }
@@ -65,6 +63,13 @@ function infoText(item: ShopItemId): string {
       return `Abgabe alle ${secs(CONFIG.depositEveryMsCard)} s statt ${secs(CONFIG.depositEveryMs)} s`;
     case 'card_plus':
       return `+${CONFIG.shop.cardPlusBonusPct} % Pfand je Flasche`;
+    case 'glove':
+      return `+${CONFIG.fight.gloveBonus} Schaden je Schlag`;
+    // kurz, damit die Zeilen mit Menge und Preis auch im Viertel-Splitscreen nicht umbrechen
+    case 'pepper':
+      return `${unitOf('pepper')} Ladungen`;
+    case 'id_papers':
+      return 'nur für die nächste Runde';
     default:
       return '';
   }
@@ -111,11 +116,11 @@ export class ShopModel {
     return SHOP_CATEGORIES.map((c, i) => ({ category: c, name: SHOP_CATEGORY_NAMES[c], selected: i === this.categoryIndex }));
   }
 
-  /** Größte wählbare Menge auf der aktuellen Zeile: freier Rest bis zur Grenze bei Stückware, sonst 1. */
+  /** Größte wählbare Menge: so viele Stück, wie bis zur Grenze passen (Pfefferspray: Flaschen zu je 10 Ladungen), sonst 1. */
   maxQty(p: Progress): number {
     const item = this.currentItem();
     if (!item || CONFIG.shop.items[item].kind !== 'stack') return 1;
-    return Math.max(1, maxOf(item) - ownedOf(p, item));
+    return Math.max(1, Math.floor((maxOf(item) - ownedOf(p, item)) / unitOf(item)));
   }
 
   private onStackRow(): boolean {
@@ -218,7 +223,7 @@ export class ShopModel {
       if (owned >= max) return { ...row, detail: `Stufe ${max} (max)`, state: 'grey' };
       row.detail = `Stufe ${owned} → ${owned + 1}: ${effectText(item, owned + 1)}`;
     } else if (def.kind === 'once') {
-      if (owned >= max) return { ...row, detail: def.perRound ? 'gemietet für die nächste Runde' : 'vorhanden', state: 'grey' };
+      if (owned >= max) return { ...row, detail: item === 'cart' ? 'gemietet für die nächste Runde' : def.perRound ? 'gilt für die nächste Runde' : 'vorhanden', state: 'grey' };
       const missing = def.requires !== undefined && ownedOf(p, def.requires) === 0;
       row.detail = missing ? `braucht ${CONFIG.shop.items[def.requires!].name}` : info;
     } else if (def.kind === 'count') {

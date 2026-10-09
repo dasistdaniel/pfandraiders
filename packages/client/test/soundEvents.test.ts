@@ -202,6 +202,24 @@ describe('detectSounds', () => {
     });
     expect(detectSounds(p, n, 'all')).toEqual(['pickup']);
   });
+
+  it('plays spray for the sprayer and for a victim next to him', () => {
+    const p = next(fresh(), (s) => {
+      s.players.b.x = s.players.a.x + 16;
+      s.players.b.y = s.players.a.y;
+    });
+    const n = next(p, (s) => {
+      s.players.a.sprayCooldownMs = CONFIG.spray.cooldownMs;
+      s.players.b.x += CONFIG.spray.knockbackPx;
+      s.players.b.health -= CONFIG.spray.damage;
+    });
+    expect(detectSounds(p, n, ['a'])).toEqual(['spray']);
+    expect(detectSounds(p, n, ['b'])).toEqual(['spray']);
+    const far = next(fresh(), (s) => {
+      s.players.b.x = s.players.a.x + 200;
+    });
+    expect(detectSounds(far, next(far, (s) => { s.players.a.sprayCooldownMs = CONFIG.spray.cooldownMs; }), ['b'])).toEqual([]);
+  });
 });
 
 describe('snapshotForSound', () => {

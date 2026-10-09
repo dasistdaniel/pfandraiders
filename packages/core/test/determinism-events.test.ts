@@ -14,6 +14,7 @@ function scripted(tick: number, shift: number): Input {
     action: (tick + shift) % 9 < 5,
     steal: tick % 211 < 6,
     attack: tick % 97 < 3,
+    spray: tick % 151 < 2,
   };
 }
 
@@ -29,6 +30,7 @@ interface Stats {
 
 function play(seed: number): { state: GameState; stats: Stats } {
   const s = createGame(seed, CITY_MAP, ['a', 'b', 'c'], { roundMs: 400000, countdownMs: 0 });
+  for (const p of Object.values(s.players)) p.items.pepper = 99;
   const stats: Stats = {
     maxNpcs: 0,
     sawDog: false,

@@ -259,6 +259,26 @@ describe('buying in the shop phase', () => {
     for (const m of members) room.setReady(m, true);
     expect(room.state!.players.p1.items.cart).toBe(0);
   });
+
+  it('keeps the id papers for exactly one round', () => {
+    const { room, members, endRound } = inShop();
+    expect(room.shopBuy(members[0], 'defense', 'id_papers', 1).ok).toBe(true);
+    for (const m of members) room.setReady(m, true);
+    expect(room.state!.players.p1.items.id_papers).toBe(1);
+    endRound();
+    expect(room.progress.get('p1')!.items.id_papers).toBe(0);
+  });
+
+  it('sells pepper spray as ten charges per bottle and keeps unused charges', () => {
+    const { room, members, conns, endRound } = inShop();
+    expect(room.shopBuy(members[0], 'defense', 'pepper', 2).ok).toBe(true);
+    expect(conns[0].last('shopState').you).toMatchObject({ money: 400, items: { pepper: 20 } });
+    expect(room.shopBuy(members[0], 'defense', 'pepper', 9)).toMatchObject({ ok: false, code: 'cannot_buy', message: 'Mehr geht nicht.' });
+    for (const m of members) room.setReady(m, true);
+    room.state!.players.p1.items.pepper = 13;
+    endRound();
+    expect(room.progress.get('p1')!.items.pepper).toBe(13);
+  });
 });
 
 describe('round time and ending the series', () => {

@@ -5,6 +5,7 @@ import { updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
 import { cancelSearch, refillSpot, updateSearch } from './search';
+import { trySpray } from './spray';
 import { tryLoot } from './theft';
 import { NO_INPUT } from './types';
 import type { GameState, Input, Player } from './types';
@@ -54,8 +55,11 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   p.stealHeld = input.steal;
   const attackPressed = input.attack && !p.attackHeld;
   p.attackHeld = input.attack;
+  const sprayPressed = input.spray && !p.sprayHeld;
+  p.sprayHeld = input.spray;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
   p.attackCooldownMs = Math.max(0, p.attackCooldownMs - dt);
+  p.sprayCooldownMs = Math.max(0, p.sprayCooldownMs - dt);
 
   if (updateHealth(p, dt)) {
     // Bewusstlos: keine Eingabe wirksam (die Tastenflanken oben sind schon nachgeführt)
@@ -66,6 +70,8 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
 
   // Schlagen geht auch im Laufen; die eigene Suche bricht ab
   if (attackPressed && tryAttack(state, p)) cancelSearch(p);
+  // Sprühen geht auch im Laufen; die eigene Suche bricht ab
+  if (sprayPressed && trySpray(state, p)) cancelSearch(p);
 
   // Abgabe hat Vorrang: wer mit Flaschen am Automaten drückt, beginnt im selben Tick keine Suche
   const depositing = updateDeposit(state, p, input, dt, pressed);

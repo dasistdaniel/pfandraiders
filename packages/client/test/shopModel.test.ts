@@ -51,7 +51,8 @@ describe('ShopModel navigation', () => {
   it('changes the quantity with left and right on a stack row, otherwise the category', () => {
     const m = new ShopModel();
     const p = rich();
-    m.selectCategory(3); // Verteidigung: Leckerli
+    m.selectCategory(3);
+    m.selectRow(2); // Leckerli (Verteidigung: Pfefferspray, Ausweisdokumente, Leckerli)
     m.move('right', p);
     m.move('right', p);
     expect(m.qty).toBe(3);
@@ -76,6 +77,7 @@ describe('ShopModel navigation', () => {
     const p = rich();
     p.items.dog_treat = 97;
     m.selectCategory(3);
+    m.selectRow(2); // Leckerli
     m.move('left', p);
     expect(m.qty).toBe(1);
     for (let i = 0; i < 10; i++) m.move('right', p);
@@ -100,6 +102,7 @@ describe('ShopModel actions', () => {
     const m = new ShopModel();
     const p = rich();
     m.selectCategory(3);
+    m.selectRow(2); // Leckerli
     m.changeQty(4, p);
     expect(m.activate(p)).toEqual({ kind: 'buy', category: 'defense', item: 'dog_treat', qty: 5 });
     expect(m.qty).toBe(1);
@@ -182,10 +185,36 @@ describe('ShopModel rows', () => {
     expect(rows[2]).toMatchObject({ detail: '+10 % Pfand je Flasche', state: 'normal' });
   });
 
-  it('keeps the punch levels under Waffen', () => {
+  it('sells the glove under Waffen', () => {
     const m = new ShopModel();
+    const p = rich();
     m.selectCategory(2);
-    expect(m.rows(rich())[0]).toMatchObject({ name: 'Stärkerer Schlag', detail: 'Stufe 0 → 1: +5 Schaden', price: '2,50 €' });
+    expect(m.rows(p)[0]).toMatchObject({ name: 'Boxhandschuh', detail: '+10 Schaden je Schlag', price: '4,00 €', state: 'normal' });
+    p.items.glove = 1;
+    expect(m.rows(p)[0]).toMatchObject({ detail: 'vorhanden', price: '', state: 'grey' });
+  });
+
+  it('sells pepper spray by the bottle and shows the charges', () => {
+    const m = new ShopModel();
+    const p = rich();
+    p.items.pepper = 15;
+    m.selectCategory(3);
+    m.changeQty(1, p);
+    expect(m.rows(p)[0]).toMatchObject({ name: 'Pfefferspray', detail: '10 Ladungen  ◄ 2 ►  (hast 15)', price: '6,00 €' });
+    expect(m.maxQty(p)).toBe(8);
+    expect(m.activate(p)).toEqual({ kind: 'buy', category: 'defense', item: 'pepper', qty: 2 });
+    p.items.pepper = 95;
+    expect(m.maxQty(p)).toBe(1);
+    expect(m.rows(p)[0]).toMatchObject({ state: 'grey' });
+  });
+
+  it('offers the id papers for the next round only', () => {
+    const m = new ShopModel();
+    const p = rich();
+    m.selectCategory(3);
+    expect(m.rows(p)[1]).toMatchObject({ name: 'Ausweisdokumente', detail: 'nur für die nächste Runde', price: '3,00 €' });
+    p.items.id_papers = 1;
+    expect(m.rows(p)[1]).toMatchObject({ detail: 'gilt für die nächste Runde', price: '', state: 'grey' });
   });
 
   it('shows quantity and total only on the selected treat row', () => {
@@ -193,10 +222,11 @@ describe('ShopModel rows', () => {
     const p = rich();
     p.items.dog_treat = 4;
     m.selectCategory(3);
+    m.selectRow(2);
     m.changeQty(2, p);
-    expect(m.rows(p)[0]).toMatchObject({ name: 'Leckerli', detail: '◄ 3 ►  (hast 4)', price: '3,00 €' });
-    m.selectRow(1);
-    expect(m.rows(p)[0]).toMatchObject({ detail: '(hast 4)', price: '1,00 €' });
+    expect(m.rows(p)[2]).toMatchObject({ name: 'Leckerli', detail: '◄ 3 ►  (hast 4)', price: '3,00 €' });
+    m.selectRow(0);
+    expect(m.rows(p)[2]).toMatchObject({ detail: '(hast 4)', price: '1,00 €' });
   });
 
   it('labels Bereit by state', () => {

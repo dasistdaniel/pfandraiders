@@ -389,6 +389,28 @@ describe('police', () => {
     expect(isBeingChecked(s, 'p1')).toBe(false);
   });
 
+  it('ignores a player with id papers: no chase, no check, no confiscation', () => {
+    const s = carrying();
+    s.players.p1.items.id_papers = 1;
+    const cop = addNpc(s, 'police', 40, 24);
+    runFor(s, {}, CONFIG.npc.police.checkMs + 500);
+    expect(isBeingChecked(s, 'p1')).toBe(false);
+    expect(totalBottles(s.players.p1.bottles)).toBe(4);
+    expect(cop.targetId).toBeNull();
+  });
+
+  it('ignores a player with id papers but checks another', () => {
+    const s = quiet(newGame(['############', '#@..@......#', '############'], ['p1', 'p2']));
+    for (const id of ['p1', 'p2']) {
+      s.players[id].items.bag = 3;
+      s.players[id].bottles = { plastic: 4, glass: 0, crate: 0 };
+    }
+    s.players.p1.items.id_papers = 1;
+    const cop = addNpc(s, 'police', 40, 24); // p1 16 px, p2 32 px entfernt
+    runSteps(s, {}, 5, 20);
+    expect(cop.targetId).toBe('p2');
+  });
+
   it('does not check the same player again for restMs, even standing next to them', () => {
     const s = carrying();
     const cop = addNpc(s, 'police', 40, 24);

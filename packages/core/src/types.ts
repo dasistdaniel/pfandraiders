@@ -10,7 +10,9 @@ export type ShopItemId =
   | 'flashlight'
   | 'card'
   | 'card_plus'
-  | 'punch'
+  | 'glove'
+  | 'pepper'
+  | 'id_papers'
   | 'dog_treat';
 /** Besitz je Shop-Artikel: Stückzahl, Stufe oder 0/1. Bleibt über Runden, außer Mietsachen (perRound). */
 export type Items = Record<ShopItemId, number>;
@@ -51,9 +53,11 @@ export interface Input {
   steal: boolean;
   /** Schlagen-Taste gehalten (wirkt beim Drücken) */
   attack: boolean;
+  /** Pfefferspray-Taste gehalten (wirkt beim Drücken) */
+  spray: boolean;
 }
 
-export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, attack: false };
+export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, attack: false, spray: false };
 
 export interface SpotDef extends Point {
   id: number;
@@ -82,7 +86,7 @@ export interface Player {
   /** Cent */
   money: number;
   bottles: Bottles;
-  /** Besitz aus dem Shop (Taschen, Upgrades, Schlag, Leckerli) */
+  /** Besitz aus dem Shop (Taschen, Upgrades, Boxhandschuh, Spray-Ladungen, Ausweis, Leckerli) */
   items: Items;
   mode: Mode;
   searchSpotId: number | null;
@@ -98,8 +102,12 @@ export interface Player {
   stealHeld: boolean;
   /** Schlagen-Taste im vorigen Tick gedrückt, für die Flanke */
   attackHeld: boolean;
+  /** Pfefferspray-Taste im vorigen Tick gedrückt, für die Flanke */
+  sprayHeld: boolean;
   /** Restzeit, bis der Spieler wieder schlagen kann, 0 = bereit */
   attackCooldownMs: number;
+  /** Restzeit, bis der Spieler wieder sprühen kann, 0 = bereit (öffentlich: andere sehen die Wolke) */
+  sprayCooldownMs: number;
   /** Restzeit des Schutzes nach dem Aufstehen aus einem Knockout, 0 = angreifbar */
   shieldMs: number;
   /** Leben, 0 = bewusstlos (kann zwischen Ticks Nachkommastellen haben) */

@@ -17,7 +17,7 @@ export const SHOP_CATEGORY_NAMES: Record<ShopCategory, string> = {
 export const SHOP_ITEM_IDS: readonly ShopItemId[] = Object.keys(CONFIG.shop.items) as ShopItemId[];
 
 /** Artikel mit Stufen und einer Wirkung je Stufe */
-export type LevelItemId = 'flashlight' | 'punch';
+export type LevelItemId = 'flashlight';
 
 export function isShopCategory(v: unknown): v is ShopCategory {
   return typeof v === 'string' && (SHOP_CATEGORIES as readonly string[]).includes(v);
@@ -34,7 +34,7 @@ export function shopItemsOf(category: ShopCategory): ShopItemId[] {
 
 /** Kein Besitz. Als Literal, damit ein neuer Artikel hier die Kompilierung scheitern lässt. */
 export function noItems(): Items {
-  return { bag: 0, backpack: 0, cart: 0, flashlight: 0, card: 0, card_plus: 0, punch: 0, dog_treat: 0 };
+  return { bag: 0, backpack: 0, cart: 0, flashlight: 0, card: 0, card_plus: 0, glove: 0, pepper: 0, id_papers: 0, dog_treat: 0 };
 }
 
 /** Fortschritt eines neuen Spielers: nichts. */
@@ -72,6 +72,11 @@ export function maxOf(item: ShopItemId): number {
   return def.max ?? CONFIG.shop.maxStack;
 }
 
+/** Bestand je gekauftem Stück (Pfefferspray: 10 Ladungen), sonst 1. */
+export function unitOf(item: ShopItemId): number {
+  return CONFIG.shop.items[item].unit ?? 1;
+}
+
 export type BuyRefusal = 'unknown_item' | 'wrong_category' | 'bad_qty' | 'requires' | 'maxed' | 'no_money';
 
 export type BuyResult = { ok: true; cost: number } | { ok: false; reason: BuyRefusal };
@@ -100,7 +105,7 @@ export function checkShopBuy(p: Progress, category: unknown, item: unknown, qty:
   if (def.kind !== 'stack' && qty !== 1) return { ok: false, reason: 'bad_qty' };
   if (def.requires !== undefined && p.items[def.requires] === 0) return { ok: false, reason: 'requires' };
   const owned = ownedOf(p, item);
-  if (owned + qty > maxOf(item)) return { ok: false, reason: 'maxed' };
+  if (owned + qty * unitOf(item) > maxOf(item)) return { ok: false, reason: 'maxed' };
   const cost = def.kind === 'level' ? def.prices[owned] : def.prices[0] * qty;
   if (p.money < cost) return { ok: false, reason: 'no_money' };
   return { ok: true, cost };
@@ -111,6 +116,7 @@ export function shopBuy(p: Progress, category: unknown, item: unknown, qty: unkn
   const r = checkShopBuy(p, category, item, qty);
   if (!r.ok) return r;
   p.money -= r.cost;
-  p.items[item as ShopItemId] += qty as number;
+  const id = item as ShopItemId;
+  p.items[id] += (qty as number) * unitOf(id);
   return r;
 }

@@ -227,7 +227,7 @@ describe('OnlineConnection input', () => {
     expect(socket.sent.filter((m) => m.t === 'input')).toHaveLength(0);
   });
 
-  it('sends a changed attack or steal key at once, not only with the heartbeat', () => {
+  it('sends a changed attack, steal or spray key at once, not only with the heartbeat', () => {
     const { socket, conn } = setup();
     socket.receive(startMessage());
     conn.update(10);
@@ -236,10 +236,13 @@ describe('OnlineConnection input', () => {
     conn.update(10);
     conn.setInput('p1', { ...NO_INPUT, steal: true });
     conn.update(10);
+    conn.setInput('p1', { ...NO_INPUT, spray: true });
+    conn.update(10);
     const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
-    expect(inputs.length).toBe(before + 2);
-    expect(inputs.at(-2)!.input.attack).toBe(true);
-    expect(inputs.at(-1)!.input.steal).toBe(true);
+    expect(inputs.length).toBe(before + 3);
+    expect(inputs.at(-3)!.input.attack).toBe(true);
+    expect(inputs.at(-2)!.input.steal).toBe(true);
+    expect(inputs.at(-1)!.input.spray).toBe(true);
   });
 
   it('tracks the room phase and sends ready', () => {

@@ -66,7 +66,7 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage({ t: 'input', seq: 7, input: { moveX: 5, action: true } })).toEqual({
       t: 'input',
       seq: 7,
-      input: { moveX: 0, moveY: 0, action: true, steal: false, attack: false },
+      input: { moveX: 0, moveY: 0, action: true, steal: false, attack: false, spray: false },
     });
   });
 
