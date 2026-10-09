@@ -5,9 +5,11 @@ import {
   DEFAULT_MAP_ID,
   DEFAULT_ROUND_MS,
   DEFAULT_ROUNDS,
+  finalRanking,
   freshProgress,
   isAvatar,
   isRoundMs,
+  isRounds,
   MAP_DEFS,
   MAX_ROOM_PLAYERS,
   MIN_START_PLAYERS,
@@ -136,7 +138,11 @@ export class Room {
   private readonly countdownMs: number | undefined;
   /** Vom Host gewählte Rundenzeit */
   private chosenRoundMs: number = DEFAULT_ROUND_MS;
-  /** Rangliste der letzten Runde, für Nachzügler in der Shop-Phase */
+  /** Vom Host gewählte Rundenzahl (0 = offen) */
+  private chosenRounds: number = DEFAULT_ROUNDS;
+  /** Laufende bzw. letzte Runde der Serie ab 1; 0 in der Lobby */
+  round = 0;
+  /** Rangliste der letzten Runde (Shop-Phase) bzw. Endwertung (Phase final), für Nachzügler */
   private lastRanking: RankEntry[] = [];
   private readonly now: () => number;
   private readonly random: () => number;
@@ -171,6 +177,11 @@ export class Room {
   /** Rundenzeit der nächsten Runde: ROUND_MS (falls gesetzt), sonst die Wahl des Hosts. */
   roundMs(): number {
     return this.fixedRoundMs ?? this.chosenRoundMs;
+  }
+
+  /** Rundenzahl der Serie (0 = offen). */
+  rounds(): number {
+    return this.chosenRounds;
   }
 
   /** Raum verlangt beim Beitritt ein Passwort. */
@@ -220,7 +231,7 @@ export class Room {
       players: this.roster(),
       phase: this.phase,
       roundMs: this.roundMs(),
-      rounds: DEFAULT_ROUNDS,
+      rounds: this.rounds(),
     };
   }
 
@@ -245,7 +256,7 @@ export class Room {
 
   /**
    * Markiert Mitglieder nach der Frist als abgelaufen; außerhalb der Runde fliegen sie raus
-   * (ihr Fortschritt verfällt). In der Shop-Phase kann das die nächste Runde auslösen.
+   * (ihr Fortschritt und ihre Figur werden frei). In der Shop-Phase kann das die nächste Runde auslösen.
    */
   private expireMembers(): void {
     const now = this.now();
@@ -256,10 +267,8 @@ export class Room {
     const gone = this.members.filter((m) => m.conn === null && m.expired);
     if (gone.length === 0) return;
     for (const m of gone) this.drop(m);
-    if (this.phase === 'shop') {
-      this.broadcastLobby();
-      this.checkAllReady();
-    }
+    this.broadcastLobby();
+    if (this.phase === 'shop') this.checkAllReady();
   }
 
   join(name: string, conn: Conn, token?: string, extras: JoinExtras = {}): Result<Member> {
@@ -277,6 +286,7 @@ export class Room {
         this.sendChatHistory(conn);
         if (this.phase === 'playing' && this.state) this.sendStart(back);
         if (this.phase === 'shop') this.sendShop(back);
+        if (this.phase === 'final') this.sendFinal(back);
         this.broadcastLobby();
         return { ok: true, value: back };
       }
@@ -315,6 +325,8 @@ export class Room {
       this.progress.set(member.id, freshProgress());
       this.sendShop(member);
     }
+    // Beitritt während der Endwertung: sieht sie, steht aber nicht drin, und wartet auf die Lobby
+    if (this.phase === 'final') this.sendFinal(member);
     this.broadcastLobby();
     return { ok: true, value: member };
   }
@@ -412,6 +424,7 @@ export class Room {
     this.members = this.connected();
     this.progress.clear();
     for (const m of this.members) this.progress.set(m.id, freshProgress());
+    this.round = 0;
     this.startRound();
     return OK;
   }
@@ -429,6 +442,7 @@ export class Room {
       m.ackSeq = 0;
       m.ready = false;
     }
+    this.round++;
     this.phase = 'playing';
     // Chat ist nur in der Lobby offen; die Zähler werden nicht mehr gebraucht
     this.chatTimes.clear();
@@ -447,6 +461,8 @@ export class Room {
       players: this.roster(),
       snap: projectSnapshot(this.state, m.id),
       roundMs: this.roundMs(),
+      rounds: this.rounds(),
+      round: this.round,
     });
   }
 
@@ -463,6 +479,31 @@ export class Room {
     if (!m.conn) return;
     const own = this.progress.get(m.id) ?? freshProgress();
     m.conn.send({ t: 'shopState', you: progressOf(own), ready: m.ready });
+  }
+
+  /** Endwertung an einen Spieler: erst die Phase, dann die Rangliste nach Gesamtverdienst (kein Shop-Stand). */
+  private sendFinal(m: Member): void {
+    if (!m.conn) return;
+    m.conn.send({ t: 'phase', phase: 'final' });
+    m.conn.send({ t: 'ranking', entries: this.lastRanking.map((e) => ({ ...e })) });
+  }
+
+  /**
+   * Serie vorbei: Endwertung aus dem Fortschritt aller aktuellen Mitglieder (Gesamtverdienst; Rundenverdienst
+   * aus der letzten Runde, sonst 0), danach eingefroren. Kein Shop.
+   */
+  private enterFinal(): void {
+    const entries: RankEntry[] = this.members.map((m) => {
+      const p = this.progress.get(m.id) ?? freshProgress();
+      const last = this.lastRanking.find((e) => e.id === m.id);
+      return { id: m.id, money: p.money, round: last?.round ?? 0, total: p.earnedTotal };
+    });
+    this.lastRanking = finalRanking(entries);
+    this.phase = 'final';
+    this.state = null;
+    for (const m of this.members) m.ready = false;
+    for (const m of this.members) this.sendFinal(m);
+    this.broadcastLobby();
   }
 
   /** Bereit / nicht bereit in der Shop-Phase. Sind danach alle Verbundenen bereit, beginnt die nächste Runde. */
@@ -507,7 +548,7 @@ export class Room {
     return OK;
   }
 
-  /** Rundenzeit wählen (nur Host, nur Lobby oder Shop; der Wert ist schon gegen ROUND_MS_CHOICES geprüft). */
+  /** Rundenzeit wählen (nur Host, nicht während einer Runde; der Wert ist schon gegen ROUND_MS_CHOICES geprüft). */
   setRoundMs(byId: string, roundMs: number): Result<void> {
     if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Rundenzeit ändern.');
     if (this.phase === 'playing') return fail('wrong_phase', 'Die Rundenzeit ändert sich erst zwischen den Runden.');
@@ -518,16 +559,41 @@ export class Room {
     return OK;
   }
 
-  /** Serie beenden (nur Host, nur Shop): zurück in die Lobby, Fortschritt verfällt, Getrennte fallen heraus. */
+  /** Rundenzahl wählen (nur Host, nur Lobby): 1, 3, 5 oder 0 = offen. */
+  setRounds(byId: string, rounds: number): Result<void> {
+    if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Rundenzahl ändern.');
+    if (this.phase !== 'lobby') return fail('wrong_phase', 'Die Rundenzahl ändert sich nur in der Lobby.');
+    if (!isRounds(rounds)) return fail('bad_message', 'Ungültige Rundenzahl.');
+    this.lastActive = this.now();
+    this.chosenRounds = rounds;
+    this.broadcastLobby();
+    return OK;
+  }
+
+  /** Serie vorzeitig beenden (nur Host, nur Shop): weiter zur Endwertung der bisherigen Runden. */
   endSeries(byId: string): Result<void> {
     if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Serie beenden.');
     if (this.phase !== 'shop') return fail('wrong_phase', 'Die Serie lässt sich nur im Shop beenden.');
     this.lastActive = this.now();
+    this.enterFinal();
+    return OK;
+  }
+
+  /**
+   * Nach der Endwertung zurück in die Lobby (nur Host, nur final). Bleibt: Code, Name, Sichtbarkeit, Passwort,
+   * Host, Rundenzahl, Rundenzeit, Mitglieder (auch Getrennte in der Frist), Figuren und Chat.
+   * Zurückgesetzt: Fortschritt, Rangliste, Rundennummer. Abgelaufene fallen heraus.
+   */
+  toLobby(byId: string): Result<void> {
+    if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann zurück in die Lobby.');
+    if (this.phase !== 'final') return fail('wrong_phase', 'Zurück in die Lobby geht nur nach der Endwertung.');
+    this.lastActive = this.now();
+    this.expireMembers();
     this.phase = 'lobby';
     this.state = null;
     this.progress.clear();
     this.lastRanking = [];
-    this.members = this.connected();
+    this.round = 0;
     for (const m of this.members) m.ready = false;
     this.broadcast({ t: 'phase', phase: 'lobby' });
     this.broadcastLobby();
@@ -542,7 +608,7 @@ export class Room {
     this.startRound();
   }
 
-  /** Runde vorbei: Fortschritt sichern, Rangliste senden, Shop-Phase. */
+  /** Runde vorbei: Fortschritt sichern, dann Shop-Phase oder (nach der letzten Runde) Endwertung. */
   private endRound(): void {
     const state = this.state;
     if (!state) return;
@@ -551,10 +617,14 @@ export class Room {
       if (p) this.progress.set(m.id, progressOf(p));
     }
     this.lastRanking = ranking(state);
-    this.phase = 'shop';
     for (const m of this.members) m.ready = false;
     // Wer die Runde endgültig verlassen hat (oder dessen Frist ablief), fällt jetzt heraus
     for (const m of this.members.filter((x) => x.conn === null && x.expired)) this.drop(m);
+    if (this.chosenRounds !== 0 && this.round >= this.chosenRounds) {
+      this.enterFinal();
+      return;
+    }
+    this.phase = 'shop';
     for (const m of this.members) this.sendShop(m);
     this.broadcastLobby();
   }

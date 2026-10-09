@@ -270,7 +270,7 @@ describe('round time and ending the series', () => {
     expect(conns[0].last('lobby').roundMs).toBe(1000);
   });
 
-  it('lets only the host end the series in the shop phase, back to the lobby without progress', () => {
+  it('lets only the host end the series in the shop phase, into the final ranking, then back to the lobby without progress', () => {
     const { room, conns, members, endRound } = series();
     expect(room.endSeries('p1')).toMatchObject({ ok: false, code: 'wrong_phase' });
     room.start('p1');
@@ -278,12 +278,17 @@ describe('round time and ending the series', () => {
     room.leave(members[2].conn!);
     expect(room.endSeries('p2')).toMatchObject({ ok: false, code: 'not_host' });
     expect(room.endSeries('p1').ok).toBe(true);
+    expect(room.phase).toBe('final');
+    expect(conns[1].last('phase').phase).toBe('final');
+    expect(room.toLobby('p1').ok).toBe(true);
     expect(room.phase).toBe('lobby');
     expect(room.state).toBeNull();
     expect(room.progress.size).toBe(0);
-    expect(room.members.map((m) => m.id)).toEqual(['p1', 'p2']);
+    // p3 ist getrennt, aber noch in der Frist: bleibt in der Lobby, start entfernt ihn
+    expect(room.members.map((m) => m.id)).toEqual(['p1', 'p2', 'p3']);
     expect(conns[1].last('phase').phase).toBe('lobby');
     expect(room.start('p1').ok).toBe(true);
+    expect(room.members.map((m) => m.id)).toEqual(['p1', 'p2']);
     expect(room.state!.players.p1.money).toBe(0);
   });
 });
