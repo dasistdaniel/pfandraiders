@@ -1,7 +1,7 @@
 import { CONFIG } from './config';
 import { updateDeposit } from './economy';
 import { tryAttack } from './fight';
-import { eatFood, updateHealth } from './health';
+import { updateHealth } from './health';
 import { walk } from './movement';
 import { updateNpcs } from './npc';
 import { cancelSearch, refillSpot, updateSearch } from './search';
@@ -52,8 +52,6 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
   p.actionHeld = input.action;
   const stealPressed = input.steal && !p.stealHeld;
   p.stealHeld = input.steal;
-  const eatPressed = input.eat && !p.eatHeld;
-  p.eatHeld = input.eat;
   const attackPressed = input.attack && !p.attackHeld;
   p.attackHeld = input.attack;
   p.shieldMs = Math.max(0, p.shieldMs - dt);
@@ -66,7 +64,6 @@ function updatePlayer(state: GameState, p: Player, input: Input, dt: number): vo
     return;
   }
 
-  if (eatPressed) eatFood(p);
   // Schlagen geht auch im Laufen; die eigene Suche bricht ab
   if (attackPressed && tryAttack(state, p)) cancelSearch(p);
 

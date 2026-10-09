@@ -66,7 +66,7 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage({ t: 'input', seq: 7, input: { moveX: 5, action: true } })).toEqual({
       t: 'input',
       seq: 7,
-      input: { moveX: 0, moveY: 0, action: true, steal: false, attack: false, eat: false },
+      input: { moveX: 0, moveY: 0, action: true, steal: false, attack: false },
     });
   });
 
@@ -144,17 +144,17 @@ describe('series messages', () => {
   });
 
   it('accepts shopBuy with known category and item and a quantity from 1 to 99', () => {
-    expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: 'food', qty: 99 })).toEqual({
+    expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: 'dog_treat', qty: 99 })).toEqual({
       t: 'shopBuy',
       category: 'defense',
-      item: 'food',
+      item: 'dog_treat',
       qty: 99,
     });
     for (const qty of [0, 100, 1.5, -3, '2', null]) {
-      expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: 'food', qty })).toBeNull();
+      expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: 'dog_treat', qty })).toBeNull();
     }
     expect(parseClientMessage({ t: 'shopBuy', category: 'defense', item: '__proto__', qty: 1 })).toBeNull();
-    expect(parseClientMessage({ t: 'shopBuy', category: 'toString', item: 'food', qty: 1 })).toBeNull();
+    expect(parseClientMessage({ t: 'shopBuy', category: 'toString', item: 'dog_treat', qty: 1 })).toBeNull();
   });
 
   it('accepts setRoundMs only with an allowed value', () => {

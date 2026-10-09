@@ -24,7 +24,7 @@ describe('countdown before the round', () => {
     s.players.p1.health = 50;
     const before = JSON.parse(JSON.stringify({ ...s, map: null, tick: 0, countdownMs: 0 }));
     // länger als die Rundenzeit, aber kürzer als der Countdown: die Runde endet nicht
-    runSteps(s, { p1: input({ moveX: 1, action: true, attack: true }), p2: input({ moveY: 1, eat: true }) }, 249, 20);
+    runSteps(s, { p1: input({ moveX: 1, action: true, attack: true }), p2: input({ moveY: 1 }) }, 249, 20);
     expect(s.countdownMs).toBe(20);
     expect(s.phase).toBe('running');
     expect(s.tick).toBe(249);

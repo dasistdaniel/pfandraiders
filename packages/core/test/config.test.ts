@@ -19,21 +19,26 @@ describe('config sanity', () => {
     expect(CONFIG.searchMs).toBeGreaterThan(0);
   });
 
-  it('has speed multipliers in (0, 1] so containers never stop or speed up the player', () => {
-    for (const c of CONFIG.containers) {
-      expect(c.speedMult).toBeGreaterThan(0);
-      expect(c.speedMult).toBeLessThanOrEqual(1);
-    }
+  it('carries 3 in the hands and 31 with every bag, backpack and the cart', () => {
+    expect(CONFIG.carry.base).toBe(3);
+    expect(CONFIG.carry.perUnit).toEqual({ bag: 2, backpack: 5, cart: 10 });
+    const max = CONFIG.shop.items;
+    expect(
+      CONFIG.carry.base +
+        (max.bag.max ?? 0) * CONFIG.carry.perUnit.bag +
+        (max.backpack.max ?? 0) * CONFIG.carry.perUnit.backpack +
+        CONFIG.carry.perUnit.cart,
+    ).toBe(31);
   });
 
-  it('has exactly one upgrade price per container step', () => {
-    expect(CONFIG.upgradePrices.length).toBe(CONFIG.containers.length - 1);
+  it('slows only with the cart, by a factor in (0, 1]', () => {
+    expect(CONFIG.carry.cartSpeedMult).toBe(0.7);
+    expect(CONFIG.carry.cartSpeedMult).toBeGreaterThan(0);
   });
 
-  it('has strictly increasing capacities so every upgrade is an improvement', () => {
-    for (let i = 1; i < CONFIG.containers.length; i++) {
-      expect(CONFIG.containers[i].capacity).toBeGreaterThan(CONFIG.containers[i - 1].capacity);
-    }
+  it('knocks out for a fixed 20 s and finds food in bins more often', () => {
+    expect(CONFIG.health.knockoutMs).toBe(20000);
+    expect(CONFIG.health.food.chance).toEqual({ bin: 0.1, bus_stop: 0.04, bench: 0.04, bush: 0.04, park: 0.04 });
   });
 });
 

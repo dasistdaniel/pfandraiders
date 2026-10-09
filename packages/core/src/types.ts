@@ -2,31 +2,26 @@ export type BottleKind = 'plastic' | 'glass' | 'crate';
 export type Bottles = Record<BottleKind, number>;
 export type SpotType = 'bus_stop' | 'bench' | 'bush' | 'bin' | 'park';
 export type Mode = 'walking' | 'searching' | 'unconscious';
-/** Upgrades mit Stufen (die Tasche ist containerLevel) */
-export type UpgradeId = 'knockout' | 'speed' | 'search' | 'punch' | 'armor';
-/** Stufe je Upgrade, 0 = nicht gekauft */
-export type Upgrades = Record<UpgradeId, number>;
-/** Verbrauchsgüter (Stückzahl) und der Bolzenschneider (höchstens einer) */
-export interface Inventory {
-  dog_treat: number;
-  food: number;
-  bolt_cutters: boolean;
-}
-/** Waffe; bisher nur die Faust, Fernkampf folgt in einem späteren Plan */
-export type WeaponId = 'fist' | 'sling' | 'pistol';
-export type ShopCategory = 'bags' | 'upgrades' | 'attack' | 'defense';
+export type ShopCategory = 'bags' | 'upgrades' | 'weapons' | 'defense';
 export type ShopItemId =
   | 'bag'
-  | 'knockout'
-  | 'speed'
-  | 'search'
+  | 'backpack'
+  | 'cart'
+  | 'flashlight'
+  | 'card'
+  | 'card_plus'
   | 'punch'
-  | 'bolt_cutters'
-  | 'sling'
-  | 'pistol'
-  | 'dog_treat'
-  | 'food'
-  | 'armor';
+  | 'dog_treat';
+/** Besitz je Shop-Artikel: Stückzahl, Stufe oder 0/1. Bleibt über Runden, außer Mietsachen (perRound). */
+export type Items = Record<ShopItemId, number>;
+/** Letzter Essensfund dieser Runde (privat): n zählt die Funde ab 1, text ist der Index in FOOD_TEXTS[spot]. */
+export interface FoodFind {
+  n: number;
+  spot: SpotType;
+  text: number;
+  /** Leben war schon voll (aufgerundet): Text bekommt FOOD_FULL_SUFFIX */
+  full: boolean;
+}
 
 export interface Point {
   x: number;
@@ -56,11 +51,9 @@ export interface Input {
   steal: boolean;
   /** Schlagen-Taste gehalten (wirkt beim Drücken) */
   attack: boolean;
-  /** Essen-Taste gehalten (wirkt beim Drücken: eine Portion aus dem Inventar) */
-  eat: boolean;
 }
 
-export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, attack: false, eat: false };
+export const NO_INPUT: Input = { moveX: 0, moveY: 0, action: false, steal: false, attack: false };
 
 export interface SpotDef extends Point {
   id: number;
@@ -89,7 +82,8 @@ export interface Player {
   /** Cent */
   money: number;
   bottles: Bottles;
-  containerLevel: number;
+  /** Besitz aus dem Shop (Taschen, Upgrades, Schlag, Leckerli) */
+  items: Items;
   mode: Mode;
   searchSpotId: number | null;
   searchProgressMs: number;
@@ -102,16 +96,8 @@ export interface Player {
   actionHeld: boolean;
   /** Ausrauben-Taste im vorigen Tick gedrückt, für die Flanke (Ausrauben wirkt nur beim Drücken) */
   stealHeld: boolean;
-  /** Essen-Taste im vorigen Tick gedrückt, für die Flanke */
-  eatHeld: boolean;
   /** Schlagen-Taste im vorigen Tick gedrückt, für die Flanke */
   attackHeld: boolean;
-  /** Verbrauchsgüter und Bolzenschneider (bleiben über Runden) */
-  inventory: Inventory;
-  /** Upgrade-Stufen (bleiben über Runden) */
-  upgrades: Upgrades;
-  /** Waffe, bisher immer 'fist' */
-  weapon: WeaponId;
   /** Restzeit, bis der Spieler wieder schlagen kann, 0 = bereit */
   attackCooldownMs: number;
   /** Restzeit des Schutzes nach dem Aufstehen aus einem Knockout, 0 = angreifbar */
@@ -122,6 +108,8 @@ export interface Player {
   unconsciousMs: number;
   /** In diesem Knockout schon ausgeraubt (einmal pro Knockout, Spec §4.4) */
   robbed: boolean;
+  /** Letzter Essensfund dieser Runde, null = noch keiner (für den Hinweis im Client) */
+  lastFood: FoodFind | null;
   /** Rundenverdienst in Cent (Pfand dieser Runde) */
   earnedRound: number;
   /** Gesamtverdienst der Serie in Cent (alle Runden, inklusive der laufenden) */

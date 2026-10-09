@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { totalBottles } from '../src/bottles';
 import { CONFIG } from '../src/config';
-import { damage, eatFood, knockoutMsOf } from '../src/health';
+import { damage } from '../src/health';
 import { input, newGame, runFor, runSteps, SEARCH_ROWS, teleport } from './helpers';
 
 describe('hunger', () => {
@@ -27,39 +27,30 @@ describe('knock out', () => {
     const p = s.players.p1;
     p.money = 1001;
     p.bottles = { plastic: 2, glass: 1, crate: 0 };
-    p.inventory.bolt_cutters = true;
-    p.inventory.food = 2;
+    p.items.dog_treat = 2;
     damage(p, 1000);
     return s;
   }
 
-  it('keeps bottles, money and inventory', () => {
+  it('keeps bottles, money and items', () => {
     const p = knocked().players.p1;
     expect(p.bottles).toEqual({ plastic: 2, glass: 1, crate: 0 });
     expect(p.money).toBe(1001);
-    expect(p.inventory).toEqual({ dog_treat: 0, food: 2, bolt_cutters: true });
+    expect(p.items.dog_treat).toBe(2);
     expect(p.mode).toBe('unconscious');
     expect(p.health).toBe(0);
     expect(p.robbed).toBe(false);
   });
 
-  it('lasts 20 s without upgrade and 15, 10, 5 s with the knockout upgrade', () => {
-    for (const [level, ms] of [[0, 20000], [1, 15000], [2, 10000], [3, 5000]] as const) {
-      const s = newGame(SEARCH_ROWS);
-      s.players.p1.upgrades.knockout = level;
-      damage(s.players.p1, 1000);
-      expect(s.players.p1.unconsciousMs).toBe(ms);
-      expect(knockoutMsOf(s.players.p1)).toBe(ms);
-    }
-  });
-
-  it('uses the same duration when hunger knocks the player out', () => {
+  it('lasts the fixed knockout time, also after hunger', () => {
     const s = newGame(SEARCH_ROWS);
-    s.players.p1.upgrades.knockout = 2;
-    s.players.p1.health = 0.05;
-    runSteps(s, {}, 30, 20);
-    expect(s.players.p1.unconsciousMs).toBeGreaterThan(10000 - 600);
-    expect(s.players.p1.unconsciousMs).toBeLessThanOrEqual(10000);
+    damage(s.players.p1, 1000);
+    expect(s.players.p1.unconsciousMs).toBe(CONFIG.health.knockoutMs);
+    const t = newGame(SEARCH_ROWS);
+    t.players.p1.health = 0.05;
+    runSteps(t, {}, 30, 20);
+    expect(t.players.p1.unconsciousMs).toBeGreaterThan(CONFIG.health.knockoutMs - 600);
+    expect(t.players.p1.unconsciousMs).toBeLessThanOrEqual(CONFIG.health.knockoutMs);
   });
 
   it('cancels searching', () => {
@@ -74,10 +65,10 @@ describe('knock out', () => {
 
   it('ignores all input while unconscious', () => {
     const s = knocked();
-    runSteps(s, { p1: input({ moveX: 1, action: true, steal: true, attack: true, eat: true }) }, 50, 20);
+    runSteps(s, { p1: input({ moveX: 1, action: true, steal: true, attack: true }) }, 50, 20);
     expect(s.players.p1.x).toBe(24);
     expect(s.players.p1.mode).toBe('unconscious');
-    expect(s.players.p1.inventory.food).toBe(2);
+    expect(s.players.p1.items.dog_treat).toBe(2);
   });
 
   it('takes no further damage while unconscious', () => {
@@ -91,7 +82,7 @@ describe('knock out', () => {
   it('stands up where he fell with revive health and shield', () => {
     const s = knocked();
     teleport(s, 'p1', { x: 100, y: 24 });
-    runFor(s, {}, knockoutMsOf(s.players.p1) + 100);
+    runFor(s, {}, CONFIG.health.knockoutMs + 100);
     const p = s.players.p1;
     expect(p.x).toBe(100);
     expect(p.y).toBe(24);
@@ -108,48 +99,6 @@ describe('knock out', () => {
     runSteps(s, {}, 10, 20);
     expect(Number.isNaN(s.players.p1.health)).toBe(false);
     expect(s.players.p1.health).toBeGreaterThanOrEqual(0);
-  });
-});
-
-describe('eating from the inventory', () => {
-  const EAT = { p1: input({ eat: true }) };
-
-  it('heals one portion on the key press and uses it up', () => {
-    const s = newGame(SEARCH_ROWS);
-    s.players.p1.health = 50;
-    s.players.p1.inventory.food = 2;
-    runSteps(s, EAT, 1);
-    expect(s.players.p1.health).toBeCloseTo(50 + CONFIG.health.food.heal, 1);
-    expect(s.players.p1.inventory.food).toBe(1);
-  });
-
-  it('eats only once while the key is held', () => {
-    const s = newGame(SEARCH_ROWS);
-    s.players.p1.health = 10;
-    s.players.p1.inventory.food = 5;
-    runSteps(s, EAT, 20);
-    expect(s.players.p1.inventory.food).toBe(4);
-    runSteps(s, { p1: input({}) }, 1);
-    runSteps(s, EAT, 1);
-    expect(s.players.p1.inventory.food).toBe(3);
-  });
-
-  it('caps health at the maximum', () => {
-    const s = newGame(SEARCH_ROWS);
-    s.players.p1.health = 95;
-    s.players.p1.inventory.food = 1;
-    runSteps(s, EAT, 1);
-    expect(s.players.p1.health).toBe(CONFIG.health.max);
-  });
-
-  it('does nothing without food or at full health', () => {
-    const s = newGame(SEARCH_ROWS);
-    s.players.p1.health = 50;
-    expect(eatFood(s.players.p1)).toBe(false);
-    s.players.p1.health = CONFIG.health.max;
-    s.players.p1.inventory.food = 1;
-    expect(eatFood(s.players.p1)).toBe(false);
-    expect(s.players.p1.inventory.food).toBe(1);
   });
 });
 

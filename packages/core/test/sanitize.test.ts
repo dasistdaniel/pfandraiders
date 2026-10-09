@@ -4,7 +4,7 @@ import { NO_INPUT } from '../src/types';
 
 describe('sanitizeInput', () => {
   it('keeps a valid input', () => {
-    const i = { moveX: -1, moveY: 1, action: true, steal: true, attack: true, eat: true };
+    const i = { moveX: -1, moveY: 1, action: true, steal: true, attack: true };
     expect(sanitizeInput(i)).toEqual(i);
   });
 
@@ -27,7 +27,6 @@ describe('sanitizeInput', () => {
       action: 'yes',
       steal: 1,
       attack: 'true',
-      eat: {},
     });
     expect(out).toEqual(NO_INPUT);
     expect(sanitizeInput({ moveX: NaN, moveY: Infinity })).toEqual(NO_INPUT);
@@ -40,7 +39,8 @@ describe('sanitizeInput', () => {
     expect('extra' in out).toBe(false);
   });
 
-  it('has attack and eat off in NO_INPUT', () => {
-    expect(NO_INPUT).toEqual({ moveX: 0, moveY: 0, action: false, steal: false, attack: false, eat: false });
+  it('has attack off and no eat key in NO_INPUT, and drops a sent eat key', () => {
+    expect(NO_INPUT).toEqual({ moveX: 0, moveY: 0, action: false, steal: false, attack: false });
+    expect('eat' in sanitizeInput({ ...NO_INPUT, eat: true })).toBe(false);
   });
 });

@@ -2,12 +2,15 @@ import { totalBottles, VALUE_ORDER } from './bottles';
 import { CONFIG } from './config';
 import type { GameState, Input, Player, Point } from './types';
 
-export function containerOf(p: Player) {
-  return CONFIG.containers[p.containerLevel];
+/** Plätze: Hände plus Taschen, Rucksäcke und Einkaufswagen (Spec §2.1). */
+export function capacityOf(p: Pick<Player, 'items'>): number {
+  const c = CONFIG.carry;
+  return c.base + p.items.bag * c.perUnit.bag + p.items.backpack * c.perUnit.backpack + p.items.cart * c.perUnit.cart;
 }
 
-export function capacityOf(p: Player): number {
-  return containerOf(p).capacity;
+/** Faktor auf das Lauftempo: nur der Einkaufswagen bremst (Spec §2.2). */
+export function speedMultOf(p: Pick<Player, 'items'>): number {
+  return p.items.cart > 0 ? CONFIG.carry.cartSpeedMult : 1;
 }
 
 export function distance(a: Point, b: Point): number {

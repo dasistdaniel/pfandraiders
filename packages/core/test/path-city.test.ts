@@ -46,7 +46,7 @@ describe('police pathing on the city map', () => {
       s.players.p1.x = player.x;
       s.players.p1.y = player.y;
       s.players.p1.health = 1e9; // kein Umfallen durch Hunger
-      s.players.p1.containerLevel = 1;
+      s.players.p1.items.bag = 3;
       s.players.p1.bottles = { plastic: 4, glass: 0, crate: 0 };
       s.npcs.push({
         id: 1, kind: 'police', x: from.x, y: from.y, lifeMs: 30000, mood: 'active', moodMs: 0, targetId: null,

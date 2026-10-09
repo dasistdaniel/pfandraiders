@@ -14,7 +14,6 @@ function scripted(tick: number, shift: number): Input {
     action: (tick + shift) % 9 < 5,
     steal: tick % 211 < 6,
     attack: tick % 97 < 3,
-    eat: tick % 300 === 0,
   };
 }
 

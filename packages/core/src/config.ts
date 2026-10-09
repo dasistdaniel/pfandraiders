@@ -5,24 +5,28 @@ export const TILE = 16;
 
 export type Range = readonly [min: number, max: number];
 
-/** level: Stufen (Preis je nächste Stufe), once: höchstens einmal, stack: Stückzahl bis CONFIG.shop.maxStack */
-export type ShopKind = 'level' | 'once' | 'stack';
+/**
+ * level: Stufen (Preis je nächste Stufe), once: höchstens einmal, count: Stückzahl bis max, je Kauf genau eins,
+ * stack: Stückzahl bis max bzw. CONFIG.shop.maxStack, Menge im Shop wählbar
+ */
+export type ShopKind = 'level' | 'once' | 'count' | 'stack';
 
 export interface ShopItemDef {
   category: ShopCategory;
   /** Anzeigename im Shop */
   name: string;
   kind: ShopKind;
-  /** level: Preis in Cent von Stufe i auf i + 1; once/stack: [Preis je Stück] */
+  /** level: Preis in Cent von Stufe i auf i + 1; once/count/stack: [Preis je Stück] */
   prices: readonly number[];
   /** level: Wirkung je Stufe (Index = Stufe, Länge = prices.length + 1); sonst leer */
   values: readonly number[];
-  /** false = wird grau mit "bald" angezeigt und ist nicht kaufbar */
-  available: boolean;
+  /** count/stack: höchster Bestand (fehlt = CONFIG.shop.maxStack) */
+  max?: number;
+  /** Miete: gilt nur für die Runde nach dem Kauf und ist am Rundenende weg (progressAfterRound) */
+  perRound?: boolean;
+  /** Kauf erst, wenn dieser Artikel vorhanden ist */
+  requires?: ShopItemId;
 }
-
-/** Preis in Cent, um von Taschenstufe i auf i + 1 zu kommen */
-const UPGRADE_PRICES: readonly number[] = [150, 400, 900];
 
 export const CONFIG = {
   /** Standard-Rundenzeit (5 Minuten); der Host wählt in der Lobby 3, 5, 7 oder 10 Minuten */
@@ -47,24 +51,24 @@ export const CONFIG = {
   searchMs: 1500,
   /** Am Pfandautomaten wird alle so viele ms eine Flasche abgegeben (die erste sofort beim Drücken) */
   depositEveryMs: 150,
+  /** ... mit Kundenkarte */
+  depositEveryMsCard: 100,
   refillMs: 30000,
   /** Wahrscheinlichkeit, dass ein Spot zu Rundenbeginn gefüllt ist */
   spotActiveChance: 0.85,
   /** Cent pro Flasche */
   bottleValue: { plastic: 8, glass: 15, crate: 25 } as Record<BottleKind, number>,
-  containers: [
-    { name: 'Hände', capacity: 3, speedMult: 1 },
-    { name: 'Tasche', capacity: 8, speedMult: 1 },
-    { name: 'Rucksack', capacity: 15, speedMult: 0.95 },
-    { name: 'Einkaufswagen', capacity: 30, speedMult: 0.75 },
-  ],
-  /** Preis in Cent, um von Stufe i auf i+1 zu kommen */
-  upgradePrices: UPGRADE_PRICES,
+  /** Plätze: Hände plus je Tasche, Rucksack und Einkaufswagen (Spec §2.1); nur der Wagen bremst */
+  carry: {
+    base: 3,
+    perUnit: { bag: 2, backpack: 5, cart: 10 },
+    cartSpeedMult: 0.7,
+  },
   /** Ausrauben eines Ausgeknockten (Spec §4.4) */
   steal: {
     /** größter Abstand Räuber zu Opfer in Pixeln */
     radius: 20,
-    /** Anteil der Flaschen des Opfers (mit Bolzenschneider alles) */
+    /** Anteil der Flaschen des Opfers (aufgerundet) */
     fraction: 0.5,
   },
   /** Schlagen (Spec §4.1) */
@@ -73,43 +77,42 @@ export const CONFIG = {
     radius: 20,
     /** so lange nach einem Schlag (auch ohne Treffer) kein neuer */
     cooldownMs: 600,
-    /** Grundschaden; Schlag-Upgrade erhöht, Rüstung des Opfers senkt */
+    /** Grundschaden; das Schlag-Upgrade erhöht ihn */
     damage: 20,
-    /** Untergrenze des Schadens */
-    minDamage: 5,
   },
   /**
-   * Shop-Phase (Spec §3). Reihenfolge der Einträge = Reihenfolge im Shop. Preise und Wirkungen sind
-   * Startwerte für das spätere Balancing.
+   * Shop-Phase (Spec 2026-10-09-shop-umbau §1). Reihenfolge der Einträge = Reihenfolge im Shop.
+   * Alle Preise und Wirkungen sind erfundene Startwerte für das spätere Balancing.
    */
   shop: {
-    /** Höchster Bestand eines Verbrauchsguts */
+    /** Höchster Bestand eines Verbrauchsguts ohne eigenes max */
     maxStack: 99,
+    /** Kundenkarte+: Aufschlag je Flasche in Prozent, kaufmännisch gerundet (Spec §3.3) */
+    cardPlusBonusPct: 10,
     items: {
-      bag: { category: 'bags', name: 'Größere Tasche', kind: 'level', prices: UPGRADE_PRICES, values: [], available: true },
-      /** values: Knockout-Dauer in ms */
-      knockout: { category: 'upgrades', name: 'Knockout kürzer', kind: 'level', prices: [200, 500, 1000], values: [20000, 15000, 10000, 5000], available: true },
-      /** values: Faktor auf die Laufgeschwindigkeit */
-      speed: { category: 'upgrades', name: 'Laufgeschwindigkeit', kind: 'level', prices: [200, 500, 1000], values: [1, 1.08, 1.16, 1.24], available: true },
+      bag: { category: 'bags', name: 'Tasche', kind: 'count', prices: [150], values: [], max: 4 },
+      backpack: { category: 'bags', name: 'Rucksack', kind: 'count', prices: [400], values: [], max: 2 },
+      cart: { category: 'bags', name: 'Einkaufswagen', kind: 'once', prices: [100], values: [], perRound: true },
       /** values: Faktor auf die Suchzeit */
-      search: { category: 'upgrades', name: 'Schneller suchen', kind: 'level', prices: [200, 500, 1000], values: [1, 0.85, 0.7, 0.55], available: true },
+      flashlight: { category: 'upgrades', name: 'Taschenlampe', kind: 'level', prices: [200, 500, 1000], values: [1, 0.85, 0.7, 0.55] },
+      card: { category: 'upgrades', name: 'Kundenkarte', kind: 'once', prices: [300], values: [] },
+      card_plus: { category: 'upgrades', name: 'Kundenkarte+', kind: 'once', prices: [600], values: [], requires: 'card' },
       /** values: zusätzlicher Schaden je Schlag */
-      punch: { category: 'attack', name: 'Stärkerer Schlag', kind: 'level', prices: [250, 600, 1200], values: [0, 5, 10, 15], available: true },
-      bolt_cutters: { category: 'attack', name: 'Bolzenschneider', kind: 'once', prices: [600], values: [], available: true },
-      sling: { category: 'attack', name: 'Steinschleuder', kind: 'once', prices: [800], values: [], available: false },
-      pistol: { category: 'attack', name: 'Pistole', kind: 'once', prices: [2000], values: [], available: false },
-      dog_treat: { category: 'defense', name: 'Leckerli', kind: 'stack', prices: [100], values: [], available: true },
-      food: { category: 'defense', name: 'Essen', kind: 'stack', prices: [100], values: [], available: true },
-      /** values: weniger Schaden je Schlag */
-      armor: { category: 'defense', name: 'Rüstung', kind: 'level', prices: [250, 600, 1200], values: [0, 4, 8, 12], available: true },
+      punch: { category: 'weapons', name: 'Stärkerer Schlag', kind: 'level', prices: [250, 600, 1200], values: [0, 5, 10, 15] },
+      dog_treat: { category: 'defense', name: 'Leckerli', kind: 'stack', prices: [100], values: [] },
     } as Record<ShopItemId, ShopItemDef>,
   },
   health: {
     max: 100,
     /** alle so viele ms verliert ein Spieler 1 Leben durch Hunger */
     hungerEveryMs: 8000,
-    /** Eine Portion Essen aus dem Inventar heilt so viel */
-    food: { heal: 30 },
+    /** Dauer eines Knockouts */
+    knockoutMs: 20000,
+    /** Essensfund beim Suchen (Spec §5): heilt so viel, Chance je abgeschlossener Suche nach Spot-Art */
+    food: {
+      heal: 30,
+      chance: { bin: 0.1, bus_stop: 0.04, bench: 0.04, bush: 0.04, park: 0.04 } as Record<SpotType, number>,
+    },
     /** Leben nach dem Aufstehen */
     reviveHealth: 60,
     /** Schutz nach dem Aufstehen */

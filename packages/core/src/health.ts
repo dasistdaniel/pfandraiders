@@ -1,20 +1,14 @@
 import { CONFIG } from './config';
 import { cancelSearch } from './search';
-import { upgradeValue } from './shop';
 import type { Player } from './types';
 
-/** Dauer eines Knockouts nach der Stufe "Knockout kürzer": 20 s, 15 s, 10 s, 5 s. */
-export function knockoutMsOf(p: Pick<Player, 'upgrades'>): number {
-  return upgradeValue(p, 'knockout');
-}
-
 /**
- * Umfallen: Flaschen, Geld und Inventar bleiben. Der Spieler liegt knockoutMsOf(p) lang und kann
+ * Umfallen: Flaschen, Geld und Besitz bleiben. Der Spieler liegt CONFIG.health.knockoutMs lang und kann
  * in dieser Zeit einmal ausgeraubt werden (robbed wird zurückgesetzt).
  */
 export function knockOut(p: Player): void {
   p.health = 0;
-  p.unconsciousMs = knockoutMsOf(p);
+  p.unconsciousMs = CONFIG.health.knockoutMs;
   p.robbed = false;
   cancelSearch(p);
   p.depositMs = 0;
@@ -49,12 +43,4 @@ export function updateHealth(p: Player, dtMs: number): boolean {
     return true;
   }
   return false;
-}
-
-/** Isst eine Portion aus dem Inventar: heilt bis zum Maximum. Nicht bewusstlos, nicht bei vollem Leben. */
-export function eatFood(p: Player): boolean {
-  if (p.unconsciousMs > 0 || p.inventory.food <= 0 || p.health >= CONFIG.health.max) return false;
-  p.inventory.food--;
-  p.health = Math.min(CONFIG.health.max, p.health + CONFIG.health.food.heal);
-  return true;
 }

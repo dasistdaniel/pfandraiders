@@ -26,9 +26,9 @@ export function cancelSearch(p: Player): void {
   p.searchProgressMs = 0;
 }
 
-/** Suchdauer nach der Stufe "Schneller suchen" (ganze ms). */
-export function searchMsOf(p: Pick<Player, 'upgrades'>): number {
-  return Math.round(CONFIG.searchMs * upgradeValue(p, 'search'));
+/** Suchdauer nach der Stufe der Taschenlampe (ganze ms). */
+export function searchMsOf(p: Pick<Player, 'items'>): number {
+  return Math.round(CONFIG.searchMs * upgradeValue(p, 'flashlight'));
 }
 
 /**

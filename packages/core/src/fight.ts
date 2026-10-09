@@ -4,10 +4,9 @@ import { damage } from './health';
 import { upgradeValue } from './shop';
 import type { GameState, Player } from './types';
 
-/** Schaden eines Schlags: Grundschaden plus Schlag-Upgrade minus Rüstung des Opfers, mindestens minDamage. */
-export function punchDamage(attacker: Player, victim: Player): number {
-  const raw = CONFIG.fight.damage + upgradeValue(attacker, 'punch') - upgradeValue(victim, 'armor');
-  return Math.max(CONFIG.fight.minDamage, raw);
+/** Schaden eines Schlags: Grundschaden plus Schlag-Upgrade. */
+export function punchDamage(attacker: Pick<Player, 'items'>): number {
+  return CONFIG.fight.damage + upgradeValue(attacker, 'punch');
 }
 
 /**
@@ -38,6 +37,6 @@ export function tryAttack(state: GameState, attacker: Player): boolean {
   if (attacker.attackCooldownMs > 0) return false;
   attacker.attackCooldownMs = CONFIG.fight.cooldownMs;
   const target = findAttackTarget(state, attacker);
-  if (target && target.shieldMs === 0) damage(target, punchDamage(attacker, target));
+  if (target && target.shieldMs === 0) damage(target, punchDamage(attacker));
   return true;
 }

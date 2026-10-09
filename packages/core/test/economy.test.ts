@@ -51,7 +51,7 @@ describe('timed deposit', () => {
 
   it('needs exactly 29 intervals for a full shopping cart of 30 bottles', () => {
     const s = atDropoff();
-    s.players.p1.containerLevel = CONFIG.containers.length - 1;
+    s.players.p1.items = { ...s.players.p1.items, bag: 4, backpack: 2, cart: 1 }; // 31 Plätze
     s.players.p1.bottles = { plastic: 30, glass: 0, crate: 0 };
     runSteps(s, PRESS, 1);
     runSteps(s, PRESS, stepsUntilBottle(29) - 1);
