@@ -1,3 +1,5 @@
+import type { AssetState } from '../audioAssets';
+import type { MusicId } from '../audioIds';
 import { loadMusicVolume, saveMusicVolume } from '../settings';
 import {
   BASS_GATE_FRACTION,
@@ -57,6 +59,37 @@ import type { LayerName, MusicMode, NoteEvent } from './score';
 /** Liefert den gemeinsamen AudioContext (SoundFx), damit es nie einen zweiten gibt. */
 export interface AudioProvider {
   getContext(): AudioContext | null;
+}
+
+/** Eigene Musikdateien (AudioAssets): Zustand und Puffer je ID, Meldung bei Änderungen. */
+export interface MusicAssets {
+  state(id: string): AssetState;
+  buffer(id: string): AudioBuffer | null;
+  onChange?(fn: () => void): unknown;
+}
+
+/** Pegel einer Musikdatei bei Regler 100 % (die Datei bringt ihre eigene Lautstärke mit, auch music_ended). */
+export const MUSIC_FILE_GAIN = 0.2;
+/** Überblendung zwischen zwei Musikdateien bzw. Datei und erzeugter Musik, in s */
+export const MUSIC_CROSSFADE_SEC = 0.5;
+
+/** Datei-ID der Musik eines Zustands. */
+export function musicIdFor(mode: MusicMode): MusicId {
+  return `music_${mode}`;
+}
+
+/** Was im aktuellen Zustand läuft: Datei-Loop, erzeugte Musik, Stille (Datei lädt noch) oder nichts. */
+export type MusicSource = 'file' | 'synth' | 'wait' | 'off';
+
+/**
+ * Quelle der Musik: ohne Wunsch, bei "aus" oder Lautstärke 0 nichts; liegt eine Datei bereit, die Datei (festes Tempo,
+ * kein Fortschritt); lädt sie noch, Stille statt kurz erzeugter Musik; fehlt sie oder ist sie kaputt, die erzeugte Musik.
+ */
+export function musicSourceFor(run: boolean, file: AssetState): MusicSource {
+  if (!run) return 'off';
+  if (file === 'ready') return 'file';
+  if (file === 'pending') return 'wait';
+  return 'synth';
 }
 
 export interface Timers {
@@ -132,6 +165,10 @@ const defaultTimers: Timers = {
  * Signalweg: Akkorde, Leads, Arpeggio → Tiefpass → Duck (pumpt mit dem Kick) → out;
  * Gitarre → Gitarren-Tiefpass → out; Bass → Bass-Tiefpass → out; Kick, Snare, Hi-Hat, Becken → out;
  * out → Kompressor → Ausgang. Alle Filter entstehen einmal beim Anschließen, nicht je Note.
+ *
+ * Eigene Dateien (music_menu, music_game, music_ended, siehe docs/SOUNDLISTE.md) ersetzen die erzeugte Musik je
+ * Zustand: fester Loop ohne Tempowechsel, beim Zustandswechsel 0,5 s überblendet, eigener Ausgang direkt zum Ziel.
+ * Fehlt die Datei eines Zustands oder ist sie kaputt, läuft dort die erzeugte Musik.
  */
 export class MusicPlayer {
   private ctx: AudioContext | null = null;
@@ -155,16 +192,34 @@ export class MusicPlayer {
   private nextStepTime = 0;
   private lastTickTime: number | null = null;
   private appliedLevel: number | null = null;
+  private readonly assets: MusicAssets | null;
+  /** Ausgang der Musikdateien (Lautstärke), entsteht erst beim ersten Datei-Loop */
+  private fileOut: GainNode | null = null;
+  private fileLevel: number | null = null;
+  /** Laufende Datei-Loops je Zustand (beim Überblenden kurz zwei) */
+  private fileLoops = new Map<MusicMode, { src: AudioBufferSourceNode; env: GainNode }>();
+  private source: MusicSource = 'off';
   volume: number;
   muted: boolean;
 
   constructor(
     private readonly audio: AudioProvider,
-    opts: { volume?: number; muted?: boolean; timers?: Timers } = {},
+    opts: { volume?: number; muted?: boolean; timers?: Timers; assets?: MusicAssets | null } = {},
   ) {
     this.volume = clampVolume(opts.volume ?? loadMusicVolume());
     this.muted = opts.muted ?? false;
     this.timers = opts.timers ?? defaultTimers;
+    this.assets = opts.assets ?? null;
+    try {
+      this.assets?.onChange?.(() => this.sync());
+    } catch {
+      // ohne Meldungen gilt der Stand beim nächsten Zustandswechsel
+    }
+  }
+
+  /** Was gerade läuft (für Tests und Fehlersuche). */
+  get currentSource(): MusicSource {
+    return this.source;
   }
 
   /** Aktuelles (geglättetes) Tempo in BPM. */
@@ -209,15 +264,83 @@ export class MusicPlayer {
     return this.wanted && !this.muted && this.volume > 0;
   }
 
+  private fileState(): AssetState {
+    if (!this.assets) return 'none';
+    try {
+      return this.assets.state(musicIdFor(this.mode));
+    } catch {
+      return 'none';
+    }
+  }
+
   private sync(): void {
     try {
       if (this.shouldRun() && !this.ctx) this.attach();
+      this.source = this.ctx ? musicSourceFor(this.shouldRun(), this.fileState()) : 'off';
       this.applyLevel();
-      if (this.shouldRun() && this.ctx) this.startTimer();
+      if (this.source === 'synth') this.startTimer();
       else this.stopTimer();
     } catch {
       // Audio darf das Spiel nie stören
     }
+    try {
+      this.syncFiles();
+    } catch {
+      // Audio darf das Spiel nie stören
+    }
+  }
+
+  /** Datei-Loop des aktuellen Zustands starten (eingeblendet), alle anderen ausblenden und beenden. */
+  private syncFiles(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const want = this.source === 'file' ? this.mode : null;
+    const now = ctx.currentTime;
+    for (const [mode, loop] of [...this.fileLoops]) {
+      if (mode === want) continue;
+      this.fileLoops.delete(mode);
+      try {
+        loop.env.gain.cancelScheduledValues(now);
+        loop.env.gain.setValueAtTime(loop.env.gain.value, now);
+        loop.env.gain.linearRampToValueAtTime(0, now + MUSIC_CROSSFADE_SEC);
+        loop.src.stop(now + MUSIC_CROSSFADE_SEC + 0.05);
+      } catch {
+        // schon beendet
+      }
+    }
+    if (want === null) return;
+    const out = this.ensureFileOut(ctx);
+    const level = (MUSIC_FILE_GAIN * this.volume) / 100;
+    if (this.fileLevel === null || Math.abs(level - this.fileLevel) > 1e-9) {
+      out.gain.cancelScheduledValues(now);
+      out.gain.setValueAtTime(out.gain.value, now);
+      out.gain.setTargetAtTime(level, now, 0.05);
+      this.fileLevel = level;
+    }
+    if (this.fileLoops.has(want)) return;
+    const buf = this.assets?.buffer(musicIdFor(want));
+    if (!buf) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const env = ctx.createGain();
+    env.gain.value = 0;
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(1, now + MUSIC_CROSSFADE_SEC);
+    src.connect(env);
+    env.connect(out);
+    src.start(now);
+    this.fileLoops.set(want, { src, env });
+  }
+
+  private ensureFileOut(ctx: AudioContext): GainNode {
+    if (this.fileOut) return this.fileOut;
+    const out = ctx.createGain();
+    out.gain.value = 0;
+    out.connect(ctx.destination);
+    this.fileOut = out;
+    this.fileLevel = 0;
+    return out;
   }
 
   private filter(ctx: AudioContext, type: BiquadFilterType, hz: number, q: number, dest: AudioNode): BiquadFilterNode {
@@ -277,7 +400,7 @@ export class MusicPlayer {
   }
 
   private targetLevel(): number {
-    if (!this.shouldRun()) return 0;
+    if (this.source !== 'synth') return 0;
     return ((MUSIC_MAX_GAIN * this.volume) / 100) * (this.mode === 'ended' ? ENDED_LEVEL : 1);
   }
 
