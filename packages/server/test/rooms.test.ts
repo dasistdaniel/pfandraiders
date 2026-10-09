@@ -101,3 +101,24 @@ describe('RoomManager', () => {
     expect(m.size).toBe(1);
   });
 });
+
+describe('RoomManager.create with options', () => {
+  it('uses the default room name, public and no password', () => {
+    const m = new RoomManager({ maxRooms: 5 });
+    const a = m.create('Anna', conn);
+    const k = m.create('Klaus', conn);
+    if (!a.ok || !k.ok) throw new Error('create failed');
+    expect(a.value.room.name).toBe('Annas Raum');
+    expect(k.value.room.name).toBe("Klaus' Raum");
+    expect(a.value.room.visibility).toBe('public');
+    expect(a.value.room.locked).toBe(false);
+  });
+
+  it('passes name, visibility and password on and lets the creator in', () => {
+    const m = new RoomManager({ maxRooms: 5 });
+    const r = m.create('Anna', conn, { roomName: 'Bude', visibility: 'private', password: 'pw' });
+    if (!r.ok) throw new Error('create failed');
+    expect(r.value.room).toMatchObject({ name: 'Bude', visibility: 'private', locked: true });
+    expect(r.value.member.name).toBe('Anna');
+  });
+});

@@ -4,6 +4,7 @@ import {
   createGame,
   DEFAULT_MAP_ID,
   DEFAULT_ROUND_MS,
+  DEFAULT_ROUNDS,
   freshProgress,
   isRoundMs,
   MAP_DEFS,
@@ -27,13 +28,14 @@ import type {
   Progress,
   RankEntry,
   RoomPhase,
+  RoomVisibility,
   RosterEntry,
   ServerBuild,
   ServerMessage,
   ShopCategory,
   ShopItemId,
 } from '@pfandraiders/core';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { currentBuild } from './buildInfo';
 import { SERVER_CONFIG } from './config';
 
@@ -86,12 +88,39 @@ function fail<T>(code: ErrorCode, message: string): Result<T> {
 
 const OK: Result<void> = { ok: true, value: undefined };
 
+/** Einstellungen beim Anlegen; danach unveränderlich (Spec §1.4). */
+export interface RoomSettings {
+  /** Raumname, schon bereinigt (1 bis MAX_ROOM_NAME_LENGTH Zeichen) */
+  name: string;
+  visibility: RoomVisibility;
+  /** Passwort, schon bereinigt; fehlt = kein Passwort. Der Raum behält nur den SHA-256-Hash. */
+  password?: string;
+}
+
+/** Zusätzliche Angaben beim Beitritt */
+export interface JoinExtras {
+  /** Passwort für einen Raum mit Passwort */
+  password?: string;
+  /** Wunschfigur (0 bis AVATAR_COUNT - 1) */
+  avatar?: number;
+}
+
+function sha256(text: string): Buffer {
+  return createHash('sha256').update(text, 'utf8').digest();
+}
+
 export class Room {
   phase: RoomPhase = 'lobby';
   members: Member[] = [];
   state: GameState | null = null;
   /** Fortschritt der Serie je Spieler-id (Geld, Tasche, Upgrades, Inventar, Gesamtverdienst); leer in der Lobby */
   readonly progress = new Map<string, Progress>();
+  /** Raumname (fest) */
+  readonly name: string;
+  /** Sichtbarkeit in der Raumliste (fest) */
+  readonly visibility: RoomVisibility;
+  /** SHA-256 des Passworts; null = kein Passwort. Das Passwort selbst wird nicht gespeichert. */
+  private readonly passwordHash: Buffer | null;
   private nextId = 1;
   private lastActive: number;
   private readonly mapId: MapId;
@@ -116,7 +145,11 @@ export class Room {
   constructor(
     readonly code: string,
     opts: RoomOptions = {},
+    settings: Partial<RoomSettings> = {},
   ) {
+    this.name = settings.name ?? `Raum ${code}`;
+    this.visibility = settings.visibility ?? 'public';
+    this.passwordHash = settings.password ? sha256(settings.password) : null;
     this.mapId = opts.mapId ?? DEFAULT_MAP_ID;
     this.map = opts.map ?? MAP_DEFS[this.mapId].map;
     this.stepMs = opts.stepMs ?? SERVER_CONFIG.stepMs;
@@ -134,6 +167,26 @@ export class Room {
   /** Rundenzeit der nächsten Runde: ROUND_MS (falls gesetzt), sonst die Wahl des Hosts. */
   roundMs(): number {
     return this.fixedRoundMs ?? this.chosenRoundMs;
+  }
+
+  /** Raum verlangt beim Beitritt ein Passwort. */
+  get locked(): boolean {
+    return this.passwordHash !== null;
+  }
+
+  /** Zeitkonstanter Vergleich über SHA-256 beider Werte; ohne Passwort im Raum immer true. */
+  private passwordOk(given: string | undefined): boolean {
+    if (this.passwordHash === null) return true;
+    return timingSafeEqual(sha256(given ?? ''), this.passwordHash);
+  }
+
+  /** Gehört das Token einem Mitglied, das innerhalb der Frist zurückkehren darf? (Für die Ratenbegrenzung im Handler.) */
+  hasReturnToken(token?: string): boolean {
+    if (token === undefined) return false;
+    const now = this.now();
+    return this.members.some(
+      (m) => m.token === token && !m.expired && (m.disconnectedAt === null || now - m.disconnectedAt <= this.graceMs),
+    );
   }
 
   /** Host = erster verbundener Spieler in Beitrittsreihenfolge. */
@@ -155,10 +208,14 @@ export class Room {
     return {
       t: 'lobby',
       room: this.code,
+      roomName: this.name,
+      visibility: this.visibility,
+      locked: this.locked,
       host: this.hostId(),
       players: this.roster(),
       phase: this.phase,
       roundMs: this.roundMs(),
+      rounds: DEFAULT_ROUNDS,
     };
   }
 
@@ -200,7 +257,7 @@ export class Room {
     }
   }
 
-  join(name: string, conn: Conn, token?: string): Result<Member> {
+  join(name: string, conn: Conn, token?: string, extras: JoinExtras = {}): Result<Member> {
     this.lastActive = this.now();
     this.expireMembers();
 
@@ -219,6 +276,9 @@ export class Room {
         return { ok: true, value: back };
       }
     }
+
+    // Passwort vor allen anderen Prüfungen (Rückkehr mit gültigem Token braucht keins)
+    if (!this.passwordOk(extras.password)) return fail('wrong_password', 'Passwort falsch oder nötig.');
 
     if (this.phase === 'playing') return fail('already_started', 'Die Runde läuft bereits.');
     if (this.members.length >= MAX_ROOM_PLAYERS) return fail('room_full', 'Der Raum ist voll.');

@@ -1,4 +1,5 @@
-import { ROOM_CODE_CHARS, ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import { defaultRoomName, ROOM_CODE_CHARS, ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import type { RoomVisibility } from '@pfandraiders/core';
 import { SERVER_CONFIG } from './config';
 import { Room } from './room';
 import type { Conn, Member, Result, RoomOptions } from './room';
@@ -8,6 +9,18 @@ export interface ManagerOptions extends RoomOptions {
   /** Wird bei jeder abgefangenen Ausnahme beim Ticken aufgerufen (Logging, Tests). */
   onError?: (err: unknown, room: Room) => void;
   maxTickFailures?: number;
+}
+
+/** Angaben aus der create-Nachricht (schon bereinigt) */
+export interface CreateOptions {
+  /** fehlt = defaultRoomName(name) */
+  roomName?: string;
+  /** fehlt = public */
+  visibility?: RoomVisibility;
+  /** fehlt = kein Passwort */
+  password?: string;
+  /** Wunschfigur des Erstellers */
+  avatar?: number;
 }
 
 export class RoomManager {
@@ -41,13 +54,17 @@ export class RoomManager {
     }
   }
 
-  /** Neuer Raum, der Ersteller tritt als Host bei. */
-  create(name: string, conn: Conn): Result<{ room: Room; member: Member }> {
+  /** Neuer Raum, der Ersteller tritt als Host bei (mit seinem eigenen Passwort). */
+  create(name: string, conn: Conn, opts: CreateOptions = {}): Result<{ room: Room; member: Member }> {
     if (this.rooms.size >= this.maxRooms) {
       return { ok: false, code: 'too_many_rooms', message: 'Der Server ist ausgelastet.' };
     }
-    const room = new Room(this.newCode(), this.opts);
-    const joined = room.join(name, conn);
+    const room = new Room(this.newCode(), this.opts, {
+      name: opts.roomName ?? defaultRoomName(name),
+      visibility: opts.visibility ?? 'public',
+      password: opts.password,
+    });
+    const joined = room.join(name, conn, undefined, { password: opts.password, avatar: opts.avatar });
     if (!joined.ok) return joined;
     this.rooms.set(room.code, room);
     return { ok: true, value: { room, member: joined.value } };
