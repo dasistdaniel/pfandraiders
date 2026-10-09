@@ -6,11 +6,13 @@ import {
   DEFAULT_ROUND_MS,
   DEFAULT_ROUNDS,
   freshProgress,
+  isAvatar,
   isRoundMs,
   MAP_DEFS,
   MAX_ROOM_PLAYERS,
   MIN_START_PLAYERS,
   NO_INPUT,
+  pickAvatar,
   progressOf,
   projectSnapshot,
   ranking,
@@ -60,6 +62,8 @@ export interface Member {
   ackSeq: number;
   /** Shop-Phase: hat "Bereit" gedrückt */
   ready: boolean;
+  /** Figur (Index 0 bis AVATAR_COUNT - 1), im Raum eindeutig; wird frei, wenn das Mitglied entfernt wird */
+  avatar: number;
 }
 
 export interface RoomOptions {
@@ -201,6 +205,7 @@ export class Room {
       color: m.color,
       connected: m.conn !== null,
       ready: m.ready,
+      avatar: m.avatar,
     }));
   }
 
@@ -288,6 +293,7 @@ export class Room {
 
     const used = new Set(this.members.map((m) => m.color));
     const free = ROOM_COLORS.find((c) => !used.has(c));
+    const avatar = pickAvatar(new Set(this.members.map((m) => m.avatar)), extras.avatar);
     const member: Member = {
       id: `p${this.nextId++}`,
       name,
@@ -299,6 +305,7 @@ export class Room {
       input: { ...NO_INPUT },
       ackSeq: 0,
       ready: false,
+      avatar,
     };
     this.members.push(member);
     conn.send({ t: 'joined', room: this.code, you: member.id, token: member.token, build: this.build });
@@ -467,6 +474,20 @@ export class Room {
     this.sendShopState(m);
     this.broadcastLobby();
     this.checkAllReady();
+    return OK;
+  }
+
+  /** Eigene Figur wählen (nur Lobby). Vergeben = avatar_taken; die eigene Figur noch einmal = ok ohne Nachricht. */
+  setAvatar(m: Member, avatar: number): Result<void> {
+    if (this.phase !== 'lobby') return fail('wrong_phase', 'Die Figur wählt man in der Lobby.');
+    if (!isAvatar(avatar)) return fail('bad_message', 'Ungültige Figur.');
+    if (m.conn === null || m.avatar === avatar) return OK;
+    if (this.members.some((x) => x !== m && x.avatar === avatar)) {
+      return fail('avatar_taken', 'Die Figur ist schon vergeben.');
+    }
+    this.lastActive = this.now();
+    m.avatar = avatar;
+    this.broadcastLobby();
     return OK;
   }
 
