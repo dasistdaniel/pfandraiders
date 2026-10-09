@@ -5,6 +5,7 @@ import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
 import { alertText, hintLines, resultFooter, resultHeader, resultRows, statusLines } from './text';
 import { formatMoney } from './format';
+import { knockoutFontSizes, knockoutText } from './knockoutView';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 const BAR_WIDTH = 80;
@@ -112,6 +113,8 @@ export class PlayerHud {
   private readonly bar: Phaser.GameObjects.Rectangle;
   /** Große Countdown-Anzeige mitten im eigenen Viewport (5..1, LOS!) */
   private readonly countdown: Phaser.GameObjects.Text;
+  /** Große Ausgeknockt-Anzeige mitten im eigenen Viewport: Titel, Restsekunden, "Ausgeraubt!" */
+  private readonly knockout: { title: Phaser.GameObjects.Text; seconds: Phaser.GameObjects.Text; robbed: Phaser.GameObjects.Text };
 
   constructor(scene: Phaser.Scene, view: Rect, color: number, name: string, private labels: KeyLabels,
     private readonly nameOf: (id: string) => string,
@@ -151,13 +154,45 @@ export class PlayerHud {
       .setOrigin(0.5)
       .setVisible(false);
 
-    this.objects = [this.status, this.hint, this.alert, this.barBg, this.bar, tag, this.countdown];
+    const ko = knockoutFontSizes(view);
+    const big = (fontSize: number, color: string, y: number, originY: number): Phaser.GameObjects.Text =>
+      scene.add
+        .text(view.w / 2, y, '', {
+          ...FONT,
+          fontSize: `${fontSize}px`,
+          fontStyle: 'bold',
+          color,
+          stroke: '#000000',
+          strokeThickness: Math.max(3, Math.round(fontSize / 8)),
+          align: 'center',
+        })
+        .setOrigin(0.5, originY)
+        .setVisible(false);
+    // Zahl genau in der Mitte, Titel darüber, "Ausgeraubt!" darunter
+    this.knockout = {
+      title: big(ko.title, '#ff5252', view.h / 2 - ko.seconds / 2, 1),
+      seconds: big(ko.seconds, '#ffee58', view.h / 2, 0.5),
+      robbed: big(ko.robbed, '#ffffff', view.h / 2 + ko.seconds / 2 + 4, 0),
+    };
+
+    this.objects = [
+      this.status, this.hint, this.alert, this.barBg, this.bar, tag, this.countdown,
+      this.knockout.title, this.knockout.seconds, this.knockout.robbed,
+    ];
     for (const o of this.objects) {
       (o as Phaser.GameObjects.Text).setScrollFactor(0).setDepth(10);
     }
     this.bar.setDepth(11);
     this.countdown.setDepth(22);
+    for (const t of Object.values(this.knockout)) t.setDepth(22);
     this.objects.push(...this.results.objects);
+  }
+
+  private updateKnockout(ko: ReturnType<typeof knockoutText>): void {
+    const { title, seconds, robbed } = this.knockout;
+    title.setText(ko?.title ?? '').setVisible(ko !== null);
+    seconds.setText(ko?.seconds ?? '').setVisible(ko !== null);
+    robbed.setText(ko?.robbed ?? '').setVisible(ko !== null && ko.robbed !== '');
   }
 
   /** Anderes Gerät (online Auto-Wechsel aufs Gamepad): Tastenhinweise passen sich an. */
@@ -171,6 +206,7 @@ export class PlayerHud {
    */
   update(state: GameState, p: Player, notices: string[] = [], countdown = ''): void {
     this.countdown.setText(countdown).setVisible(countdown !== '');
+    this.updateKnockout(countdown === '' ? knockoutText(p, state.phase) : null);
     this.status.setText(statusLines(state, p).join('\n'));
     this.hint.setText(hintLines(state, p, this.labels).join('\n'));
     this.alert.setText(alertText(state, p, notices));
