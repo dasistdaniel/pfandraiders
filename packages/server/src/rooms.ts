@@ -1,5 +1,5 @@
-import { defaultRoomName, ROOM_CODE_CHARS, ROOM_CODE_LENGTH } from '@pfandraiders/core';
-import type { RoomVisibility } from '@pfandraiders/core';
+import { defaultRoomName, MAX_LISTED_ROOMS, ROOM_CODE_CHARS, ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import type { RoomInfo, RoomVisibility } from '@pfandraiders/core';
 import { SERVER_CONFIG } from './config';
 import { Room } from './room';
 import type { Conn, Member, Result, RoomOptions } from './room';
@@ -42,6 +42,19 @@ export class RoomManager {
 
   get(code: string): Room | undefined {
     return this.rooms.get(code);
+  }
+
+  /**
+   * Öffentliche Räume mit mindestens einem verbundenen Spieler: beitretbare Lobbys zuerst,
+   * dann mehr Spieler zuerst, dann nach Code; höchstens MAX_LISTED_ROOMS.
+   */
+  listRooms(): RoomInfo[] {
+    const joinable = (r: RoomInfo): number => (r.phase === 'lobby' && r.players < r.max ? 1 : 0);
+    return [...this.rooms.values()]
+      .map((room) => room.info())
+      .filter((r): r is RoomInfo => r !== null)
+      .sort((a, b) => joinable(b) - joinable(a) || b.players - a.players || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+      .slice(0, MAX_LISTED_ROOMS);
   }
 
   private newCode(): string {

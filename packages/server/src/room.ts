@@ -31,6 +31,7 @@ import type {
   MapId,
   Progress,
   RankEntry,
+  RoomInfo,
   RoomPhase,
   RoomVisibility,
   RosterEntry,
@@ -657,5 +658,25 @@ export class Room {
   /** Leerer Raum, der lange genug leer war. */
   isDead(): boolean {
     return this.connected().length === 0 && this.now() - this.lastActive >= this.emptyMs;
+  }
+
+  /**
+   * Eintrag für die Raumliste; null = privat oder niemand verbunden. Ohne Token, Passwort und Spieler-IDs.
+   * Die Phase final erscheint als shop (läuft, nicht beitretbar).
+   */
+  info(): RoomInfo | null {
+    if (this.visibility !== 'public') return null;
+    const hostId = this.hostId();
+    const host = this.members.find((m) => m.id === hostId);
+    if (!host) return null;
+    return {
+      code: this.code,
+      name: this.name,
+      host: host.name,
+      players: this.members.length,
+      max: MAX_ROOM_PLAYERS,
+      phase: this.phase === 'final' ? 'shop' : this.phase,
+      locked: this.locked,
+    };
   }
 }

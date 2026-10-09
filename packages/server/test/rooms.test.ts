@@ -122,3 +122,80 @@ describe('RoomManager.create with options', () => {
     expect(r.value.member.name).toBe('Anna');
   });
 });
+
+describe('RoomManager.listRooms', () => {
+  const quiet = () => ({ send() {} });
+
+  it('lists public rooms with name, host, players, max, phase and lock, without secrets', () => {
+    const m = new RoomManager({ maxRooms: 5, countdownMs: 0 });
+    const r = m.create('Anna', quiet(), { roomName: 'Bude', password: 'geheim' });
+    if (!r.ok) throw new Error('create failed');
+    r.value.room.join('Bob', quiet(), undefined, { password: 'geheim' });
+    const list = m.listRooms();
+    expect(list).toEqual([{ code: r.value.room.code, name: 'Bude', host: 'Anna', players: 2, max: 8, phase: 'lobby', locked: true }]);
+    const text = JSON.stringify(list);
+    expect(text).not.toContain('geheim');
+    expect(text).not.toContain(r.value.member.token);
+    expect(text).not.toContain('"p1"');
+  });
+
+  it('hides private rooms and rooms without connected players', () => {
+    const m = new RoomManager({ maxRooms: 5 });
+    m.create('Anna', quiet(), { visibility: 'private' });
+    const c = quiet();
+    const empty = m.create('Bob', c);
+    if (!empty.ok) throw new Error('create failed');
+    empty.value.room.leave(c);
+    expect(m.listRooms()).toEqual([]);
+  });
+
+  it('puts joinable lobbies first, then more players, then by code', () => {
+    let i = 0;
+    // Codes AAAA, BBBB, CCCC, DDDD (ROOM_CODE_CHARS beginnt mit ABCD)
+    const seq = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3].map((k) => (k + 0.5) / ROOM_CODE_CHARS.length);
+    const m = new RoomManager({ maxRooms: 5, countdownMs: 0, random: () => seq[i++ % seq.length] });
+    const a = m.create('A', quiet()); // AAAA: Lobby, 1 Spieler
+    const b = m.create('B', quiet()); // BBBB: läuft, 2 Spieler
+    const c = m.create('C', quiet()); // CCCC: Lobby, 3 Spieler
+    const d = m.create('D', quiet()); // DDDD: Lobby, 1 Spieler
+    if (!a.ok || !b.ok || !c.ok || !d.ok) throw new Error('create failed');
+    expect([a, b, c, d].map((r) => (r.ok ? r.value.room.code : ''))).toEqual(['AAAA', 'BBBB', 'CCCC', 'DDDD']);
+    b.value.room.join('B2', quiet());
+    b.value.room.start('p1');
+    c.value.room.join('C2', quiet());
+    c.value.room.join('C3', quiet());
+    expect(m.listRooms().map((r) => [r.code, r.phase, r.players])).toEqual([
+      ['CCCC', 'lobby', 3],
+      ['AAAA', 'lobby', 1],
+      ['DDDD', 'lobby', 1],
+      ['BBBB', 'playing', 2],
+    ]);
+  });
+
+  it('puts a full lobby behind the joinable ones and shows the final phase as shop', () => {
+    let i = 0;
+    const seq = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2].map((k) => (k + 0.5) / ROOM_CODE_CHARS.length);
+    const m = new RoomManager({ maxRooms: 5, countdownMs: 0, roundMs: 100, random: () => seq[i++ % seq.length] });
+    const full = m.create('A', quiet());
+    const fin = m.create('B', quiet());
+    const open = m.create('C', quiet());
+    if (!full.ok || !fin.ok || !open.ok) throw new Error('create failed');
+    for (let k = 2; k <= 8; k++) full.value.room.join(`A${k}`, quiet());
+    fin.value.room.join('B2', quiet());
+    fin.value.room.setRounds('p1', 1);
+    fin.value.room.start('p1');
+    for (let k = 0; k < 10 && fin.value.room.phase === 'playing'; k++) fin.value.room.tick();
+    expect(fin.value.room.phase).toBe('final');
+    expect(m.listRooms().map((r) => [r.code, r.phase, r.players])).toEqual([
+      ['CCCC', 'lobby', 1],
+      ['AAAA', 'lobby', 8],
+      ['BBBB', 'shop', 2],
+    ]);
+  });
+
+  it('returns at most 50 rooms', () => {
+    const m = new RoomManager({ maxRooms: 60 });
+    for (let k = 0; k < 60; k++) m.create(`P${k}`, quiet());
+    expect(m.listRooms()).toHaveLength(50);
+  });
+});
