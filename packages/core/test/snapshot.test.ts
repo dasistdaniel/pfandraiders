@@ -13,7 +13,9 @@ function game() {
   s.players.p2.money = 777;
   s.players.p2.bottles = { plastic: 0, glass: 3, crate: 0 };
   s.players.p2.items.dog_treat = 3;
-  s.players.p2.items.punch = 2;
+  s.players.p2.items.pepper = 20;
+  s.players.p2.sprayCooldownMs = 700;
+  s.players.p2.sprayHeld = true;
   s.players.p2.lastFood = { n: 1, spot: 'bin', text: 1, full: false };
   s.players.p2.earnedRound = 55;
   s.rngState = 987654321;
@@ -35,6 +37,13 @@ describe('projectSnapshot', () => {
     expect(other.robbed).toBe(true);
     expect(other.lastFood).toBeNull();
     expect(projectSnapshot(s, 'p2').players.p2.lastFood).toEqual({ n: 1, spot: 'bin', text: 1, full: false });
+  });
+
+  it('shows the spray cooldown of a foreign player (the cloud) but not his spray key or charges', () => {
+    const other = projectSnapshot(game(), 'p1').players.p2;
+    expect(other.sprayCooldownMs).toBe(700);
+    expect(other.sprayHeld).toBe(false);
+    expect(other.items.pepper).toBe(0);
   });
 
   it('shows the attack cooldown of a foreign player but not his attack key', () => {
@@ -173,7 +182,7 @@ describe('snapshot key sets', () => {
   const PLAYER_KEYS = [
     'actionHeld', 'attackCooldownMs', 'attackHeld', 'bottles', 'depositMs', 'earnedRound', 'earnedTotal',
     'health', 'id', 'items', 'lastFood', 'mode', 'money', 'robbed', 'searchProgressMs', 'searchSpotId',
-    'shieldMs', 'spawn', 'stealHeld', 'unconsciousMs', 'x', 'y',
+    'shieldMs', 'spawn', 'sprayCooldownMs', 'sprayHeld', 'stealHeld', 'unconsciousMs', 'x', 'y',
   ];
 
   it('pins the keys of own and foreign players', () => {

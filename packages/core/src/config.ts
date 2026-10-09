@@ -22,6 +22,8 @@ export interface ShopItemDef {
   values: readonly number[];
   /** count/stack: höchster Bestand (fehlt = CONFIG.shop.maxStack) */
   max?: number;
+  /** stack: so viel Bestand bringt ein gekauftes Stück (Pfefferspray: 10 Ladungen je Flasche), fehlt = 1 */
+  unit?: number;
   /** Miete: gilt nur für die Runde nach dem Kauf und ist am Rundenende weg (progressAfterRound) */
   perRound?: boolean;
   /** Kauf erst, wenn dieser Artikel vorhanden ist */
@@ -77,8 +79,17 @@ export const CONFIG = {
     radius: 20,
     /** so lange nach einem Schlag (auch ohne Treffer) kein neuer */
     cooldownMs: 600,
-    /** Grundschaden; das Schlag-Upgrade erhöht ihn */
+    /** Grundschaden */
     damage: 20,
+    /** zusätzlicher Schaden mit Boxhandschuh */
+    gloveBonus: 10,
+  },
+  /** Pfefferspray (Spec §4.2): nächster wacher Spieler in radius, Stoß knockbackPx weg, damage Leben, cooldownMs Pause */
+  spray: {
+    radius: 30,
+    knockbackPx: 40,
+    damage: 2,
+    cooldownMs: 1000,
   },
   /**
    * Shop-Phase (Spec 2026-10-09-shop-umbau §1). Reihenfolge der Einträge = Reihenfolge im Shop.
@@ -97,8 +108,10 @@ export const CONFIG = {
       flashlight: { category: 'upgrades', name: 'Taschenlampe', kind: 'level', prices: [200, 500, 1000], values: [1, 0.85, 0.7, 0.55] },
       card: { category: 'upgrades', name: 'Kundenkarte', kind: 'once', prices: [300], values: [] },
       card_plus: { category: 'upgrades', name: 'Kundenkarte+', kind: 'once', prices: [600], values: [], requires: 'card' },
-      /** values: zusätzlicher Schaden je Schlag */
-      punch: { category: 'weapons', name: 'Stärkerer Schlag', kind: 'level', prices: [250, 600, 1200], values: [0, 5, 10, 15] },
+      glove: { category: 'weapons', name: 'Boxhandschuh', kind: 'once', prices: [400], values: [] },
+      /** Bestand = Ladungen; eine gekaufte Flasche bringt unit Ladungen */
+      pepper: { category: 'defense', name: 'Pfefferspray', kind: 'stack', prices: [300], values: [], max: 99, unit: 10 },
+      id_papers: { category: 'defense', name: 'Ausweisdokumente', kind: 'once', prices: [300], values: [], perRound: true },
       dog_treat: { category: 'defense', name: 'Leckerli', kind: 'stack', prices: [100], values: [] },
     } as Record<ShopItemId, ShopItemDef>,
   },

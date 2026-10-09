@@ -1,12 +1,11 @@
 import { CONFIG } from './config';
 import { distance } from './economy';
 import { damage } from './health';
-import { upgradeValue } from './shop';
 import type { GameState, Player } from './types';
 
-/** Schaden eines Schlags: Grundschaden plus Schlag-Upgrade. */
+/** Schaden eines Schlags: Grundschaden, mit Boxhandschuh mehr (Spec §4.1). */
 export function punchDamage(attacker: Pick<Player, 'items'>): number {
-  return CONFIG.fight.damage + upgradeValue(attacker, 'punch');
+  return CONFIG.fight.damage + (attacker.items.glove > 0 ? CONFIG.fight.gloveBonus : 0);
 }
 
 /**
