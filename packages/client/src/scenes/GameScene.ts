@@ -23,6 +23,7 @@ import { HEALTH_COLORS, healthBar } from '../healthBar';
 import { audioToggles, cycleAudio, music, sfx, unlockAudio } from '../sfx';
 import { PLING_GAP_SEC } from '../sound';
 import { detectFoodFinds, detectSeizures, detectSounds, snapshotForSound } from '../soundEvents';
+import { detectEventSounds, mergeSounds, preferAlternatives, searchLoopKeys } from '../eventSounds';
 import { Notices } from '../notices';
 import { buildInput } from '../input';
 import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
@@ -121,6 +122,8 @@ export class GameScene extends Phaser.Scene {
   /** Zustand des vorigen Frames für Sound-Ereignisse, null = noch keiner (erster Frame ohne Sounds) */
   private prevSoundState: GameState | null = null;
   private ownSoundIds: string[] | 'all' = 'all';
+  /** Laufende Such-Loops (Schlüssel wie in searchLoopKeys) */
+  private loopKeys = new Set<string>();
   /** Kurze HUD-Hinweise je Spieler (Beschlagnahme durch die Polizei). */
   private notices = new Notices();
   /** Nur online: läuft, solange die Verbindung weg ist und wir automatisch neu verbinden. */
@@ -174,6 +177,7 @@ export class GameScene extends Phaser.Scene {
     this.joinedSeen = false;
     this.padBPrev = {};
     this.prevSoundState = null;
+    this.loopKeys = new Set();
     this.notices = new Notices();
     this.roundTotalMs = 0;
     this.pause = new PauseMenu();
@@ -386,6 +390,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.input.gamepad?.on('down', padDown);
     this.events.once('shutdown', () => {
+      this.syncLoops([]);
       this.input.gamepad?.off('down', unlock);
       this.input.gamepad?.off('down', padDown);
       if (this.online) this.online.onJoined = null;
@@ -460,11 +465,18 @@ export class GameScene extends Phaser.Scene {
       this.cycleSound();
       this.renderPause(); // Beschriftung "Ton: ..." im offenen Menü
     }
+    // Zeitsprung rückwärts (neue Runde, Wiederverbindung): kein Vergleich über die Lücke
+    if (this.prevSoundState && state.tick < this.prevSoundState.tick) this.prevSoundState = null;
     // Mehrere Plings eines Frames (online: mehrere Flaschen pro Snapshot) nacheinander abspielen
     let plings = 0;
-    for (const id of detectSounds(this.prevSoundState, state, this.ownSoundIds)) {
+    const sounds = mergeSounds(
+      detectSounds(this.prevSoundState, state, this.ownSoundIds),
+      detectEventSounds(this.prevSoundState, state, this.ownSoundIds),
+    );
+    for (const id of preferAlternatives(sounds, (x) => sfx.hasFile(x))) {
       sfx.play(id, id === 'pling' ? PLING_GAP_SEC * plings++ : 0);
     }
+    this.syncLoops(searchLoopKeys(state, this.ownSoundIds, frozen));
     this.notices.tick(viewDelta);
     for (const z of detectSeizures(this.prevSoundState, state, this.ownSoundIds)) this.notices.show(z.id, seizeText(z.count));
     for (const f of detectFoodFinds(this.prevSoundState, state, this.ownSoundIds)) this.notices.show(f.id, f.text);
@@ -507,6 +519,14 @@ export class GameScene extends Phaser.Scene {
     }
     const countdownText = this.countdown.update(state.countdownMs, viewDelta, state.phase);
     this.slots.forEach((slot, i) => this.huds[i].update(state, state.players[slot.id], this.notices.lines(slot.id), countdownText));
+  }
+
+  /** Such-Loops abgleichen: fehlende starten (auch nach dem Wiedereinschalten der Effekte), übrige stoppen. */
+  private syncLoops(keys: string[]): void {
+    const want = new Set(keys);
+    for (const key of this.loopKeys) if (!want.has(key)) sfx.stopLoop(key);
+    for (const key of want) sfx.startLoop('search', key);
+    this.loopKeys = want;
   }
 
   /**
@@ -606,10 +626,19 @@ export class GameScene extends Phaser.Scene {
     const p = this.pause;
     if (!p.isOpen && !escPressed && !nav.start) return false;
     // Nur eine Aktion pro Frame
-    if (escPressed || nav.start) p.toggle();
-    else if (nav.back) p.back();
-    else if (nav.move !== 0) p.move(nav.move);
-    else if (nav.confirm && this.runPauseAction(p.activate())) return true;
+    if (escPressed || nav.start) {
+      p.toggle();
+      sfx.play(p.isOpen ? 'ui_select' : 'ui_back');
+    } else if (nav.back) {
+      p.back();
+      sfx.play('ui_back');
+    } else if (nav.move !== 0) {
+      p.move(nav.move);
+      sfx.play('ui_move');
+    } else if (nav.confirm) {
+      sfx.play('ui_select');
+      if (this.runPauseAction(p.activate())) return true;
+    }
     this.renderPause();
     return false;
   }
