@@ -96,6 +96,19 @@ Dieselbe Liste zeigt das Spiel im Hauptmenü unter "Credits" (Daten in `packages
 - [Phaser 3](https://phaser.io) – Photon Storm, MIT (Spiel-Framework)
 - [PfandRaiders](https://github.com/dasistdaniel/pfandraiders) – dasistdaniel (Sound, Musik und Karten selbst erzeugt)
 
+## Eigene Sounds
+
+Ohne Audiodateien erzeugt das Spiel alle Effekte und die Musik selbst (WebAudio). Eigene Dateien ersetzen sie einzeln:
+
+- **Ordner:** Effekte nach `packages/client/public/sounds/`, Musik nach `packages/client/public/music/`.
+- **Dateiname = ID** plus Endung, z. B. `sounds/knockout.ogg` oder `music/music_game.ogg`. Alle IDs und wann sie klingen: [docs/SOUNDLISTE.md](docs/SOUNDLISTE.md).
+- **Formate:** `.ogg`, `.mp3`, `.wav` (bei mehreren Dateien für eine ID gilt `.ogg` vor `.mp3` vor `.wav`). Für Musik `.ogg` nehmen: `.mp3` bringt Encoder-Stille mit, die im Loop als Lücke hörbar sein kann.
+- **Loops:** `music_menu`, `music_game` und `music_ended` laufen als fester, nahtloser Loop je Zustand (Wechsel mit 0,5 s Überblendung); `search` loopt, solange gesucht wird. Alle anderen Effekte spielen einmal.
+- **Ersatz:** Fehlt eine Datei, behalten die 15 alten Effekte und die Musik ihren erzeugten Klang; die neuen Ereignisse bleiben stumm. Kaputte Dateien werden still übersprungen.
+- **Manifest:** Build und Dev-Server erzeugen aus den Ordnern `audio-manifest.json` (Vite-Plugin `packages/client/vite-audio.ts`); unbekannte Dateinamen melden sie als Warnung. Zur Laufzeit lädt das Spiel nur, was im Manifest steht, und erst nach der ersten Taste oder dem ersten Klick.
+- **Testen:** Datei in den Ordner legen, `npm run dev` (läuft er schon: Seite neu laden), `http://localhost:5173/audio-manifest.json` zeigt, was erkannt wurde. Im Spiel einmal eine Taste drücken, dann klingt die Datei. Im Netzwerk-Tab der Browser-Werkzeuge sieht man die geladenen Dateien.
+- **Lizenz:** nur CC0 oder selbst erstellt; Quelle und Lizenz jeder Datei in `assets-src/audio/CREDITS.txt` eintragen.
+
 ## Testhilfen per URL
 
 `?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden, überschreibt die Wahl der Lobby), `?seed=123` (feste Zufallsbefüllung), `?events=now` (NPCs und Zonen sofort statt nach Minuten).

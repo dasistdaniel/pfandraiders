@@ -2,7 +2,11 @@ node_modules
 dist
 *.log
 .superpowers
-assets-src/
+assets-src/*
+# Ausnahme: Lizenzliste der eigenen Audiodateien (Quelldateien selbst bleiben lokal)
+!assets-src/audio/
+assets-src/audio/*
+!assets-src/audio/CREDITS.txt
 .tmp/
 
 # Server-Konfiguration auf dem VPS (ALLOWED_ORIGINS usw.)

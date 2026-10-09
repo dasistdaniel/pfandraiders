@@ -1,0 +1,18 @@
+PfandRaiders: Herkunft der Audiodateien
+=======================================
+
+Nur CC0-Material oder selbst erstellte Sounds (siehe docs/SOUNDLISTE.md).
+Pro Datei unter packages/client/public/sounds/ bzw. packages/client/public/music/ ein Eintrag.
+
+Vorlage:
+
+Datei:    sounds/knockout.ogg
+Titel:    <Titel der Quelle>
+Autor:    <Name>
+Quelle:   <URL>
+Lizenz:   CC0 1.0
+Hinweis:  <bearbeitet? gekürzt, normalisiert, ...>
+
+Einträge:
+
+(noch keine; ohne Dateien erzeugt das Spiel alle Klänge selbst)
