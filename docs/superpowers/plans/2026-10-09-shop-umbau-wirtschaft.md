@@ -99,8 +99,8 @@
 14. **Ausrauben** nimmt immer `CONFIG.steal.fraction` (die Hälfte, aufgerundet, so viel passt).
 15. **Essen-Taste**: In PR 1 verschwindet `eat` aus `Input`, `KeyState`, `KeyLabels`, `KeyboardLayout`, `padToHeld`, `sameInput`, Steuerungsübersicht und README. Die Tasten `C`, `,` und Gamepad `Y` sind danach frei; PR 2 belegt sie mit dem Pfefferspray.
 16. **Ton `buy`**: Käufe gibt es nur noch im Shop (eigene Szene), Geld sinkt in der Runde also nie. Die Regel in `detectSounds` bleibt nur bei „Geld sinkt bei Bewusstsein“; der Vergleich von `containerLevel` entfällt.
-17. **Flaschensymbole**: 16 je Zeile, 8 × 10 px, 2 px Abstand, also höchstens 2 Zeilen (Breite 158 px) ab `y = 50` bis `y = 72`. Das passt in die kleinste Splitscreen-Ansicht (478 × 268) unter die beiden Statuszeilen (y 8 bis etwa 46) und über den Suchbalken (`BAR_Y = 76`). Die Grafik hängt in `hud.objects`, damit fremde Kameras sie ignorieren. Neu gezeichnet wird nur, wenn sich `bottleIconsKey` ändert.
-18. **Statuszeilen**: genau zwei Zeilen: `Zeit m:ss   Geld x,yz €` und `Leben n/100` plus Besitz in dieser Reihenfolge: `Leckerli n`, `Wagen`, `Karte` oder `Karte+`.
+17. **Flaschensymbole**: 16 je Zeile, 8 × 10 px, 2 px Abstand, also höchstens 2 Zeilen (Breite 158 px) ab `y = 68` bis `y = 90`. Darunter rücken der Suchbalken auf `BAR_Y = 94` und die Warnung auf `ALERT_Y = 110` (bis 3 Zeilen, also bis etwa y 167). Die Hinweise wachsen von unten (bis 4 Zeilen, ab etwa y 184 in der kleinsten Ansicht 478 × 268). Die Grafik hängt in `hud.objects`, damit fremde Kameras sie ignorieren. Neu gezeichnet wird nur, wenn sich `bottleIconsKey` ändert.
+18. **Statuszeilen**: immer genau drei Zeilen (y 8 bis etwa 65): `Zeit m:ss   Geld x,yz €`, `Leben n/100` und die Besitzzeile mit zwei Leerzeichen zwischen den Teilen in dieser Reihenfolge: `Leckerli n`, `Wagen`, `Karte` oder `Karte+` (leer, wenn nichts da ist). Grund: Der feste Lebensbalken oben rechts liegt bei y 30 bis 42 und x ≥ Breite − 108 (370 in der 478 px breiten Ansicht); eine lange zweite Zeile liefe darunter. Die längste Besitzzeile nach PR 2 (`Leckerli 99  Spray 99  Wagen  Karte+  Ausweis`, 45 Zeichen, etwa 430 px) bleibt unter dem Umbruch von 462 px und liegt unterhalb des Balkens.
 19. **`hintLines`** behält „Container voll“; die Kapazität kommt aus `capacityOf`.
 20. **Prüfung der Snapshots** (`snapshotGuard.ts`): statt `containerLevel` muss `items` ein Objekt sein. **Prüfung des Shop-Stands** (`shopGuard.ts`): `items` muss für jede Kennung aus `SHOP_ITEM_IDS` eine ganze Zahl von 0 bis `maxOf(id)` haben; unbekannte Schlüssel werden ignoriert und nicht übernommen.
 
@@ -2476,7 +2476,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `capacityOf`, `bottlesValueFor`, `VALUE_ORDER` (Task 1/2), `Bottles`, `BottleKind`.
-- Produces: `bottleIcons`, `bottleIconsKey`, `BOTTLE_ICON`, `BOTTLE_ICON_COLORS`, `BottleIcon`; `statusLines` mit zwei Zeilen.
+- Produces: `bottleIcons`, `bottleIconsKey`, `BOTTLE_ICON`, `BOTTLE_ICON_COLORS`, `BottleIcon`; `statusLines` mit genau drei Zeilen (Zeit/Geld, Leben, Besitz); `hud.ts` mit `ICONS.y = 68`, `BAR_Y = 94`, `ALERT_Y = 110`.
 
 - [ ] **Step 1: Failing tests für das Layout**
 
@@ -2534,12 +2534,12 @@ In `packages/client/test/text.test.ts`:
 - Test `shows time, money, container and bottles` (Zeilen 30 bis 43):
 
 ```ts
-  it('shows time and money, then health; the bottles are icons now', () => {
+  it('shows time and money, health and an item line; the bottles are icons now', () => {
     const s = twoGame();
     s.players.p1.money = 150;
     s.players.p1.bottles = { plastic: 2, glass: 1, crate: 0 };
     const lines = statusLines(s, s.players.p1);
-    expect(lines).toEqual(['Zeit 5:00   Geld 1,50 €', 'Leben 100/100']);
+    expect(lines).toEqual(['Zeit 5:00   Geld 1,50 €', 'Leben 100/100', '']);
   });
 ```
 
@@ -2547,17 +2547,17 @@ In `packages/client/test/text.test.ts`:
 - Tests `shows the inventory after the health` und `shows only the health without inventory` (Zeilen 349 bis 358):
 
 ```ts
-  it('shows the items after the health', () => {
+  it('shows the items on their own line below the health', () => {
     const s = duo();
     s.players.p1.items = { ...s.players.p1.items, dog_treat: 2, cart: 1, card: 1 };
-    expect(statusLines(s, s.players.p1)[1]).toBe('Leben 100/100   Leckerli 2   Wagen   Karte');
+    expect(statusLines(s, s.players.p1).slice(1)).toEqual(['Leben 100/100', 'Leckerli 2  Wagen  Karte']);
     s.players.p1.items.card_plus = 1;
-    expect(statusLines(s, s.players.p1)[1]).toBe('Leben 100/100   Leckerli 2   Wagen   Karte+');
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leckerli 2  Wagen  Karte+');
   });
 
-  it('shows only the health without items', () => {
+  it('keeps the item line empty without items', () => {
     const s = duo();
-    expect(statusLines(s, s.players.p1)[1]).toBe('Leben 100/100');
+    expect(statusLines(s, s.players.p1).slice(1)).toEqual(['Leben 100/100', '']);
   });
 
   it('shows the deposit value with the Kundenkarte+ bonus', () => {
@@ -2663,11 +2663,15 @@ function itemParts(p: Player): string[] {
   return parts;
 }
 
-/** Zwei Zeilen: Zeit und Geld, dann Leben mit Besitz. Die Flaschen zeigt das HUD als Symbole (bottleIcons). */
+/**
+ * Immer drei Zeilen: Zeit und Geld, Leben, Besitz (leer ohne Besitz). Das Leben steht allein, damit die Zeile nicht
+ * unter den Lebensbalken oben rechts läuft. Die Flaschen zeigt das HUD als Symbole (bottleIcons).
+ */
 export function statusLines(state: GameState, p: Player): string[] {
   return [
     `Zeit ${formatTime(state.timeLeftMs)}   Geld ${formatMoney(p.money)}`,
-    [`Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`, ...itemParts(p)].join('   '),
+    `Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`,
+    itemParts(p).join('  '),
   ];
 }
 ```
@@ -2677,7 +2681,15 @@ In `hintLines`: `formatMoney(bottlesValue(p.bottles))` durch `formatMoney(bottle
 - [ ] **Step 6: `hud.ts`**
 
 - Import ergänzen: `import { capacityOf, CONFIG, searchMsOf } from '@pfandraiders/core';` und `import { BOTTLE_ICON, BOTTLE_ICON_COLORS, bottleIcons, bottleIconsKey } from './bottleIcons';`
-- Kommentar Zeile 14 ersetzen: `// Status (2 Zeilen) belegt y 8..46, Flaschensymbole y 50..72, Hinweise wachsen von unten (bis 4 Zeilen); Balken und Warnung liegen darunter.` und darunter `const ICONS = { x: 8, y: 50 };`
+- Zeilen 14 bis 16 (Kommentar, `BAR_Y`, `ALERT_Y`) ersetzen:
+
+```ts
+// Status (3 Zeilen) belegt y 8..65, Flaschensymbole y 68..90, Suchbalken ab 94, Warnung ab 110 (bis 3 Zeilen);
+// Hinweise wachsen von unten (bis 4 Zeilen). Passt in die kleinste Ansicht 478 x 268.
+const ICONS = { x: 8, y: 68 };
+const BAR_Y = 94;
+const ALERT_Y = 110;
+```
 - In `PlayerHud` Felder ergänzen:
 
 ```ts
@@ -2775,7 +2787,7 @@ Mit leeren Händen trägt man 3 Flaschen, voll ausgestattet 31 (ohne Wagen 21). 
 ```
 
 - Zeile 61 (Kampf): „mit 20 Schaden (Schlag-Upgrade mehr, Rüstung des Opfers weniger, mindestens 5)“ → „mit 20 Schaden (Schlag-Upgrade mehr)“; „(20 s, mit Upgrade kürzer)“ → „(20 s)“; die Sätze über den Bolzenschneider („Mit dem Bolzenschneider nimmt …“ und „, der Bolzenschneider bleibt erhalten“) streichen.
-- Zeile 65: „Essen aus dem Vorrat (Essen-Taste) heilt 30.“ → „Essen, das man beim Suchen findet, heilt 30.“ Und hinter dem Satz über den Lebensbalken ergänzen: „Darunter zeigt das eigene HUD den Container als Reihe von Flaschensymbolen: Plastik blau, Glas grün, Kasten braun, freie Plätze grau (16 je Zeile). In der Zeile mit dem Leben stehen kurz Leckerli, Wagen und Kundenkarte.“
+- Zeile 65: „Essen aus dem Vorrat (Essen-Taste) heilt 30.“ → „Essen, das man beim Suchen findet, heilt 30.“ Und hinter dem Satz über den Lebensbalken ergänzen: „Darunter zeigt das eigene HUD den Container als Reihe von Flaschensymbolen: Plastik blau, Glas grün, Kasten braun, freie Plätze grau (16 je Zeile). Unter der Zeile mit dem Leben stehen kurz Leckerli, Wagen und Kundenkarte.“
 
 - [ ] **Step 2: Alles prüfen**
 

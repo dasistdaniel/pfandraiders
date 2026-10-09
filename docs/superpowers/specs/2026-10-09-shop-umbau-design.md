@@ -75,7 +75,7 @@ Nach jedem PR sind alle Tests, Typecheck und Builds grün und das Spiel ist loka
 ### 6. HUD (PR 1, Ergänzung in PR 2)
 
 1. Statt der Zahl „Tasche 3/8 Pl2 Gl1 Ka0“ zeigt das eigene HUD eine Reihe Flaschensymbole: belegte Plätze nach Art gefärbt (Plastik blau, Glas grün, Kasten braun), in Abgabe-Reihenfolge (Kasten, Glas, Plastik), freie Plätze grau; 16 je Zeile, also höchstens 2 Zeilen bei 31 Plätzen. Gezeichnet mit Phaser-Grafik wie die übrigen Formen, keine neuen Dateien.
-2. Darüber zwei Textzeilen: „Zeit … Geld …“ und „Leben …“ mit kompakten Hinweisen auf Besitz: `Leckerli n`, `Wagen`, `Karte` bzw. `Karte+`, ab PR 2 `Spray n`, `Ausweis`.
+2. Darüber drei Textzeilen: „Zeit … Geld …“, „Leben …“ (allein, damit sie nicht unter den Lebensbalken oben rechts läuft) und eine Besitzzeile mit kompakten Hinweisen: `Leckerli n`, `Wagen`, `Karte` bzw. `Karte+`, ab PR 2 `Spray n`, `Ausweis`. Symbole, Suchbalken und Warnung rücken entsprechend nach unten; alles passt in die kleinste Splitscreen-Ansicht (478 × 268).
 3. Das Layout der Symbole kommt aus einer reinen Hilfsfunktion mit Tests.
 4. Fremde Spieler erscheinen im HUD wie bisher nicht; über den Figuren ändert sich nichts.
 

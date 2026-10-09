@@ -66,7 +66,7 @@
 11. **Ausweisdokumente**: `perRound: true` wie der Wagen, also löscht sie das vorhandene `progressAfterRound` am Rundenende (online und lokal). Polizisten wollen einen Spieler mit `items.id_papers > 0` nicht (`wants` in `npc.ts`): Sie jagen, kontrollieren und beschlagnahmen nicht. Hunde sind nicht betroffen. Der Shop zeigt „nur für die nächste Runde“, nach dem Kauf „gilt für die nächste Runde“ (beim Wagen bleibt „mieten“/„gemietet“).
 12. **Boxhandschuh** ersetzt die Schlag-Stufen vollständig: `punch` verschwindet aus `ShopItemId`, `Items` und `LevelItemId`; `upgradeValue` gibt es nur noch für die Taschenlampe.
 13. **Reihenfolge in „Verteidigung“**: Pfefferspray, Ausweisdokumente, Leckerli (Spec §1.2). Pfefferspray ist damit Zeile 0 und eine Mengenzeile (wie bisher Leckerli an dieser Stelle).
-14. **HUD**: Zeile mit dem Leben in dieser Reihenfolge: `Leckerli n`, `Spray n`, `Wagen`, `Karte`/`Karte+`, `Ausweis`.
+14. **HUD**: Besitzzeile (dritte Statuszeile aus PR 1, Teile mit zwei Leerzeichen getrennt) in dieser Reihenfolge: `Leckerli n`, `Spray n`, `Wagen`, `Karte`/`Karte+`, `Ausweis`. Längster Fall `Leckerli 99  Spray 99  Wagen  Karte+  Ausweis` (45 Zeichen) passt ohne Umbruch in die kleinste Ansicht.
 15. **Determinismus-Test** mit Ereignissen bekommt das Spray in die Eingaben (alle drei Spieler mit 99 Ladungen), damit Stoß und Abklingzeit im Vergleich zweier Läufe stecken.
 
 ## Review Focus
@@ -1064,12 +1064,12 @@ In `packages/client/test/text.test.ts`:
 - Test `shows the items after the health` ersetzen:
 
 ```ts
-  it('shows the items after the health', () => {
+  it('shows the items on their own line below the health', () => {
     const s = duo();
     s.players.p1.items = { ...s.players.p1.items, dog_treat: 2, pepper: 17, cart: 1, card: 1, id_papers: 1 };
-    expect(statusLines(s, s.players.p1)[1]).toBe('Leben 100/100   Leckerli 2   Spray 17   Wagen   Karte   Ausweis');
+    expect(statusLines(s, s.players.p1).slice(1)).toEqual(['Leben 100/100', 'Leckerli 2  Spray 17  Wagen  Karte  Ausweis']);
     s.players.p1.items.card_plus = 1;
-    expect(statusLines(s, s.players.p1)[1]).toBe('Leben 100/100   Leckerli 2   Spray 17   Wagen   Karte+   Ausweis');
+    expect(statusLines(s, s.players.p1)[2]).toBe('Leckerli 2  Spray 17  Wagen  Karte+  Ausweis');
   });
 
   it('offers the spray with charges and a target in reach, not during its cooldown', () => {
@@ -1283,7 +1283,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 
 - Satz unter der Tabelle: „Tasche und Rucksack kauft man je Kauf einzeln bis zur Grenze, Pfefferspray und Leckerli in Mengen; …“.
 - Kampf: „mit 20 Schaden (Schlag-Upgrade mehr)“ → „mit 20 Schaden (mit Boxhandschuh 30)“. Dahinter einfügen: „Pfefferspray (eigene Taste, mit Ladungen aus dem Shop): trifft den nächsten wachen Mitspieler in 30 px, stößt ihn 40 px weg (Wände halten ihn auf) und nimmt ihm 2 Leben; danach 1 s Pause. Eine Ladung wird nur verbraucht, wenn jemand in Reichweite ist. Wer Schutz hat, wird weder gestoßen noch verletzt (die Ladung ist trotzdem weg). Alle sehen eine kurze orange Wolke, Sprühender und Getroffener hören ein Zischen.“
-- Leben und Events: hinter „Polizisten konfiszieren nach 2 s Kontrolle die Hälfte der Flaschen …“ einfügen: „Wer Ausweisdokumente hat, wird in dieser Runde von Polizisten in Ruhe gelassen.“ und im HUD-Satz „In der Zeile mit dem Leben stehen kurz Leckerli, Wagen und Kundenkarte.“ → „In der Zeile mit dem Leben stehen kurz Leckerli, Spray-Ladungen, Wagen, Kundenkarte und Ausweis.“
+- Leben und Events: hinter „Polizisten konfiszieren nach 2 s Kontrolle die Hälfte der Flaschen …“ einfügen: „Wer Ausweisdokumente hat, wird in dieser Runde von Polizisten in Ruhe gelassen.“ und im HUD-Satz „Unter der Zeile mit dem Leben stehen kurz Leckerli, Wagen und Kundenkarte.“ → „Unter der Zeile mit dem Leben stehen kurz Leckerli, Spray-Ladungen, Wagen, Kundenkarte und Ausweis.“
 
 - [ ] **Step 2: Alles prüfen**
 
