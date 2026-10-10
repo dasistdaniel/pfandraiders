@@ -441,7 +441,11 @@ export class OnlineConnection implements GameConnection {
         if (this.buffer.length > 0 && msg.snap.tick <= this.buffer[this.buffer.length - 1].snap.tick) break;
         this.buffer.push({ at: this.clock, snap: msg.snap });
         if (this.buffer.length > MAX_BUFFER) this.buffer.splice(0, this.buffer.length - MAX_BUFFER);
-        this.delay.observe(this.timeline.noteSnapshot(msg.snap.tick, this.clock));
+        {
+          const late = this.timeline.noteSnapshot(msg.snap.tick, this.clock);
+          // Erst mit geschätztem Server-Takt ist die Verspätung aussagekräftig
+          if (this.timeline.settled) this.delay.observe(late);
+        }
         {
           const me = msg.snap.players[this.you];
           if (me) this.predictor.onSnapshot({ x: me.x, y: me.y }, msg.ack, this.moving(), this.clock, msg.snap.tick);
@@ -582,7 +586,7 @@ export class OnlineConnection implements GameConnection {
     const newest = latest.snap.tick;
     this.timeline.advance(this.clock);
     // Offene Lücke: so viel später als erwartet ist der nächste Tick schon (lässt die Verzögerung im Stau wachsen)
-    this.delay.step(dt, this.clock - this.timeline.timeOf(newest + 1));
+    this.delay.step(dt, this.timeline.settled ? this.clock - this.timeline.timeOf(newest + 1) : 0);
     this.renderTick = Math.max(this.renderTick, this.timeline.tickAt(this.clock - this.delay.delayMs));
     const rt = this.renderTick;
     let snap = latest.snap;

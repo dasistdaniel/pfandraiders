@@ -299,6 +299,14 @@ describe('OnlineConnection rendering state', () => {
     for (let f = 40; f < 500; f++) expect(xs[f]).toBeCloseTo(0.1 * (f + 1) * 10 + 91, 6);
   });
 
+  it('keeps 100 ms on a calm network with a slower server tick (Windows: about 61 ms), also while starting', () => {
+    const { xs, delays } = walk((k) => k * 61, 300, 1100);
+    expect(Math.max(...delays)).toBe(100);
+    // gleichmäßig: nach dem Einschwingen höchstens 1 px Abweichung vom mittleren Schritt (5 px je 61 ms)
+    const steps = xs.slice(200).map((x, i, a) => (i === 0 ? null : x - a[i - 1])).slice(1) as number[];
+    for (const d of steps) expect(Math.abs(d - (5 * 16) / 61)).toBeLessThan(1);
+  });
+
   it('does not freeze and then jump after a stall: extrapolates, slows down, blends back', () => {
     // 2 s ruhig, dann 400 ms Stau (Ticks 40..47 kommen alle bei 2350 an), dann wieder ruhig
     const arrive = (k: number) => (k >= 40 && k <= 47 ? 2350 : k * 50);

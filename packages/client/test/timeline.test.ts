@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_WINDOW_MS, OFFSET_SLEW, RESYNC_MS, ServerTimeline } from '../src/timeline';
+import { MIN_WINDOW_MS, OFFSET_SLEW, RATE_MIN_SPAN_MS, RESYNC_MS, ServerTimeline } from '../src/timeline';
 
 /** Ruhige Leitung: Tick k kommt bei start + k * ms an (mit optionaler Verspätung je Tick). */
 function feed(tl: ServerTimeline, ticks: number, ms = 50, late: (k: number) => number = () => 0, start = 1000): number {
@@ -73,6 +73,25 @@ describe('ServerTimeline', () => {
     // nach der Einschwingzeit landen die Snapshots wieder pünktlich
     expect(Math.max(...late.slice(150).map(Math.abs))).toBeLessThan(5);
     expect(tl.timeOf(299)).toBeCloseTo(now, -1);
+  });
+
+  it('is settled after RATE_MIN_SPAN_MS and then places snapshots on time at once', () => {
+    const tl = new ServerTimeline();
+    const late: number[] = [];
+    let settledAt = -1;
+    for (let k = 0; k < 60; k++) {
+      const now = 1000 + k * 61;
+      tl.advance(now);
+      late.push(tl.noteSnapshot(k, now));
+      if (tl.settled && settledAt < 0) settledAt = k;
+    }
+    expect(settledAt).toBeGreaterThan(0);
+    expect(settledAt * 61).toBeGreaterThanOrEqual(RATE_MIN_SPAN_MS);
+    expect(settledAt * 61).toBeLessThan(RATE_MIN_SPAN_MS + 200);
+    // gleich nach dem Einschwingen pünktlich, nicht erst nach Sekunden
+    expect(Math.max(...late.slice(settledAt + 1).map(Math.abs))).toBeLessThan(3);
+    tl.reset();
+    expect(tl.settled).toBe(false);
   });
 
   it('estimates the tick despite jitter', () => {

@@ -50,13 +50,24 @@ export class ServerTimeline {
   private target = 0;
   private hasBase = false;
   private lastNow: number | null = null;
+  /** Takt schon einmal geschätzt (ab RATE_MIN_SPAN_MS Daten) */
+  private rateKnown = false;
 
   /** Schon ein Snapshot gesehen? Vorher ist die Zuordnung undefiniert. */
   get ready(): boolean {
     return this.hasBase;
   }
 
+  /**
+   * Takt geschätzt? Vorher rechnet die Zeitachse mit 50 ms je Tick; läuft der Server langsamer, wirken die
+   * Snapshots bis dahin immer verspäteter. Verspätungen zählen deshalb erst danach als Jitter.
+   */
+  get settled(): boolean {
+    return this.rateKnown;
+  }
+
   reset(): void {
+    this.rateKnown = false;
     this.msPerTick = SERVER_STEP_MS;
     this.samples = [];
     this.baseTick = 0;
@@ -102,9 +113,10 @@ export class ServerTimeline {
     let drop = 0;
     while (drop < this.samples.length - 1 && this.samples[drop].at < newest - RATE_WINDOW_MS) drop++;
     if (drop > 0) this.samples.splice(0, drop);
-    this.estimateRate();
+    const first = this.estimateRate();
     this.target = this.envelope(newest);
-    if (Math.abs(this.target - this.base) > RESYNC_MS) this.base = this.target;
+    // Mit der ersten Takt-Schätzung direkt auf die Hülle: die alte Zuordnung (50 ms je Tick) war geraten
+    if (first || Math.abs(this.target - this.base) > RESYNC_MS) this.base = this.target;
     return at - this.timeOf(tick);
   }
 
@@ -136,14 +148,14 @@ export class ServerTimeline {
   /**
    * Takt aus der unteren Hülle: in der älteren und der neueren Hälfte des Fensters je den Snapshot mit der
    * kleinsten Verspätung suchen; die Steigung zwischen beiden ist die Dauer eines Ticks. Staus und Jitter
-   * verspäten Snapshots nur, die schnellsten bleiben brauchbar.
+   * verspäten Snapshots nur, die schnellsten bleiben brauchbar. Gibt true bei der ersten Schätzung zurück.
    */
-  private estimateRate(): void {
+  private estimateRate(): boolean {
     const s = this.samples;
-    if (s.length < 4) return;
+    if (s.length < 4) return false;
     const first = s[0].at;
     const span = s[s.length - 1].at - first;
-    if (span < RATE_MIN_SPAN_MS) return;
+    if (span < RATE_MIN_SPAN_MS) return false;
     const mid = first + span / 2;
     let a: Sample | null = null;
     let b: Sample | null = null;
@@ -161,8 +173,14 @@ export class ServerTimeline {
         b = x;
       }
     }
-    if (!a || !b || b.tick - a.tick < 10) return;
+    if (!a || !b || b.tick - a.tick < 10) return false;
     const raw = Math.max(RATE_MIN, Math.min(RATE_MAX, (b.at - a.at) / (b.tick - a.tick)));
+    if (!this.rateKnown) {
+      this.rateKnown = true;
+      this.msPerTick = raw;
+      return true;
+    }
     this.msPerTick += RATE_GAIN * (raw - this.msPerTick);
+    return false;
   }
 }
