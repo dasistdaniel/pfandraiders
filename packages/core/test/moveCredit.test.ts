@@ -169,6 +169,8 @@ describe('MoveCredit', () => {
     mc.tick(0, true, true);
     mc.onInput(10, 1, 0, STOP, RIGHT);
     mc.onInput(10, 2, 400, RIGHT, STOP);
+    // was das Budget nicht hergibt, verfällt sofort und hält das ack nicht auf
+    expect(mc.ackLimit(2)).toBe(2);
     let got = 0;
     for (let t = 50; t <= 50 + MOVE_CREDIT.maxAgeMs + 100; t += 50) got += total(mc.tick(t, true, true));
     expect(got).toBe(0);

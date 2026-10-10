@@ -483,9 +483,28 @@ describe('Predictor against a simulated server', () => {
 });
 
 describe('Server with held inputs (docs/NETZ.md, Befund 2)', () => {
-  // Stau nur Client→Server: "los" (bei 1000 ms) und "stopp" (bei 1300 ms) hängen im Stau und kommen zusammen an.
-  // Der alte Server nahm nur die letzte Eingabe und ließ die Figur stehen; der Client hatte 300 ms (34,5 px)
-  // vorhergesagt. Jetzt meldet jede Eingabe, wie lange die vorige galt, und der Server rechnet nach.
+  it('turns inside an up-stall without hard snap or jerks (the overshoot itself stays)', () => {
+    // Zickzack, der Richtungswechsel liegt im Stau: Der Server läuft bis zum Ende des Staus in die alte Richtung
+    // (das lässt sich nicht zurücknehmen); nachgerechnet wird nur, was das Budget hergibt.
+    const zig: Script = [
+      [1000, 1, 0],
+      [1000, -1, 0],
+      [1000, 1, 0],
+      [1000, -1, 0],
+    ];
+    for (const at of [700, 800, 900, 1000, 1100, 1200, 1700, 1850]) {
+      for (const seed of [1, 2, 3]) {
+        const sim = simulate({ latency: 60, jitter: 80, script: zig, seed, stall: { at, ms: 400 }, stallDir: 'up' });
+        expect(sim.pred.snaps).toBe(0);
+        for (let i = 1; i < sim.frames.length; i++) {
+          const p = sim.frames[i - 1];
+          const q = sim.frames[i];
+          expect(Math.hypot(q.x - p.x, q.y - p.y)).toBeLessThanOrEqual((SPEED * q.dt * 1.01) / 1000 + 5);
+        }
+      }
+    }
+  });
+
   const GO_STOP: Script = [
     [1000, 0, 0],
     [300, 1, 0],

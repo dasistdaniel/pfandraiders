@@ -20,7 +20,9 @@ import type { GameState, Input } from './types';
  *   gegen spätere Gutschriften desselben Laufs.
  * - Schutz gegen gefälschte Werte: ein Budget (Token-Bucket) mit `budgetMs` Fassungsvermögen, das mit der echten
  *   Zeit zwischen zwei Takten nachfüllt und von jedem Takt, in dem die Figur mit einer Laufeingabe unterwegs ist,
- *   sowie von jeder Gutschrift geleert wird. Insgesamt läuft eine Figur so nie länger als Echtzeit + budgetMs.
+ *   sowie von jeder Gutschrift (schon beim Gutschreiben) geleert wird. Insgesamt läuft eine Figur so nie länger als
+ *   Echtzeit + budgetMs. Wer ohne Pause läuft, füllt das Budget also nicht auf: Lief der Server im Stau zu lange in
+ *   die alte Richtung, gibt es für die neue Richtung höchstens den Rest des Budgets.
  * - Höchstens `perTickMs` je Takt in Teilschritten zu höchstens `substepMs` (dieselbe `walk`-Funktion mit Kollision
  *   wie im normalen Schritt); was älter als `maxAgeMs` ist, verfällt.
  *
@@ -112,9 +114,14 @@ export class MoveCredit {
       const t = MOVE_CREDIT.thresholdMs;
       const grant = ends ? (deficit > t ? deficit : 0) : deficit - t;
       if (grant > 0 && moves(run)) {
-        const ms = Math.min(grant, MAX_HELD_MS);
-        this.enqueue({ moveX: run.moveX, moveY: run.moveY, ms, seq, at: now });
-        run.credited += ms;
+        // Das Budget wird sofort belastet: Was es nicht hergibt, verfällt gleich, statt in der Warteschlange das
+        // ack aufzuhalten. Der ganze Rückstand gilt als erledigt (sonst käme er später als Schub nach).
+        const ms = Math.min(grant, MAX_HELD_MS, Math.max(0, this.budget));
+        if (ms > 0) {
+          this.budget -= ms;
+          this.enqueue({ moveX: run.moveX, moveY: run.moveY, ms, seq, at: now });
+        }
+        run.credited += grant;
       }
       if (!ends) return;
     }
@@ -157,13 +164,13 @@ export class MoveCredit {
     this.queue = this.queue.filter((q) => now - q.at <= MOVE_CREDIT.maxAgeMs);
     const steps: CreditStep[] = [];
     let left = MOVE_CREDIT.perTickMs;
-    while (this.queue.length > 0 && left > 0 && this.budget > 0) {
+    // das Budget ist schon bei der Gutschrift belastet (onInput)
+    while (this.queue.length > 0 && left > 0) {
       const q = this.queue[0];
-      const ms = Math.min(q.ms, left, this.budget, MOVE_CREDIT.substepMs);
+      const ms = Math.min(q.ms, left, MOVE_CREDIT.substepMs);
       steps.push({ moveX: q.moveX, moveY: q.moveY, ms });
       q.ms -= ms;
       left -= ms;
-      this.budget -= ms;
       if (q.ms <= 1e-9) this.queue.shift();
     }
     return steps;
