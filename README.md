@@ -66,11 +66,13 @@ Leben sinken durch Hunger (1 pro 8 s), Hundebisse (15) und Schläge; bei 0 Leben
 
 ## Karten
 
-Es gibt zwei Karten. `city` ist die Standardkarte, eine Stadt mit 64 x 40 Kacheln (Straßen, Häuser, Parks, zwei Pfandautomaten, acht Startpunkte, Zonen Stadion und Konzert). `retro` ist die kleine Ursprungskarte mit 32 x 20 Kacheln und den selbst gezeichneten Kacheln. Jede Karte hat eine Kennung, die der Server in der Start-Nachricht mitschickt; der Client wählt danach die Grafik.
+Eingebaut sind zwei Karten. `city` ist die Standardkarte, eine Stadt mit 64 x 40 Kacheln (Straßen, Häuser, Parks, zwei Pfandautomaten, acht Startpunkte, Zonen Stadion und Konzert). `retro` ist die kleine Ursprungskarte mit 32 x 20 Kacheln und den selbst gezeichneten Kacheln. Jede Karte hat eine Kennung, die der Server in der Start-Nachricht mitschickt; der Client wählt danach die Grafik.
 
-- Lokal: `?map=retro` oder `?map=city` in der URL.
-- Server: Umgebungsvariable `MAP_ID` (`city` oder `retro`, Standard `city`).
-- Eine Kartenauswahl in Menü und Raum gibt es noch nicht.
+Dazu kommen eigene Karten aus `packages/core/src/maps/custom/` (Kennung = Dateiname ohne `.tiled.json`); `npm run maps` prüft sie und trägt sie in `custom/index.ts` ein.
+
+- Lokal: In der Lobby wählt hoch/runter (W/S, Pfeiltasten, Steuerkreuz) die Karte; die Wahl wird gemerkt und gilt für alle Runden der Serie. `?map=<kennung>` in der URL hat Vorrang (Testhilfe).
+- Online: Der Host wählt die Karte in der Lobby mit ◄ ►, die anderen sehen sie; sie gilt für die ganze Serie und bleibt nach der Rückkehr in die Lobby. Die Raumliste zeigt die Karte jedes Raums.
+- Server: Umgebungsvariable `MAP_ID` legt die Startkarte neuer Räume fest (eine Kennung aus der Kartenliste, Standard `city`; Unbekanntes ergibt `city` und eine Warnung mit den bekannten Kennungen).
 
 Die Stadt wird aus einem ASCII-Plan erzeugt: `packages/core/src/maps/cityPlan.ts` (Legende im Kopf der Datei) wird mit `npx tsx packages/core/scripts/generateCity.ts` zur Tiled-Datei `city.tiled.json` mit Regel- und Grafikebenen. Nach Änderungen am Plan die Datei neu erzeugen; ein Test prüft, dass beide übereinstimmen und dass jeder Punkt von jedem Startpunkt aus erreichbar ist. Die Retro-Karte entsteht ebenso aus `packages/core/src/maps/retro-ascii.ts` mit `npx tsx packages/core/scripts/asciiToTiled.ts`. Shops gibt es auf keiner Karte mehr; das frühere Zeichen `S` bzw. der Objekttyp `shop` sind ungültig.
 
@@ -111,7 +113,7 @@ Ohne Audiodateien erzeugt das Spiel alle Effekte und die Musik selbst (WebAudio)
 
 ## Testhilfen per URL
 
-`?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden, überschreibt die Wahl der Lobby), `?seed=123` (feste Zufallsbefüllung), `?events=now` (NPCs und Zonen sofort statt nach Minuten).
+`?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden, überschreibt die Wahl der Lobby), `?seed=123` (feste Zufallsbefüllung), `?map=retro` (Karte, überschreibt die Wahl der Lobby), `?events=now` (NPCs und Zonen sofort statt nach Minuten).
 
 ## Online spielen und Server
 
