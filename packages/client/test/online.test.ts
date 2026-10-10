@@ -2,6 +2,7 @@ import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, DEFAULT_ROUNDS, RET
 import type { ClientMessage, Player, RoomPhase, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
+import { Predictor } from '../src/prediction';
 import type { SocketLike } from '../src/online';
 
 class FakeSocket implements SocketLike {
@@ -619,6 +620,25 @@ describe('OnlineConnection own-player prediction', () => {
     socket.receive(ownSnap(1, seq, (p) => (p.x = spawn().x + 5)));
     conn.update(16);
     expect(conn.getState().players.p1.x).toBeCloseTo(before + (SPEED * 16) / 1000, 6);
+  });
+
+  it('passes the tick of each snapshot to the prediction', () => {
+    const spy = vi.spyOn(Predictor.prototype, 'onSnapshot');
+    try {
+      const { socket, conn } = started();
+      conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+      conn.update(16);
+      const seq = lastSeq(socket);
+      // nach einem Stau: drei Snapshots mit demselben ack kommen auf einmal an
+      for (const tick of [7, 8, 9]) socket.receive(ownSnap(tick, seq));
+      expect(spy.mock.calls.slice(-3).map((c) => [c[1], c[4]])).toEqual([
+        [seq, 7],
+        [seq, 8],
+        [seq, 9],
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('corrects a standing figure gently towards the server position', () => {
