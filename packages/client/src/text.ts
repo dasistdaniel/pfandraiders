@@ -14,7 +14,7 @@ import {
 import type { GameState, Player } from '@pfandraiders/core';
 import { countdownLeft } from './countdown';
 import type { KeyLabels } from './sources';
-import { formatMoney, formatTime } from './format';
+import { formatGain, formatMoney, formatTime } from './format';
 
 export function playerName(id: string): string {
   return id.toUpperCase();
@@ -33,12 +33,14 @@ function itemParts(p: Player): string[] {
 }
 
 /**
- * Immer drei Zeilen: Zeit und Geld, Leben, Besitz (leer ohne Besitz). Das Leben steht allein, damit die Zeile nicht
- * unter den Lebensbalken oben rechts läuft. Die Flaschen zeigt das HUD als Symbole (bottleIcons).
+ * Immer drei Zeilen: Zeit, Geld und Rundenverdienst, Leben, Besitz (leer ohne Besitz). Das Leben steht allein, damit
+ * die Zeile nicht unter den Lebensbalken oben rechts läuft. Die Flaschen zeigt das HUD als Symbole (bottleIcons).
+ * Geld = Kasse (Übertrag minus Einkäufe plus Pfand), Runde = Pfand dieser Runde (wie in der Rangliste).
+ * Längste Zeile "Zeit 10:00   Geld 123,45 €   Runde +45,60 €" (42 Zeichen) passt in die kleinste Ansicht (478 px).
  */
 export function statusLines(state: GameState, p: Player): string[] {
   return [
-    `Zeit ${formatTime(state.timeLeftMs)}   Geld ${formatMoney(p.money)}`,
+    `Zeit ${formatTime(state.timeLeftMs)}   Geld ${formatMoney(p.money)}   Runde ${formatGain(p.earnedRound)}`,
     `Leben ${Math.ceil(p.health)}/${CONFIG.health.max}`,
     itemParts(p).join('  '),
   ];

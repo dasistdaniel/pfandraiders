@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, formatTime } from '../src/format';
+import { formatGain, formatMoney, formatTime } from '../src/format';
 
 describe('formatMoney', () => {
   it('formats cents with comma and euro sign', () => {
@@ -7,6 +7,14 @@ describe('formatMoney', () => {
     expect(formatMoney(8)).toBe('0,08 €');
     expect(formatMoney(150)).toBe('1,50 €');
     expect(formatMoney(12345)).toBe('123,45 €');
+  });
+});
+
+describe('formatGain', () => {
+  it('formats earnings with a plus sign', () => {
+    expect(formatGain(0)).toBe('+0,00 €');
+    expect(formatGain(228)).toBe('+2,28 €');
+    expect(formatGain(12345)).toBe('+123,45 €');
   });
 });
 

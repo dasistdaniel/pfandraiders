@@ -5,6 +5,11 @@ export function formatMoney(cents: number): string {
   return `${euros},${String(rest).padStart(2, '0')} €`;
 }
 
+/** Verdienst als "+2,28 €" (nie negativ: Ausgaben mindern keinen Verdienst) */
+export function formatGain(cents: number): string {
+  return `+${formatMoney(cents)}`;
+}
+
 /** Millisekunden als "m:ss", aufgerundet auf volle Sekunden */
 export function formatTime(ms: number): string {
   const total = Math.ceil(ms / 1000);

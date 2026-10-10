@@ -27,12 +27,24 @@ describe('playerName', () => {
 });
 
 describe('statusLines', () => {
-  it('shows time and money, health and an item line; the bottles are icons now', () => {
+  it('shows time, money and round earnings, health and an item line; the bottles are icons now', () => {
     const s = twoGame();
     s.players.p1.money = 150;
+    s.players.p1.earnedRound = 228;
     s.players.p1.bottles = { plastic: 2, glass: 1, crate: 0 };
     const lines = statusLines(s, s.players.p1);
-    expect(lines).toEqual(['Zeit 5:00   Geld 1,50 €', 'Leben 100/100', '']);
+    expect(lines).toEqual(['Zeit 5:00   Geld 1,50 €   Runde +2,28 €', 'Leben 100/100', '']);
+  });
+
+  it('keeps the first line short enough for the smallest split-screen view even in the worst case', () => {
+    const s = twoGame();
+    s.timeLeftMs = 600000;
+    s.players.p1.money = 12345;
+    s.players.p1.earnedRound = 4560;
+    const first = statusLines(s, s.players.p1)[0];
+    expect(first).toBe('Zeit 10:00   Geld 123,45 €   Runde +45,60 €');
+    // 478 px Ansicht, Umbruch bei 462 px; Monospace 16 px ist höchstens ~9,7 px breit, Name P1..P4 rechts
+    expect(first.length).toBeLessThanOrEqual(43);
   });
 
 });
