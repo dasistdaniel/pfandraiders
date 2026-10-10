@@ -108,6 +108,8 @@ export interface ResultRow {
   place: number;
   id: string;
   name: string;
+  /** Geld jetzt (Kasse: Übertrag minus Einkäufe plus Pfand dieser Runde, Cent) */
+  money: number;
   /** Rundenverdienst (Cent) */
   round: number;
   /** Gesamtverdienst der Serie (Cent) */
@@ -131,6 +133,7 @@ export function resultRows(
       place,
       id: r.id,
       name: nameOf(r.id).slice(0, MAX_NAME_LENGTH),
+      money: r.money,
       round: r.round,
       total: r.total,
       isWinner: place === 1,
@@ -140,9 +143,51 @@ export function resultRows(
   return rows;
 }
 
-/** Kopfzeile des Ergebnisfelds (Spalten wie in hud.ts). */
-export function resultHeader(): string {
-  return 'Platz  Name              Runde     Gesamt';
+/** Spalten des Ergebnisfelds (Zeichen, Monospace): Platz mit Lücke für die Figur, Abstand nach dem Namen, Beträge. */
+const PLACE_COL = 7;
+const NAME_GAP = 2;
+const AMOUNT_COL = 10;
+const MIN_NAME_COL = 'Name'.length;
+/** Zeichen außer dem Namen: Platz, Abstand, Geld, Runde, Gesamt */
+const FIXED_COLS = PLACE_COL + NAME_GAP + 3 * AMOUNT_COL;
+
+/**
+ * Breite der Namensspalte: der längste Name (mindestens "Name", höchstens MAX_NAME_LENGTH), aber nur so breit, dass
+ * die Zeile in `maxChars` Zeichen passt (dann werden Namen gekürzt). Lokal (P1..P4) bleibt sie schmal, damit die
+ * Tabelle auch in die kleinste Splitscreen-Ansicht passt.
+ */
+export function resultNameWidth(rows: readonly ResultRow[], maxChars: number): number {
+  const longest = Math.max(MIN_NAME_COL, ...rows.map((r) => r.name.length));
+  return Math.max(MIN_NAME_COL, Math.min(longest, MAX_NAME_LENGTH, maxChars - FIXED_COLS));
+}
+
+/**
+ * Kopf des Ergebnisfelds, zwei Zeilen: "Verdienst" über den Spalten Runde und Gesamt, darunter die Spaltennamen.
+ * Geld = Kasse jetzt (nach Einkäufen); Runde und Gesamt = Verdienst (Ausgaben mindern ihn nicht).
+ */
+export function resultHeader(nameWidth: number): string[] {
+  const columns =
+    'Platz'.padEnd(PLACE_COL) +
+    'Name'.padEnd(nameWidth + NAME_GAP) +
+    'Geld'.padStart(AMOUNT_COL) +
+    'Runde'.padStart(AMOUNT_COL) +
+    'Gesamt'.padStart(AMOUNT_COL);
+  const start = columns.indexOf('Runde');
+  const group = 'Verdienst';
+  const offset = start + Math.floor((columns.length - start - group.length) / 2);
+  return [`${' '.repeat(offset)}${group}`, columns];
+}
+
+/** Eine Zeile des Ergebnisfelds, Spalten wie resultHeader (Beträge rechtsbündig unter ihren Namen). */
+export function resultRowText(row: ResultRow, nameWidth: number): string {
+  const mark = (row.isWinner ? '★' : ' ') + (row.isViewer ? '>' : ' ');
+  return (
+    `${mark}${row.place}.`.padEnd(PLACE_COL) +
+    row.name.slice(0, nameWidth).padEnd(nameWidth + NAME_GAP) +
+    formatMoney(row.money).padStart(AMOUNT_COL) +
+    formatMoney(row.round).padStart(AMOUNT_COL) +
+    formatMoney(row.total).padStart(AMOUNT_COL)
+  );
 }
 
 /** Fußzeile am Rundenende: in der Serie geht es für alle in den Shop, nach der letzten Runde zur Endwertung. */

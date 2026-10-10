@@ -4,8 +4,7 @@ import type { GameState, Player } from '@pfandraiders/core';
 import type { Rect } from './layout';
 import type { KeyLabels } from './sources';
 import { BOTTLE_ICON, BOTTLE_ICON_COLORS, bottleIcons, bottleIconsKey } from './bottleIcons';
-import { alertText, hintLines, resultFooter, resultHeader, resultRows, statusLines } from './text';
-import { formatMoney } from './format';
+import { alertText, hintLines, resultFooter, resultHeader, resultNameWidth, resultRows, resultRowText, statusLines } from './text';
 import { knockoutFontSizes, knockoutText } from './knockoutView';
 import { HEALTH_COLORS, healthBar, healthLabel } from './healthBar';
 import { charFrameIndex } from './playerChars';
@@ -18,9 +17,11 @@ const ICONS = { x: 8, y: 68 };
 const BAR_Y = 94;
 const ALERT_Y = 110;
 const MAX_RESULT_ROWS = 8;
-const PANEL_MAX_W = 440;
+/** Breit genug für 16 Zeichen lange Namen in der großen Ansicht; im Splitscreen begrenzt die Ansicht (Namen P1..P4) */
+const PANEL_MAX_W = 560;
 const PANEL_PAD = 12;
-const TITLE_H = 54;
+/** Titel und zweizeiliger Tabellenkopf ("Verdienst" über Runde und Gesamt, darunter die Spaltennamen) */
+const TITLE_H = 74;
 const ROW_H = 22;
 const FOOTER_LINE_H = 18;
 /** Countdown-Zahl: so groß im Verhältnis zur kürzeren Viewport-Seite, begrenzt auf [min, max] px */
@@ -43,17 +44,22 @@ class ResultsPanel {
   private readonly images: Phaser.GameObjects.Image[];
   private readonly footer: Phaser.GameObjects.Text;
   private readonly panelW: number;
+  private readonly inner: number;
+  /** Breite eines Zeichens der Monospace-Schrift (einmal an der Kopfzeile gemessen) */
+  private readonly charW: number;
 
   constructor(scene: Phaser.Scene, private readonly view: Rect) {
     this.panelW = Math.min(PANEL_MAX_W, view.w - 16);
     const inner = this.panelW - 2 * PANEL_PAD;
+    this.inner = inner;
     this.bg = scene.add.rectangle(view.w / 2, view.h / 2, this.panelW, 100, 0x000000, 0.8).setOrigin(0.5, 0);
     this.title = scene.add
       .text(view.w / 2, 0, 'Runde vorbei!', { ...FONT, fontSize: '24px', color: '#ffee58', align: 'center' })
       .setOrigin(0.5, 0);
     this.header = scene.add
-      .text(0, 0, resultHeader(), { ...FONT, color: '#aaaaaa' }) // gleiche Schrift wie die Zeilen, damit die Spalten passen
+      .text(0, 0, resultHeader(4)[1], { ...FONT, color: '#aaaaaa' }) // gleiche Schrift wie die Zeilen, damit die Spalten passen
       .setOrigin(0, 0);
+    this.charW = this.header.width / resultHeader(4)[1].length || 9.6;
     this.rows = Array.from({ length: MAX_RESULT_ROWS }, () =>
       scene.add.text(0, 0, '', { ...FONT, wordWrap: { width: inner } }).setOrigin(0, 0),
     );
@@ -83,31 +89,29 @@ class ResultsPanel {
     charOf: (id: string) => string | null,
   ): void {
     const rows = resultRows(state, viewerId, nameOf).slice(0, MAX_RESULT_ROWS);
+    // Namensspalte nach dem längsten Namen, aber nie breiter als das Feld (sonst bräche die Zeile um)
+    const nameWidth = resultNameWidth(rows, Math.floor(this.inner / this.charW));
     const footerLines = resultFooter(role, labels, final);
     const height = PANEL_PAD + TITLE_H + rows.length * ROW_H + 8 + footerLines.length * FOOTER_LINE_H + PANEL_PAD;
     const top = Math.max(0, Math.round((this.view.h - height) / 2));
     const left = Math.round((this.view.w - this.panelW) / 2) + PANEL_PAD;
     this.bg.setPosition(this.view.w / 2, top).setSize(this.panelW, height);
     this.title.setPosition(this.view.w / 2, top + PANEL_PAD);
-    this.header.setPosition(left, top + PANEL_PAD + 34).setVisible(true);
+    this.header.setText(resultHeader(nameWidth).join('\n')).setPosition(left, top + PANEL_PAD + 34).setVisible(true);
     this.rows.forEach((t, i) => {
       const row = rows[i];
       t.setVisible(row !== undefined);
       if (!row) this.images[i].setVisible(false);
       if (!row) return;
-      const mark = (row.isWinner ? '★' : ' ') + (row.isViewer ? '>' : ' ');
-      const place = `${mark}${row.place}.`.padEnd(7);
-      const name = row.name.padEnd(17);
-      t.setText(`${place}${name}${formatMoney(row.round).padStart(9)}  ${formatMoney(row.total).padStart(9)}`);
+      t.setText(resultRowText(row, nameWidth));
       t.setColor(toCss(colorOf(row.id)));
       t.setPosition(left, top + PANEL_PAD + TITLE_H + i * ROW_H);
       const img = this.images[i];
       const key = charOf(row.id);
       img.setVisible(key !== null);
       if (key !== null) {
-        // Breite eines Zeichens aus der Kopfzeile (gleiche Monospace-Schrift); Bild in der Lücke der Platz-Spalte
-        const charW = this.header.width / resultHeader().length;
-        img.setTexture(key, charFrameIndex('down', 0)).setPosition(left + charW * 4.6, top + PANEL_PAD + TITLE_H + i * ROW_H + 2);
+        // Bild in der Lücke der Platz-Spalte (gleiche Monospace-Schrift wie die Kopfzeile)
+        img.setTexture(key, charFrameIndex('down', 0)).setPosition(left + this.charW * 4.6, top + PANEL_PAD + TITLE_H + i * ROW_H + 2);
       }
     });
     this.footer.setText(footerLines.join('\n'));
