@@ -45,10 +45,14 @@ export const CORRECTION_GAIN = 0.35;
  * Genau ist das nur auf etwa einen Takt (die Phase zwischen Losgehen und Server-Takt ist unbekannt). Mit dem
  * simulierten Server (prediction.test.ts) ergaben Werte von 25 bis 50 ms zusammen mit dem Fenster unten praktisch
  * dieselben Fehler; 25 ms bleibt.
- * Snapshots mit unverändertem ack (Eingaben gehen nur alle 100 ms hinaus, Snapshots alle 50 ms) zählen von der
- * Ankunft des letzten neuen ack aus weiter.
+ * Snapshots mit unverändertem ack (Eingaben gehen nur alle 100 ms hinaus, Snapshots alle 50 ms) zählen vom
+ * letzten neuen ack aus über die Tick-Differenz weiter (SERVER_STEP_MS je Takt), nicht über die Ankunftszeit:
+ * Nach einem Stau kommen mehrere Snapshots auf einmal an, liegen aber je einen Takt auseinander
+ * (docs/NETZ.md, Befund 1). Ohne brauchbaren tick zählt wie früher die Ankunft.
  */
 export const ACK_OFFSET_MS = 25;
+/** Dauer eines Server-Takts (ms); muss zu SERVER_CONFIG.stepMs im Server passen (20 Takte pro Sekunde). */
+export const SERVER_STEP_MS = 50;
 /**
  * Die Zuordnung oben ist nur auf etwa einen Server-Takt genau (Phase des Takts, Frame-Raster, Jitter).
  * Verglichen wird deshalb mit dem nächstgelegenen Punkt des Verlaufs in [t - Fenster, t + Fenster]:
@@ -139,8 +143,8 @@ export class Predictor {
   private history: HistoryEntry[] = [];
   private sends = new Map<number, number>();
   private lastAck = -1;
-  /** Zeitpunkt im Verlauf, dem der letzte Snapshot mit neuem ack entsprach, und wann er ankam. */
-  private fresh: { at: number; recvAt: number } | null = null;
+  /** Zeitpunkt im Verlauf, dem der letzte Snapshot mit neuem ack entsprach, wann er ankam und sein Takt (tick). */
+  private fresh: { at: number; recvAt: number; tick: number | null } | null = null;
   /** Noch nicht angezeigter Teil der Korrekturen (angezeigt = gerechnet - offset), klingt mit CORRECTION_SMOOTH_MS ab. */
   private offset: Pos = { x: 0, y: 0 };
   /** Karte aus dem letzten step(), damit eine Korrektur die Figur nicht in eine Wand schiebt. */
@@ -258,9 +262,9 @@ export class Predictor {
 
   /**
    * Snapshot angekommen: `server` ist die eigene Position darin, `ack` die höchste Eingabenummer, die der Server
-   * bis dahin hatte, `moving` ob die aktuelle Eingabe läuft.
+   * bis dahin hatte, `moving` ob die aktuelle Eingabe läuft, `tick` der Server-Takt des Snapshots (optional).
    */
-  onSnapshot(server: Pos, ack: number, moving: boolean, nowMs: number): void {
+  onSnapshot(server: Pos, ack: number, moving: boolean, nowMs: number, tick?: number): void {
     if (!server || !finite(server.x) || !finite(server.y) || !finite(nowMs)) return;
     const s = { x: server.x, y: server.y };
     if (this.pos === null || !this.enabled) {
@@ -272,13 +276,19 @@ export class Predictor {
     // Welche Zeit im eigenen Verlauf entspricht dieser Snapshot?
     let at: number | null = null;
     const sentAt = Number.isSafeInteger(ack) ? this.sends.get(ack) : undefined;
+    const t = finite(tick) ? tick : null;
     if (sentAt !== undefined && ack > this.lastAck) {
       at = sentAt + ACK_OFFSET_MS;
       this.lastAck = ack;
-      this.fresh = { at, recvAt: nowMs };
+      this.fresh = { at, recvAt: nowMs, tick: t };
     } else if (this.fresh && ack === this.lastAck) {
-      // gleiches ack wie zuvor (Eingaben gehen nur alle 100 ms hinaus, Snapshots alle 50 ms): weiterzählen
-      at = this.fresh.at + (nowMs - this.fresh.recvAt);
+      // gleiches ack wie zuvor (Eingaben gehen nur alle 100 ms hinaus, Snapshots alle 50 ms): weiterzählen,
+      // und zwar um die Server-Takte seit dem neuen ack; nach einem Stau kommen mehrere Snapshots zugleich an
+      const fresh = this.fresh;
+      at =
+        t !== null && fresh.tick !== null && t > fresh.tick
+          ? fresh.at + (t - fresh.tick) * SERVER_STEP_MS
+          : fresh.at + (nowMs - fresh.recvAt);
     }
 
     const ref = at === null ? null : closestOnHistory(this.history, at - ACK_WINDOW_MS, at + ACK_WINDOW_MS, s);

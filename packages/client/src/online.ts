@@ -420,7 +420,7 @@ export class OnlineConnection implements GameConnection {
         if (this.buffer.length > MAX_BUFFER) this.buffer.splice(0, this.buffer.length - MAX_BUFFER);
         {
           const me = msg.snap.players[this.you];
-          if (me) this.predictor.onSnapshot({ x: me.x, y: me.y }, msg.ack, this.moving(), this.clock);
+          if (me) this.predictor.onSnapshot({ x: me.x, y: me.y }, msg.ack, this.moving(), this.clock, msg.snap.tick);
         }
         if (this.stats) {
           this.stats.noteSnapshot(msg.ack);

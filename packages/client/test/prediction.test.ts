@@ -74,6 +74,11 @@ interface SimOptions {
   serverEvent?: { at: number; apply: (p: Player) => void };
   /** Eingabe, die statt der Skript-Eingabe an den Predictor geht (Müll-Test). */
   garbage?: (t: number) => Input;
+  /**
+   * Stau in beiden Richtungen (wie der Lag-Proxy): Was in [at, at + ms) ankäme, wird gehalten und kommt bei
+   * at + ms auf einmal an.
+   */
+  stall?: { at: number; ms: number };
 }
 
 interface Frame {
@@ -103,6 +108,7 @@ function simulate(o: SimOptions) {
   const jitter = o.jitter ?? 0;
   const rand = rng(o.seed ?? 1);
   const jit = () => rand() * jitter;
+  const stall = (at: number) => (o.stall && at >= o.stall.at && at < o.stall.at + o.stall.ms ? o.stall.at + o.stall.ms : at);
   const state = createGame(1, map, ['p1'], { countdownMs: 0 });
   const me = state.players.p1;
   const pred = new Predictor();
@@ -113,7 +119,7 @@ function simulate(o: SimOptions) {
   let serverInput: Input = { ...NO_INPUT };
   let ackSeq = 0;
   const inputQ: { at: number; seq: number; input: Input }[] = [];
-  const snapQ: { at: number; player: Player; ack: number }[] = [];
+  const snapQ: { at: number; player: Player; ack: number; tick: number }[] = [];
   let lastInAt = 0;
   let lastSnapAt = 0;
   let nextTick = o.phase ?? 13;
@@ -126,6 +132,9 @@ function simulate(o: SimOptions) {
   let pending: Input = { ...NO_INPUT };
 
   const frames: Frame[] = [];
+  /** Abweichung je Snapshot; repeated = gleiches ack wie der Snapshot davor. */
+  const snapErrors: { t: number; err: number; repeated: boolean }[] = [];
+  let lastAck = -1;
   const ticks: { t: number; x: number; y: number }[] = [];
   const duration = scriptLength(o.script) + (o.tailMs ?? 1500);
 
@@ -144,8 +153,8 @@ function simulate(o: SimOptions) {
       }
       step(state, { p1: serverInput }, 50);
       ticks.push({ t: nextTick, x: me.x, y: me.y });
-      lastSnapAt = Math.max(lastSnapAt, nextTick + o.latency + jit());
-      snapQ.push({ at: lastSnapAt, player: JSON.parse(JSON.stringify(me)) as Player, ack: ackSeq });
+      lastSnapAt = Math.max(lastSnapAt, stall(nextTick + o.latency + jit()));
+      snapQ.push({ at: lastSnapAt, player: JSON.parse(JSON.stringify(me)) as Player, ack: ackSeq, tick: state.tick });
       nextTick += 50;
     }
     // Snapshots kommen zwischen den Frames an (Uhr steht noch auf dem letzten Frame)
@@ -153,7 +162,9 @@ function simulate(o: SimOptions) {
       const s = snapQ.shift()!;
       latest = s.player;
       const moving = pending.moveX !== 0 || pending.moveY !== 0;
-      pred.onSnapshot({ x: s.player.x, y: s.player.y }, s.ack, moving, clock);
+      pred.onSnapshot({ x: s.player.x, y: s.player.y }, s.ack, moving, clock, s.tick);
+      snapErrors.push({ t: clock, err: pred.lastError, repeated: s.ack === lastAck });
+      lastAck = s.ack;
     }
     // Frame: Eingabe lesen, senden, vorhersagen
     clock = tNext;
@@ -163,7 +174,7 @@ function simulate(o: SimOptions) {
     const changed = lastSent === null || lastSent.moveX !== mx || lastSent.moveY !== my;
     if (changed || sinceSent >= 100) {
       seq++;
-      lastInAt = Math.max(lastInAt, clock + o.latency + jit());
+      lastInAt = Math.max(lastInAt, stall(clock + o.latency + jit()));
       inputQ.push({ at: lastInAt, seq, input: pending });
       pred.noteSent(seq, clock);
       lastSent = pending;
@@ -188,7 +199,7 @@ function simulate(o: SimOptions) {
       sMode: latest.mode,
     });
   }
-  return { frames, ticks, pred, finalServer: { x: me.x, y: me.y }, stopAt: scriptLength(o.script) };
+  return { frames, ticks, snapErrors, pred, finalServer: { x: me.x, y: me.y }, stopAt: scriptLength(o.script) };
 }
 
 /** Vorhergesagte Position zur Zeit t (linear zwischen Frames). */
@@ -403,6 +414,55 @@ describe('Predictor against a simulated server', () => {
       expect(Number.isFinite(f.y)).toBe(true);
     }
   });
+
+  // Stau in beiden Richtungen (docs/NETZ.md, Befund 1): Die gehaltenen Eingaben lassen das ack stehen, die
+  // gehaltenen Snapshots (bis zu 10 Server-Takte) kommen am Ende alle zur selben Client-Zeit an. Die Eingabe
+  // ändert sich im Stau nicht (sonst weicht der Server wirklich ab, Befund 2).
+  const STALLS: [string, Script, { at: number; ms: number }][] = [
+    ['straight', [[3000, 1, 0]], { at: 1200, ms: 450 }],
+    ['straight, long stall', [[3000, 1, 0]], { at: 900, ms: 550 }],
+    [
+      'zigzag',
+      [
+        [1000, 1, 0],
+        [1000, -1, 0],
+        [1000, 1, 0],
+      ],
+      { at: 1300, ms: 500 },
+    ],
+  ];
+  for (const [name, script, stall] of STALLS) {
+    for (const [latency, jitter] of [
+      [60, 0],
+      [60, 30],
+      [120, 40],
+    ]) {
+      it(`places held snapshots by their tick after a ${stall.ms} ms stall (${name}, ${latency}+${jitter} ms)`, () => {
+        for (const phase of [3, 21, 38]) {
+          const sim = simulate({ latency, jitter, script, phase, seed: latency + phase, stall });
+          for (let i = 1; i < sim.frames.length; i++) {
+            const a = sim.frames[i - 1];
+            const b = sim.frames[i];
+            const walkMax = (SPEED * b.dt * 1.01) / 1000;
+            // kein harter Sprung, keine sichtbaren Rucke
+            expect(b.snaps).toBe(0);
+            expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThanOrEqual(walkMax + 3);
+          }
+          // Abweichung der Snapshots ab dem Stau (davor: Rundenstart ohne ack, dort zählt nur die Sprungregel)
+          const after = sim.snapErrors.filter((s) => s.t >= stall.at);
+          const held = after.filter((s) => s.t <= stall.at + stall.ms + 1);
+          expect(held.filter((s) => s.repeated).length).toBeGreaterThanOrEqual(3);
+          if (process.env.PRED_DETAIL) {
+            const big = after.filter((s) => s.err > 4).map((s) => `${Math.round(s.t)}:${s.err.toFixed(1)}${s.repeated ? 'R' : 'N'}`);
+            console.log(name, latency, jitter, phase, big.join(' '));
+          }
+          // klein: im Rahmen von Takt-Raster und Jitter wie (b) oben (alt: bis über SNAP_DIST)
+          const err = Math.max(...after.map((s) => s.err));
+          expect(err).toBeLessThan(10 + (2 * SPEED * jitter) / 1000);
+        }
+      });
+    }
+  }
 });
 
 describe('Predictor unit behaviour', () => {
@@ -508,6 +568,40 @@ describe('Predictor unit behaviour', () => {
     const before = pr.corrections;
     pr.onSnapshot({ x: pr.simulatedPosition!.x + DEADBAND_STILL / 2, y: 100 }, 1, false, 300);
     expect(pr.corrections).toBe(before);
+  });
+
+  it('places snapshots with a repeated ack by their tick, not by their arrival', () => {
+    // Läuft gleichmäßig nach rechts, Verlauf alle 10 ms: Position zur Zeit t = xAt(t)
+    const pr = new Predictor();
+    const me = player();
+    pr.reset({ x: me.x, y: me.y });
+    const right = { ...NO_INPUT, moveX: 1 } as Input;
+    for (let t = 10; t <= 1000; t += 10) pr.step(10, right, me, MAP, t);
+    const xAt = (t: number) => me.x + (SPEED * t) / 1000;
+    // Eingabe 1 ging bei 100 hinaus; der Snapshot mit ack 1 (Takt 10) entspricht Zeit 125 (ACK_OFFSET_MS)
+    pr.noteSent(1, 100);
+    pr.onSnapshot({ x: xAt(125), y: me.y }, 1, true, 900, 10);
+    // nach einem Stau kommen die nächsten vier Takte auf einmal an, mit demselben ack
+    for (let k = 1; k <= 4; k++) pr.onSnapshot({ x: xAt(125 + k * 50), y: me.y }, 1, true, 900, 10 + k);
+    expect(pr.corrections).toBe(0);
+    expect(pr.lastError).toBeLessThan(0.5);
+  });
+
+  it('falls back to the arrival time without a usable tick', () => {
+    const pr = new Predictor();
+    const me = player();
+    pr.reset({ x: me.x, y: me.y });
+    const right = { ...NO_INPUT, moveX: 1 } as Input;
+    for (let t = 10; t <= 1000; t += 10) pr.step(10, right, me, MAP, t);
+    const xAt = (t: number) => me.x + (SPEED * t) / 1000;
+    pr.noteSent(1, 100);
+    pr.onSnapshot({ x: xAt(125), y: me.y }, 1, true, 300, 10);
+    // ohne tick (oder mit einem nicht neueren) zählt wie bisher die Ankunft: 50 ms später = 50 ms weiter
+    pr.onSnapshot({ x: xAt(175), y: me.y }, 1, true, 350);
+    pr.onSnapshot({ x: xAt(225), y: me.y }, 1, true, 400, 10);
+    pr.onSnapshot({ x: xAt(275), y: me.y }, 1, true, 450, NaN);
+    expect(pr.corrections).toBe(0);
+    expect(pr.lastError).toBeLessThan(0.5);
   });
 
   it('ignores older acks', () => {

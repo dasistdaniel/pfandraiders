@@ -21,7 +21,7 @@ Gemessen wird in echter Zeit (`performance.now()`), nicht mit der Spieluhr von `
 | `Fehler` | Abstand zwischen Serverposition und Vorhersage beim letzten Snapshot (px). Verglichen wird mit dem Verlauf zu der Zeit, die dem Snapshot entspricht. |
 | `Glätt` | Noch nicht angezeigter Teil der Korrekturen (px). Er klingt mit 40 ms ab. |
 
-Code: `packages/client/src/netStats.ts` (reine Klasse mit übergebener Uhr, Tests in `netStats.test.ts`), angeschlossen in `online.ts` (`enableNetStats`, `netInfo`). Der Predictor liefert nur zwei Lesewerte dazu (`lastError`, `offsetSize`); sein Verhalten ist unverändert, das prüft ein Test.
+Code: `packages/client/src/netStats.ts` (reine Klasse mit übergebener Uhr, Tests in `netStats.test.ts`), angeschlossen in `online.ts` (`enableNetStats`, `netInfo`). Der Predictor liefert nur zwei Lesewerte dazu (`lastError`, `offsetSize`); die Diagnose ändert sein Verhalten nicht, das prüft ein Test.
 
 ## Lag-Proxy (`scripts/lag-proxy.mjs`)
 
@@ -71,7 +71,19 @@ Was man sieht: Bei steam springt die eigene Figur im Takt der Staus. Im Browser 
      | steam, Stau nur Server→Client, bisher | 3,3–3,8 | 0 | 13–18 (≤ 5 px) | 47–62 |
      | steam, Stau nur Server→Client, Tick-Differenz | 2,2–2,3 | 0 | 11–14 (≤ 4,7 px) | 4–9 |
 
-   - **Vorschlag:** `onSnapshot` bekommt den `tick` des Snapshots; bei gleichem ack zählt `(tick − tickDesFrischenAcks) · stepMs` statt der Ankunftszeit. Der Gewinn ist groß, die Änderung klein.
+   - **Umgesetzt** (`fix/vorhersage-tick-ack`): `onSnapshot` bekommt den `tick` des Snapshots; bei gleichem ack zählt `fresh.at + (tick − tickDesNeuenAcks) · SERVER_STEP_MS` (50 ms) statt der Ankunftszeit. Ohne brauchbaren `tick` (fehlt, keine Zahl, nicht neuer) bleibt es bei der Ankunftszeit. Konstanten (`SNAP_DIST`, Totzonen, Gewinn) sind unverändert. Ohne Stau ändert sich praktisch nichts: Die Kennzahlen des simulierten Servers in `prediction.test.ts` (`PRED_REPORT=1`) sind gleich geblieben. Neue Tests stellen dort einen Stau von 450–550 ms in beiden Richtungen nach; vorher gab es dabei harte Sprünge und Rucke bis etwa 11 px über der Laufstrecke eines Frames, jetzt keine.
+   - **Messung danach** (Messbot wie oben, gebauter Server, je 30 s; vorher = Stand vor der Änderung, am selben Tag gemessen):
+
+     | Lauf | Korr/s | harte Sprünge | sichtbare Sprünge (max) |
+     |---|---|---|---|
+     | direkt, vorher | 1,7 | 0 | 5 (3 px) |
+     | direkt, nachher | 1,3 | 0 | 0 |
+     | congested, vorher (2 Läufe) | 2,4–3,6 | 0 | 8–26 (5–10 px) |
+     | congested, nachher (2 Läufe) | 1,1–2,8 | 0 | 2–4 (2–7 px) |
+     | steam, vorher (4 Läufe) | 5,1–6,5 | 1–2 je Lauf (6 gesamt) | 28–42 (38–55 px) |
+     | steam, nachher (4 Läufe) | 2,1–3,8 | 0 | 3–14 (≤ 5,1 px) |
+
+     Was bleibt, sind kleine Rucke direkt nach einem Stau, wenn das neue ack um mehrere Eingaben springt (Befund 2), und dass fremde Figuren im Stau stehen bleiben (Befund 3).
 2. **Der Server nimmt pro Takt nur die letzte Eingabe** (`Room.setInput` überschreibt `m.input`). Staut sich die Leitung Client→Server, kommen gehaltene Eingaben auf einmal an und verlieren ihre Dauer. Der Server läuft dann bis zu einer Staulänge in die alte Richtung weiter. Das ist eine echte Abweichung (bei 115 px/s und 400–500 ms bis zu 50–60 px, also über `SNAP_DIST`), kein Schätzfehler; sie bleibt auch mit Befund 1 als Rest der Fehler bei neuem ack. Vorschläge, ungetestet:
    - Der Server wendet Eingaben je seq für ihre Dauer an (Eingabe mit Client-Zeit oder Dauer, kleine Warteschlange pro Spieler).
    - Mindestens: große Abweichungen über 100–150 ms ausblenden statt hart springen, und `SNAP_DIST` von 48 auf etwa 96 px erhöhen. Respawn und Neustart setzen ohnehin per `reset` zurück.
