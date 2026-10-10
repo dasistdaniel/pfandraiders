@@ -42,6 +42,8 @@ export interface NetExtra {
   buffered: number;
   /** davon neuer als die Anzeigezeit (Vorrat für die Interpolation fremder Figuren) */
   ahead: number;
+  /** aktuelle Anzeigeverzögerung fremder Figuren (ms, 100..250) */
+  delayMs: number;
   /** noch nicht angezeigter Teil der Korrekturen (px) */
   offsetPx: number;
   /** Abweichung Server zu Vorhersage beim letzten Snapshot (px) */
@@ -184,6 +186,7 @@ export function formatNetStats(v: NetStatsView, x: NetExtra): string[] {
     `Snaps ${int(v.snapsPerSec)} /s`,
     `Lücke ${int(v.maxGapMs)} ms max 5s`,
     `Puffer${int(x.buffered)} (vor ${x.ahead})`,
+    `Verzög${int(x.delayMs)} ms`,
     `Frame ${int(v.frameMaxMs)} ms max 5s`,
     `Korr  ${dec(v.correctionsPerSec)} /s`,
     `Sprung${int(v.hardSnaps)} in 30s`,

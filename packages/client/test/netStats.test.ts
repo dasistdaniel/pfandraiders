@@ -169,7 +169,7 @@ describe('formatNetStats', () => {
   it('shows all values in short monospace lines', () => {
     const lines = formatNetStats(
       { rttMs: 123.4, rttLastMs: 140, jitterMs: 12.6, snapsPerSec: 19, maxGapMs: 412, frameMaxMs: 33.3, correctionsPerSec: 2.4, hardSnaps: 1 },
-      { buffered: 32, ahead: 3, offsetPx: 1.26, errorPx: 7.81 },
+      { buffered: 32, ahead: 3, delayMs: 137.6, offsetPx: 1.26, errorPx: 7.81 },
     );
     expect(lines).toEqual([
       'NETZ (F3)',
@@ -178,6 +178,7 @@ describe('formatNetStats', () => {
       'Snaps    19 /s',
       'Lücke   412 ms max 5s',
       'Puffer   32 (vor 3)',
+      'Verzög  138 ms',
       'Frame    33 ms max 5s',
       'Korr    2.4 /s',
       'Sprung    1 in 30s',
@@ -190,7 +191,7 @@ describe('formatNetStats', () => {
   it('shows dashes for unknown values', () => {
     const lines = formatNetStats(
       { rttMs: null, rttLastMs: null, jitterMs: null, snapsPerSec: 0, maxGapMs: null, frameMaxMs: 0, correctionsPerSec: 0, hardSnaps: 0 },
-      { buffered: 0, ahead: 0, offsetPx: 0, errorPx: 0 },
+      { buffered: 0, ahead: 0, delayMs: 100, offsetPx: 0, errorPx: 0 },
     );
     expect(lines[1]).toBe('RTT       - ms');
     expect(lines[2]).toBe('Jitter    - ms');
