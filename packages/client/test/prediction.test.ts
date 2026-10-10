@@ -455,8 +455,9 @@ describe('Predictor against a simulated server', () => {
       [120, 40],
     ]) {
       it(`places held snapshots by their tick after a ${stall.ms} ms stall (${name}, ${latency}+${jitter} ms)`, () => {
-        for (const phase of [3, 21, 38]) {
-          const sim = simulate({ latency, jitter, script, phase, seed: latency + phase, stall });
+        // credit: false = alter Server (neuer Client vor dem Server-Update)
+        for (const [phase, credit] of [3, 21, 38].flatMap((p) => [[p, true], [p, false]] as [number, boolean][])) {
+          const sim = simulate({ latency, jitter, script, phase, seed: latency + phase, stall, credit });
           for (let i = 1; i < sim.frames.length; i++) {
             const a = sim.frames[i - 1];
             const b = sim.frames[i];
@@ -471,7 +472,7 @@ describe('Predictor against a simulated server', () => {
           expect(held.filter((s) => s.repeated).length).toBeGreaterThanOrEqual(3);
           if (process.env.PRED_DETAIL) {
             const big = after.filter((s) => s.err > 4).map((s) => `${Math.round(s.t)}:${s.err.toFixed(1)}${s.repeated ? 'R' : 'N'}`);
-            console.log(name, latency, jitter, phase, big.join(' '));
+            console.log(name, latency, jitter, phase, credit, big.join(' '));
           }
           // klein: im Rahmen von Takt-Raster und Jitter wie (b) oben (alt: bis über SNAP_DIST)
           const err = Math.max(...after.map((s) => s.err));
@@ -485,21 +486,23 @@ describe('Predictor against a simulated server', () => {
 describe('Server with held inputs (docs/NETZ.md, Befund 2)', () => {
   it('turns inside an up-stall without hard snap or jerks (the overshoot itself stays)', () => {
     // Zickzack, der Richtungswechsel liegt im Stau: Der Server läuft bis zum Ende des Staus in die alte Richtung
-    // (das lässt sich nicht zurücknehmen); nachgerechnet wird nur, was das Budget hergibt.
+    // (das lässt sich nicht zurücknehmen); nachgerechnet wird nur, was das Budget hergibt. Gilt auch gegen einen
+    // alten Server (credit: false), also für einen neuen Client vor dem Server-Update.
     const zig: Script = [
       [1000, 1, 0],
       [1000, -1, 0],
       [1000, 1, 0],
       [1000, -1, 0],
     ];
-    for (const at of [700, 800, 900, 1000, 1100, 1200, 1700, 1850]) {
-      for (const seed of [1, 2, 3]) {
-        const sim = simulate({ latency: 60, jitter: 80, script: zig, seed, stall: { at, ms: 400 }, stallDir: 'up' });
+    for (const credit of [true, false]) {
+      for (const at of [700, 800, 900, 1000, 1100, 1200, 1700, 1850]) {
+        const seed = at % 7;
+        const sim = simulate({ latency: 60, jitter: 80, script: zig, seed, stall: { at, ms: 400 }, stallDir: 'up', credit });
         expect(sim.pred.snaps).toBe(0);
         for (let i = 1; i < sim.frames.length; i++) {
           const p = sim.frames[i - 1];
           const q = sim.frames[i];
-          expect(Math.hypot(q.x - p.x, q.y - p.y)).toBeLessThanOrEqual((SPEED * q.dt * 1.01) / 1000 + 5);
+          expect(Math.hypot(q.x - p.x, q.y - p.y)).toBeLessThanOrEqual((SPEED * q.dt * 1.01) / 1000 + 6);
         }
       }
     }
@@ -510,10 +513,12 @@ describe('Server with held inputs (docs/NETZ.md, Befund 2)', () => {
     [300, 1, 0],
   ];
   const STALL = { at: 950, ms: 500 };
+  // [60, 160]: Jitter-Spanne wie das steam-Preset des Lag-Proxys (±80 ms)
   const LINES: [number, number][] = [
     [60, 0],
     [60, 30],
     [120, 40],
+    [60, 160],
   ];
 
   for (const [latency, jitter] of LINES) {

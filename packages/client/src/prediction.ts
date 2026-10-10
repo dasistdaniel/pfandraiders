@@ -262,10 +262,10 @@ export class Predictor {
     return null;
   }
 
-  /** Sendezeit der ersten Eingabe nach `ack` mit anderer Laufrichtung; null = keine oder unbekannt. */
+  /** Stand die Eingabe `ack`: Sendezeit der ersten späteren Eingabe mit Laufrichtung; sonst oder unbekannt null. */
   private nextDirChange(ack: number): number | null {
     const dir = this.sends.get(ack)?.dir ?? null;
-    if (dir === null) return null;
+    if (dir !== '0,0') return null;
     let best: number | null = null;
     for (const [seq, s] of this.sends) {
       if (seq > ack && s.dir !== null && s.dir !== dir && (best === null || s.t < best)) best = s.t;
@@ -302,9 +302,10 @@ export class Predictor {
         t !== null && fresh.tick !== null && t > fresh.tick
           ? fresh.at + (t - fresh.tick) * SERVER_STEP_MS
           : fresh.at + (nowMs - fresh.recvAt);
-      // Hat der Client danach die Laufrichtung gewechselt, kennt der Server das noch nicht (Stau Client→Server):
-      // er rechnet weiter mit der bestätigten Eingabe. Dann höchstens bis zum Senden des Wechsels vergleichen,
-      // sonst zöge ein stehender Server die schon loslaufende Figur zurück (docs/NETZ.md, Befund 2).
+      // Stand die bestätigte Eingabe und ist der Client danach losgelaufen, kennt der Server das noch nicht (Stau
+      // Client→Server): Dann höchstens bis zum Senden des Losgehens vergleichen, sonst zöge der stehende Server die
+      // schon laufende Figur zurück (docs/NETZ.md, Befund 2). Lief die bestätigte Eingabe, bleibt es beim alten
+      // Vergleich: Der Server läuft im Stau wirklich weiter, und die Vorhersage folgt dem besser nach und nach.
       const change = this.nextDirChange(ack);
       if (change !== null) at = Math.min(at, change + ACK_OFFSET_MS);
     }
