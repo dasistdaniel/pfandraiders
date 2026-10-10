@@ -1,4 +1,5 @@
-import { DEFAULT_ROUND_MS, isAvatar, isRoundMs } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, DEFAULT_ROUND_MS, isAvatar, isMapId, isRoundMs } from '@pfandraiders/core';
+import type { MapId } from '@pfandraiders/core';
 import type { DeviceRef } from './devices';
 
 export interface KeyValueStore {
@@ -177,6 +178,29 @@ export function saveLocalRoundMs(ms: number, store: KeyValueStore | undefined = 
   if (!isRoundMs(ms)) return;
   try {
     store?.setItem(LOCAL_ROUND_KEY, String(ms));
+  } catch {
+    // Speicher gesperrt: Wahl gilt nur für diese Sitzung
+  }
+}
+
+// ---- Karte lokal ----
+
+const LOCAL_MAP_KEY = 'pfandraiders.mapId';
+
+/** Karte der lokalen Lobby. Wirft nie; unbekannte (etwa gelöschte eigene) Karten ergeben die Standardkarte. */
+export function loadLocalMapId(store: KeyValueStore | undefined = defaultStore()): MapId {
+  try {
+    const raw = store?.getItem(LOCAL_MAP_KEY);
+    return isMapId(raw) ? raw : DEFAULT_MAP_ID;
+  } catch {
+    return DEFAULT_MAP_ID;
+  }
+}
+
+export function saveLocalMapId(id: MapId, store: KeyValueStore | undefined = defaultStore()): void {
+  if (!isMapId(id)) return;
+  try {
+    store?.setItem(LOCAL_MAP_KEY, id);
   } catch {
     // Speicher gesperrt: Wahl gilt nur für diese Sitzung
   }

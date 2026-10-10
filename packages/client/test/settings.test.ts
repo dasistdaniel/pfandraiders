@@ -18,7 +18,9 @@ import {
   saveOnlineDevice,
   serializeDevice,
   stepDevice,
+  loadLocalMapId,
   loadLocalRoundMs,
+  saveLocalMapId,
   saveLocalRoundMs,
   loadAvatarWish,
   saveAvatarWish,
@@ -285,5 +287,41 @@ describe('avatar wish', () => {
     };
     expect(loadAvatarWish(locked)).toBeUndefined();
     expect(() => saveAvatarWish(3, locked)).not.toThrow();
+  });
+});
+
+describe('local map', () => {
+  function mapStore(): KeyValueStore & { data: Map<string, string> } {
+    const data = new Map<string, string>();
+    return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) };
+  }
+
+  it('defaults to the city and remembers a known map', () => {
+    const store = mapStore();
+    expect(loadLocalMapId(store)).toBe('city');
+    saveLocalMapId('retro', store);
+    expect(store.data.get('pfandraiders.mapId')).toBe('retro');
+    expect(loadLocalMapId(store)).toBe('retro');
+  });
+
+  it('falls back to the default for a stored map that no longer exists', () => {
+    const store = mapStore();
+    store.data.set('pfandraiders.mapId', 'geloescht');
+    expect(loadLocalMapId(store)).toBe('city');
+    saveLocalMapId('moon', store);
+    expect(store.data.get('pfandraiders.mapId')).toBe('geloescht');
+  });
+
+  it('never throws with a blocked store', () => {
+    const broken: KeyValueStore = {
+      getItem: () => {
+        throw new Error('gesperrt');
+      },
+      setItem: () => {
+        throw new Error('gesperrt');
+      },
+    };
+    expect(loadLocalMapId(broken)).toBe('city');
+    expect(() => saveLocalMapId('retro', broken)).not.toThrow();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAP_DEFS } from '@pfandraiders/core';
+import { MAP_DEFS, MAP_LIST } from '@pfandraiders/core';
 import type { MapData } from '@pfandraiders/core';
 import { cellRect, visualsComplete, visualsMatchMap } from '../src/mapRender';
 
@@ -48,5 +48,15 @@ describe('visualsMatchMap', () => {
   });
   it('accepts the real city data', () => {
     expect(visualsMatchMap(MAP_DEFS.city.visuals, MAP_DEFS.city.map)).toBe(true);
+  });
+});
+
+describe('visuals of every city-tileset map', () => {
+  it('match their map, so the client never falls back to the flat map', () => {
+    for (const { id } of MAP_LIST) {
+      const def = MAP_DEFS[id];
+      if (def.tileset !== 'city') continue;
+      expect(visualsMatchMap(def.visuals, def.map), id).toBe(true);
+    }
   });
 });
