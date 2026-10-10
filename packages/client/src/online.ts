@@ -26,6 +26,8 @@ import { chatSound, errorSound, rosterSounds } from './eventSounds';
 import { countdownLeft } from './countdown';
 import type { GameConnection } from './connection';
 import { interpolateSnapshot } from './interpolate';
+import { NetStats } from './netStats';
+import type { NetExtra } from './netStats';
 import { Predictor } from './prediction';
 import { parseRoomList } from './roomList';
 import { parseProgress, parseRanking } from './shopGuard';
@@ -149,6 +151,8 @@ export class OnlineConnection implements GameConnection {
   private readonly predictor = new Predictor();
   private warned = false;
   private lastName = '';
+  /** Netz-Diagnose (Overlay); null = aus, dann kostet sie nichts */
+  private stats: NetStats | null = null;
 
   constructor(
     private readonly url: string,
@@ -418,6 +422,10 @@ export class OnlineConnection implements GameConnection {
           const me = msg.snap.players[this.you];
           if (me) this.predictor.onSnapshot({ x: me.x, y: me.y }, msg.ack, this.moving(), this.clock);
         }
+        if (this.stats) {
+          this.stats.noteSnapshot(msg.ack);
+          this.stats.notePrediction(this.predictor.corrections, this.predictor.snaps);
+        }
         break;
       case 'chat': {
         const chat = parseChatMessage(msg);
@@ -482,6 +490,7 @@ export class OnlineConnection implements GameConnection {
   }
 
   update(deltaMs: number): void {
+    this.stats?.noteFrame();
     const dt = Number.isFinite(deltaMs) && deltaMs > 0 ? Math.min(deltaMs, MAX_FRAME_MS) : 0;
     this.clock += dt;
     this.sinceSent += dt;
@@ -533,6 +542,7 @@ export class OnlineConnection implements GameConnection {
     if (!changed && this.sinceSent < HEARTBEAT_MS) return;
     this.sendMsg({ t: 'input', seq: ++this.seq, input });
     this.predictor.noteSent(this.seq, this.clock);
+    this.stats?.noteSent(this.seq);
     this.lastSent = input;
     this.sinceSent = 0;
   }
@@ -561,5 +571,26 @@ export class OnlineConnection implements GameConnection {
 
   bufferedSnapshots(): number {
     return this.buffer.length;
+  }
+
+  /** Netz-Diagnose ein- oder ausschalten; `now` ist die Uhr für die Messung (echte Zeit, nicht die Spieluhr). */
+  enableNetStats(on: boolean, now: () => number = () => performance.now()): void {
+    this.stats = on ? (this.stats ?? new NetStats(now)) : null;
+  }
+
+  /** Messwerte der Netz-Diagnose; null = aus. */
+  get netStats(): NetStats | null {
+    return this.stats;
+  }
+
+  /** Puffer und Vorhersage für die Netz-Diagnose (nur lesen). */
+  netInfo(): NetExtra {
+    const renderTime = this.clock - INTERP_DELAY_MS;
+    return {
+      buffered: this.buffer.length,
+      ahead: this.buffer.filter((b) => b.at > renderTime).length,
+      offsetPx: this.predictor.offsetSize,
+      errorPx: this.predictor.lastError,
+    };
   }
 }

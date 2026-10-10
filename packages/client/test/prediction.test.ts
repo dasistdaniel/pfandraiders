@@ -566,3 +566,16 @@ describe('history helpers', () => {
     ]);
   });
 });
+
+describe('Predictor diagnostics', () => {
+  it('reports the error of the last snapshot and the hidden offset without changing the position', () => {
+    const p = new Predictor();
+    p.reset({ x: 100, y: 100 });
+    expect(p.lastError).toBe(0);
+    expect(p.offsetSize).toBe(0);
+    p.onSnapshot({ x: 100 + SNAP_DIST + 10, y: 100 }, 0, false, 0);
+    expect(p.lastError).toBeCloseTo(SNAP_DIST + 10);
+    expect(p.position).toEqual({ x: 100 + SNAP_DIST + 10, y: 100 });
+    expect(p.offsetSize).toBe(0);
+  });
+});
