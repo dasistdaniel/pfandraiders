@@ -132,6 +132,8 @@ export class Predictor {
   /** Zähler (für Tests und Fehlersuche). */
   corrections = 0;
   snaps = 0;
+  /** Abstand Server zu Vorhersage beim letzten Snapshot (px; für die Netz-Diagnose). */
+  lastError = 0;
 
   private pos: Pos | null = null;
   private history: HistoryEntry[] = [];
@@ -147,6 +149,11 @@ export class Predictor {
   /** Angezeigte Position der eigenen Figur. */
   get position(): Pos | null {
     return this.pos ? { x: this.pos.x - this.offset.x, y: this.pos.y - this.offset.y } : null;
+  }
+
+  /** Noch nicht angezeigter Teil der Korrekturen (px; für die Netz-Diagnose). */
+  get offsetSize(): number {
+    return Math.hypot(this.offset.x, this.offset.y);
   }
 
   /** Gerechnete Position (ohne das Ausblenden der Korrekturen). */
@@ -279,6 +286,7 @@ export class Predictor {
     const ex = s.x - p.x;
     const ey = s.y - p.y;
     const dist = Math.hypot(ex, ey);
+    this.lastError = dist;
     if (dist > SNAP_DIST) {
       this.pos = s;
       this.history = [{ t: nowMs, x: s.x, y: s.y }];

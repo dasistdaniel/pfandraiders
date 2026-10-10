@@ -868,3 +868,68 @@ describe('rooms, room list, avatars and round count', () => {
     expect(conn.chat.map((m) => m.text)).toEqual(['Hallo']);
   });
 });
+
+describe('OnlineConnection net diagnostics', () => {
+  function ownSnap(tickValue: number, ack: number, x: number): ServerMessage {
+    const s = createGame(1, CITY_MAP, ['p1', 'p2'], { countdownMs: 0 });
+    s.tick = tickValue;
+    s.players.p1.x = x;
+    return { t: 'snap', snap: projectSnapshot(s, 'p1'), ack };
+  }
+
+  it('has no stats until enabled and drops them when disabled', () => {
+    const { conn } = setup();
+    expect(conn.netStats).toBeNull();
+    conn.enableNetStats(true, () => 0);
+    expect(conn.netStats).not.toBeNull();
+    conn.enableNetStats(false);
+    expect(conn.netStats).toBeNull();
+  });
+
+  it('measures the round trip in wall time from the input to the snapshot that acknowledges it', () => {
+    const { socket, conn } = setup();
+    let now = 5000;
+    conn.enableNetStats(true, () => now);
+    socket.receive(startMessage(0, 40));
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    conn.update(16); // sendet seq 1
+    const x = conn.getState().players.p1.x;
+    now += 90;
+    socket.receive(ownSnap(1, 1, x));
+    const v = conn.netStats!.view();
+    expect(v.rttLastMs).toBe(90);
+    expect(v.frameMaxMs).toBe(16);
+    expect(conn.netInfo()).toMatchObject({ buffered: 2 });
+  });
+
+  it('counts snapshots ahead of the render time', () => {
+    const { socket, conn } = setup();
+    conn.enableNetStats(true, () => 0);
+    socket.receive(startMessage(0, 40));
+    conn.update(16);
+    socket.receive(ownSnap(1, 0, 24));
+    socket.receive(ownSnap(2, 0, 24));
+    // Anzeigezeit = Uhr - 100 ms: alle drei Snapshots (bei Uhr 0 und 16) liegen davor
+    expect(conn.netInfo().ahead).toBe(3);
+    conn.update(200);
+    expect(conn.netInfo().ahead).toBe(0);
+    expect(conn.netInfo().buffered).toBe(3);
+  });
+
+  it('does not change what the game shows', () => {
+    const run = (stats: boolean): number[] => {
+      const { socket, conn } = setup();
+      if (stats) conn.enableNetStats(true, () => 0);
+      socket.receive(startMessage(0, 40));
+      conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+      const xs: number[] = [];
+      for (let i = 1; i <= 30; i++) {
+        conn.update(16);
+        if (i % 3 === 0) socket.receive(ownSnap(i, i, 24 + i * 2));
+        xs.push(conn.getState().players.p1.x, conn.getState().players.p2.x);
+      }
+      return xs;
+    };
+    expect(run(true)).toEqual(run(false));
+  });
+});
