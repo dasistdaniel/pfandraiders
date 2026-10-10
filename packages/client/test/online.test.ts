@@ -332,6 +332,31 @@ describe('OnlineConnection rendering state', () => {
     expect(xs[xs.length - 1]).toBe(xs[xs.length - 20]);
   });
 
+  it('survives a hidden tab: snapshots without update() stay bounded and the timeline recovers', () => {
+    const { socket, conn } = setup();
+    socket.receive(startMessage(0, 100));
+    let tick = 0;
+    // 3 s ruhig
+    for (let f = 0; f < 60; f++) {
+      socket.receive(snapMessage(++tick, 100 + 5 * tick));
+      conn.update(50);
+    }
+    // Tab im Hintergrund: 5000 Snapshots, kein update() (die Uhr steht)
+    for (let i = 0; i < 5000; i++) socket.receive(snapMessage(++tick, 100 + 5 * tick));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tl = (conn as any).timeline;
+    expect(tl.samples.length).toBeLessThanOrEqual(200);
+    // wieder sichtbar: ruhig weiter
+    const delays: number[] = [];
+    for (let f = 0; f < 200; f++) {
+      socket.receive(snapMessage(++tick, 100 + 5 * tick));
+      conn.update(50);
+      delays.push(conn.netInfo().delayMs);
+    }
+    expect(Math.abs(tl.msPerTick - 50)).toBeLessThan(3);
+    expect(delays[delays.length - 1]).toBe(100);
+  });
+
   it('a new start resets the delay', () => {
     const { conn } = walk((k) => (k >= 40 ? 2350 + k : k * 50), 60, 200);
     expect(conn.netInfo().delayMs).toBeGreaterThan(100);

@@ -42,6 +42,8 @@ export const RATE_MAX = 100;
 export const OFFSET_SLEW = 0.05;
 /** Weiter daneben springt die Zeitachse direkt auf die Hülle (ms) */
 export const RESYNC_MS = 300;
+/** Höchstzahl gemerkter Ankünfte (bei 20 pro Sekunde reichen 160 für RATE_WINDOW_MS) */
+export const MAX_SAMPLES = 160;
 
 interface Sample {
   tick: number;
@@ -121,11 +123,22 @@ export class ServerTimeline {
     const newest = this.samples[this.samples.length - 1].at;
     let drop = 0;
     while (drop < this.samples.length - 1 && this.samples[drop].at < newest - RATE_WINDOW_MS) drop++;
+    // Höchstens MAX_SAMPLES (die Uhr steht, solange kein Frame läuft, etwa im Hintergrund-Tab)
+    drop = Math.max(drop, this.samples.length - MAX_SAMPLES);
     if (drop > 0) this.samples.splice(0, drop);
     const first = this.estimateRate();
     this.target = this.envelope(newest, MIN_WINDOW_MS);
     // Mit der ersten Takt-Schätzung direkt auf die Hülle: die alte Zuordnung (50 ms je Tick) war geraten
-    if (first || Math.abs(this.target - this.base) > RESYNC_MS) this.base = this.target;
+    if (first) this.base = this.target;
+    else if (this.base - this.target > RESYNC_MS) {
+      // Viel früher als erwartet: die Uhr ist zurückgeblieben (sie steht, solange kein Frame läuft, etwa im
+      // Hintergrund-Tab). Alte Ankünfte passen nicht mehr zu ihr und würden die Takt-Schätzung verderben: neu
+      // einrasten, der geschätzte Takt bleibt.
+      this.samples = [{ tick, at }];
+      this.target = at - (tick - this.baseTick) * this.msPerTick;
+      this.base = this.target;
+      return 0;
+    } else if (this.target - this.base > RESYNC_MS) this.base = this.target;
     return at - (this.envelope(newest, LATE_WINDOW_MS) + (tick - this.baseTick) * this.msPerTick);
   }
 
