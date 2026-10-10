@@ -73,3 +73,35 @@ export function boxBlocked(map: MapData, x: number, y: number, half: number): bo
   }
   return false;
 }
+
+/** Kachelindex (row * cols + col) unter dem Pixelpunkt; -1 = außerhalb der Karte. */
+export function tileIndexAt(map: MapData, px: number, py: number): number {
+  const c = Math.floor(px / TILE);
+  const r = Math.floor(py / TILE);
+  if (!Number.isFinite(c) || !Number.isFinite(r) || c < 0 || r < 0 || c >= map.cols || r >= map.rows) return -1;
+  return r * map.cols + c;
+}
+
+/**
+ * Kacheln, die man von (px, py) aus über Vierer-Nachbarn erreicht. Wände und weiche Hindernisse (soft)
+ * sperren wie bei der Wegsuche der NPCs. Liegt der Start außerhalb oder auf einer gesperrten Kachel, ist die Menge leer.
+ */
+export function reachableTiles(map: MapData, px: number, py: number): Set<number> {
+  const seen = new Set<number>();
+  const start = tileIndexAt(map, px, py);
+  if (start < 0) return seen;
+  const blocked = (i: number): boolean => map.solid[i] || (map.soft?.[i] ?? false);
+  const stack = [start];
+  while (stack.length > 0) {
+    const i = stack.pop()!;
+    if (seen.has(i) || blocked(i)) continue;
+    seen.add(i);
+    const c = i % map.cols;
+    const r = Math.floor(i / map.cols);
+    if (c > 0) stack.push(i - 1);
+    if (c < map.cols - 1) stack.push(i + 1);
+    if (r > 0) stack.push(i - map.cols);
+    if (r < map.rows - 1) stack.push(i + map.cols);
+  }
+  return seen;
+}

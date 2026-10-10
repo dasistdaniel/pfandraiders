@@ -58,6 +58,17 @@ describe('parseTiledMap', () => {
     expect(() => parseTiledMap(b)).toThrow(/unknown object type shop/);
   });
 
+  it('reads the object type from "class" when "type" is missing or empty (Tiled 1.9)', () => {
+    const b = base();
+    b.layers[1].objects = [
+      { ...pt(1, 'spawn', 24, 24), type: '', class: 'spawn' },
+      { id: 2, name: '', class: 'spot', x: 40, y: 24, point: true, properties: [{ name: 'spotType', type: 'string', value: 'bin' }] },
+    ];
+    const m = parseTiledMap(b);
+    expect(m.spawns).toEqual([{ x: 24, y: 24 }]);
+    expect(m.spots).toEqual([{ id: 0, type: 'bin', x: 40, y: 24 }]);
+  });
+
   it('numbers spots 0, 1, 2 in object order', () => {
     const b = base();
     b.layers[1].objects = [
