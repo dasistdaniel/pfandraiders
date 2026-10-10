@@ -490,7 +490,7 @@ export class OnlineConnection implements GameConnection {
   }
 
   update(deltaMs: number): void {
-    this.stats?.noteFrame(deltaMs);
+    this.stats?.noteFrame();
     const dt = Number.isFinite(deltaMs) && deltaMs > 0 ? Math.min(deltaMs, MAX_FRAME_MS) : 0;
     this.clock += dt;
     this.sinceSent += dt;

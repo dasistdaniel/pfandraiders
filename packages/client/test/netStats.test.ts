@@ -118,17 +118,22 @@ describe('NetStats snapshots', () => {
 });
 
 describe('NetStats frames and prediction', () => {
-  it('keeps the longest frame of the last 5 s', () => {
+  it('measures frames with its own clock and keeps the longest of the last 5 s', () => {
     const c = fakeClock();
     const s = new NetStats(c.now);
-    s.noteFrame(16);
-    s.noteFrame(120);
-    c.advance(16);
-    s.noteFrame(17);
-    expect(s.view().frameMaxMs).toBe(120);
-    c.advance(WINDOW_MS);
-    s.noteFrame(18);
-    expect(s.view().frameMaxMs).toBe(18);
+    s.noteFrame(); // erster Aufruf: noch kein Frame
+    expect(s.view().frameMaxMs).toBe(0);
+    for (const ms of [16, 300, 17]) {
+      c.advance(ms);
+      s.noteFrame();
+    }
+    // ein Hänger von 300 ms bleibt sichtbar, egal was Phaser als Delta meldet
+    expect(s.view().frameMaxMs).toBe(300);
+    for (let i = 0; i < 60; i++) {
+      c.advance(100);
+      s.noteFrame();
+    }
+    expect(s.view().frameMaxMs).toBe(100);
   });
 
   it('turns cumulative prediction counters into corrections per second and hard snaps in 30 s', () => {

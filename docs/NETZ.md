@@ -10,12 +10,12 @@ Gemessen wird in echter Zeit (`performance.now()`), nicht mit der Spieluhr von `
 
 | Zeile | Bedeutung |
 |---|---|
-| `RTT 123 ms (140)` | Rundreise: Zeit vom Senden der Eingabe Nr. N bis zum ersten Snapshot mit `ack >= N`. Davor steht der geglättete Wert (gleitendes Mittel, neuer Wert zählt 1/8 wie bei TCP), in Klammern der letzte Messwert. Darin stecken beide Leitungsrichtungen plus 0 bis 50 ms Warten auf den nächsten Server-Takt; direkt am lokalen Server sind es etwa 30 ms. |
+| `RTT 123 ms (140)` | Rundreise: Zeit vom Senden der Eingabe Nr. N bis zum ersten Snapshot mit `ack >= N`. Davor steht der geglättete Wert (gleitendes Mittel, neuer Wert zählt 1/8 wie bei TCP), in Klammern der letzte Messwert. Darin stecken beide Leitungsrichtungen plus 0 bis 50 ms Warten auf den nächsten Server-Takt; direkt am lokalen Server sind es etwa 30 ms. Gemessen wird je neuem ack nur die neueste damit bestätigte Eingabe. Staut sich die Richtung Client→Server, kommen gehaltene Eingaben gebündelt an; die neueste hat dann eine kurze Rundreise, und der Stau erscheint hier zu klein (er zeigt sich unter `Lücke` und `Jitter`). |
 | `Jitter` | Standardabweichung der Abstände zwischen zwei Snapshots in den letzten 5 s. Ideal ist 0 (alle 50 ms einer), unter Windows liegt der Wert durch das Timer-Raster bei etwa 5 ms. |
 | `Snaps` | Snapshots, die in der letzten Sekunde angekommen sind. Soll 20 (der Server-Takt), lokal unter Windows sind es 16 bis 19. |
 | `Lücke` | Größter Abstand zwischen zwei Snapshots in den letzten 5 s, auch die gerade offene Lücke. Ab etwa 150 ms bleiben fremde Figuren stehen (sie laufen 100 ms verzögert). |
 | `Puffer 32 (vor 2)` | Snapshots im Puffer. Die erste Zahl wird erst bei 32 gekürzt und steht deshalb fast immer auf 32. Aussagekräftig ist „vor“: die Snapshots, die noch neuer als die Anzeigezeit (Uhr − 100 ms) sind, also der Vorrat für die Interpolation fremder Figuren. Bei 0 hält oder springt die Anzeige. |
-| `Frame` | Längster Frame der letzten 5 s (Phaser-Delta). Ein hoher Wert heißt, dass der Rechner stockt, nicht das Netz. |
+| `Frame` | Längster Abstand zwischen zwei Frames der letzten 5 s, mit derselben echten Uhr gemessen. Das Delta von Phaser ist geglättet und gedeckelt und würde Hänger verstecken. Ein hoher Wert heißt, dass der Rechner stockt, nicht das Netz. |
 | `Korr` | Korrekturen der eigenen Figur pro Sekunde (Mittel über 5 s): Snapshots, deren Abweichung über der Totzone lag und die die Vorhersage verschoben haben. |
 | `Sprung` | Harte Sprünge der eigenen Figur in den letzten 30 s. Liegt der Server mehr als `SNAP_DIST` (48 px) daneben, setzt der Client die Figur direkt auf die Serverposition. |
 | `Fehler` | Abstand zwischen Serverposition und Vorhersage beim letzten Snapshot (px). Verglichen wird mit dem Verlauf zu der Zeit, die dem Snapshot entspricht. |

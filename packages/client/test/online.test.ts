@@ -898,8 +898,18 @@ describe('OnlineConnection net diagnostics', () => {
     socket.receive(ownSnap(1, 1, x));
     const v = conn.netStats!.view();
     expect(v.rttLastMs).toBe(90);
-    expect(v.frameMaxMs).toBe(16);
     expect(conn.netInfo()).toMatchObject({ buffered: 2 });
+  });
+
+  it('measures frame times with the wall clock, not with the delta passed to update', () => {
+    const { socket, conn } = setup();
+    let now = 0;
+    conn.enableNetStats(true, () => now);
+    socket.receive(startMessage(0, 40));
+    conn.update(16);
+    now += 300; // Hänger: Phaser meldet trotzdem nur 16 ms
+    conn.update(16);
+    expect(conn.netStats!.view().frameMaxMs).toBe(300);
   });
 
   it('counts snapshots ahead of the render time', () => {

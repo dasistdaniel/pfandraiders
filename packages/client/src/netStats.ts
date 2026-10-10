@@ -72,6 +72,7 @@ export class NetStats {
   /** Abstände zwischen Snapshots, Zeit = Ankunft des zweiten */
   private gaps: Stamp[] = [];
   private frames: Stamp[] = [];
+  private lastFrame: number | null = null;
   private corrections: Stamp[] = [];
   private snaps: Stamp[] = [];
   private baseline: { corrections: number; snaps: number } | null = null;
@@ -106,11 +107,16 @@ export class NetStats {
     this.trim(t);
   }
 
-  /** Ein Frame mit der Dauer `dtMs` (ungekürzt, wie Phaser ihn meldet). */
-  noteFrame(dtMs: number): void {
-    if (!Number.isFinite(dtMs)) return;
+  /**
+   * Ein Frame. Gemessen wird der Abstand zum letzten Aufruf mit der eigenen Uhr, nicht das Delta von Phaser
+   * (das ist geglättet und gedeckelt und würde Hänger verstecken).
+   */
+  noteFrame(): void {
     const t = this.now();
-    this.frames.push({ t, v: dtMs });
+    const prev = this.lastFrame;
+    this.lastFrame = t;
+    if (prev === null) return;
+    this.frames.push({ t, v: t - prev });
     this.trim(t);
   }
 
