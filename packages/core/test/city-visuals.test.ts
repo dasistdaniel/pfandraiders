@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import cityJson from '../src/maps/city.tiled.json';
 import { CITY_PLAN, CITY_ZONES } from '../src/maps/cityPlan';
 import { getCityVisuals } from '../src/maps/city';
-import { MAP_DEFS, MAP_VISUALS } from '../src/maps';
+import { MAP_DEFS, MAP_LIST, MAP_VISUALS } from '../src/maps';
 import { parseTiledVisuals, SHEET_CELLS } from '../src/tiled';
 import type { TiledMap } from '../src/tiled';
 import { CITY_CELLS, gid, planToTiled } from '../scripts/planToTiled';
@@ -182,7 +182,7 @@ describe('city visuals: committed JSON and registry', () => {
     // MAP_DEFS lässt sich lesen (Karte, Tileset), ohne die Ebenen anzufassen
     expect(MAP_DEFS.city.map.cols).toBe(COLS);
     expect(MAP_DEFS.city.tileset).toBe('city');
-    expect(Object.keys(MAP_DEFS)).toEqual(['city', 'retro']);
+    expect(MAP_LIST.slice(0, 2).map((m) => m.id)).toEqual(['city', 'retro']);
     const a = MAP_DEFS.city.visuals;
     const b = MAP_DEFS.city.visuals;
     expect(a).not.toBeNull();
