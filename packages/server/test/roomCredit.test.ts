@@ -22,7 +22,7 @@ const H = 100;
 const OPEN = parseMap(
   Array.from({ length: H }, (_, y) => {
     if (y === 0 || y === H - 1) return '#'.repeat(W);
-    const row = Array.from({ length: W }, (_, x) => (x === 0 || x === W - 1 ? '#' : '.'));
+    const row: string[] = Array.from({ length: W }, (_, x) => (x === 0 || x === W - 1 ? '#' : '.'));
     if (y === 3 || y === 6) row[3] = '@';
     return row.join('');
   }),
