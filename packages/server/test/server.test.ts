@@ -193,7 +193,7 @@ describe('websocket server', () => {
     await p.until('joined');
     c.send({ t: 'listRooms' });
     const list = await c.until('rooms');
-    expect(list.rooms).toEqual([{ code: joinedA.room, name: 'Bude', host: 'Anna', players: 1, max: 8, phase: 'lobby', locked: true }]);
+    expect(list.rooms).toEqual([{ code: joinedA.room, name: 'Bude', host: 'Anna', players: 1, max: 8, phase: 'lobby', locked: true, mapName: 'Stadt' }]);
     c.send({ t: 'join', room: joinedA.room, name: 'Cara' });
     await c.until('error', (m) => m.code === 'wrong_password');
     c.send({ t: 'join', room: joinedA.room, name: 'Cara', password: 'geheim' });

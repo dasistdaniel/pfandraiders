@@ -132,7 +132,7 @@ describe('RoomManager.listRooms', () => {
     if (!r.ok) throw new Error('create failed');
     r.value.room.join('Bob', quiet(), undefined, { password: 'geheim' });
     const list = m.listRooms();
-    expect(list).toEqual([{ code: r.value.room.code, name: 'Bude', host: 'Anna', players: 2, max: 8, phase: 'lobby', locked: true }]);
+    expect(list).toEqual([{ code: r.value.room.code, name: 'Bude', host: 'Anna', players: 2, max: 8, phase: 'lobby', locked: true, mapName: 'Stadt' }]);
     const text = JSON.stringify(list);
     expect(text).not.toContain('geheim');
     expect(text).not.toContain(r.value.member.token);

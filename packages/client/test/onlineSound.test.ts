@@ -22,7 +22,7 @@ class FakeSocket implements SocketLike {
 
 const player = (id: string, connected = true): RosterEntry => ({ id, name: id, color: ROOM_COLORS[0], connected, ready: false, avatar: 0 });
 const lobby = (players: RosterEntry[]): ServerMessage => ({
-  t: 'lobby', room: 'ABCD', roomName: 'Raum', visibility: 'public', locked: false, host: 'p1', players, phase: 'lobby', roundMs: 60000, rounds: DEFAULT_ROUNDS,
+  t: 'lobby', room: 'ABCD', roomName: 'Raum', visibility: 'public', locked: false, host: 'p1', players, phase: 'lobby', roundMs: 60000, rounds: DEFAULT_ROUNDS, mapId: 'city', mapName: 'Stadt',
 });
 
 function setup() {

@@ -11,6 +11,7 @@ import {
   isRoundMs,
   isRounds,
   MAP_DEFS,
+  mapName,
   MAX_ROOM_PLAYERS,
   MIN_START_PLAYERS,
   NO_INPUT,
@@ -234,6 +235,8 @@ export class Room {
       phase: this.phase,
       roundMs: this.roundMs(),
       rounds: this.rounds(),
+      mapId: this.mapId,
+      mapName: mapName(this.mapId),
     };
   }
 
@@ -679,6 +682,7 @@ export class Room {
       max: MAX_ROOM_PLAYERS,
       phase: this.phase === 'final' ? 'shop' : this.phase,
       locked: this.locked,
+      mapName: mapName(this.mapId),
     };
   }
 }

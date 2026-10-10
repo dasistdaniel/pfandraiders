@@ -34,7 +34,7 @@ function roster() {
 
 /** lobby-Nachricht mit den Pflichtfeldern für Räume */
 function lobbyMsg(host: string, phase: RoomPhase, roundMs: number): ServerMessage {
-  return { t: 'lobby', room: 'ABCD', roomName: 'Annas Raum', visibility: 'public', locked: false, host, players: roster(), phase, roundMs, rounds: DEFAULT_ROUNDS };
+  return { t: 'lobby', room: 'ABCD', roomName: 'Annas Raum', visibility: 'public', locked: false, host, players: roster(), phase, roundMs, rounds: DEFAULT_ROUNDS, mapId: 'city', mapName: 'Stadt' };
 }
 
 function setup() {
@@ -805,7 +805,7 @@ describe('rooms, room list, avatars and round count', () => {
     const { socket, conn } = setup();
     let calls = 0;
     conn.onRooms = () => calls++;
-    const room = { code: 'ABCD', name: 'Bude', host: 'Anna', players: 1, max: 8, phase: 'lobby' as const, locked: false };
+    const room = { code: 'ABCD', name: 'Bude', host: 'Anna', players: 1, max: 8, phase: 'lobby' as const, locked: false, mapName: 'Stadt' };
     socket.receive({ t: 'rooms', rooms: [room] });
     expect(conn.rooms).toEqual([room]);
     socket.onmessage?.({ data: JSON.stringify({ t: 'rooms', rooms: 'kaputt' }) });

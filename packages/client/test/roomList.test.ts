@@ -20,6 +20,7 @@ const info = (over: Partial<RoomInfo> = {}): RoomInfo => ({
   max: 8,
   phase: 'lobby',
   locked: false,
+  mapName: 'Stadt',
   ...over,
 });
 
@@ -52,6 +53,14 @@ describe('parseRoomList', () => {
 
   it('keeps at most 50 entries', () => {
     expect(parseRoomList(Array.from({ length: 60 }, () => info()))).toHaveLength(50);
+  });
+
+  it('keeps entries without or with a broken map name and leaves the name empty', () => {
+    const old: Record<string, unknown> = { ...info() };
+    delete old.mapName;
+    const parsed = parseRoomList([old, info({ code: 'EFGH', mapName: 'x'.repeat(25) }), { ...info({ code: 'JKLM' }), mapName: 7 }]);
+    expect(parsed?.map((r) => r.mapName)).toEqual(['', '', '']);
+    expect(parseRoomList([info({ mapName: ' Übung ' })])?.[0].mapName).toBe('Übung');
   });
 });
 
