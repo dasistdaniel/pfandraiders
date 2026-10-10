@@ -2,7 +2,7 @@ import { MAX_MESSAGE_BYTES, parseClientMessage } from '@pfandraiders/core';
 import type { ErrorCode, MapId, ServerMessage } from '@pfandraiders/core';
 import type { IncomingMessage } from 'http';
 import { WebSocketServer } from 'ws';
-import type { WebSocket } from 'ws';
+import type { PerMessageDeflateOptions, WebSocket } from 'ws';
 import { SERVER_CONFIG } from './config';
 import type { Conn, Member, Room } from './room';
 import { RoomManager } from './rooms';
@@ -29,7 +29,24 @@ export interface ServerOptions {
   idleMs?: number;
   /** Abgefangene Ausnahmen (Tick und Nachrichtenhandler). Ohne Angabe wird nach stderr geloggt. */
   onError?: (err: unknown, room: Room | null) => void;
+  /** permessage-deflate anbieten (WS_DEFLATE). Standard an; Umgebungsvariable WS_COMPRESSION=off schaltet ab. */
+  compression?: boolean;
 }
+
+/**
+ * Einstellungen für permessage-deflate. Der Server schickt je Client 20 Snapshots pro Sekunde mit 6–10 KB JSON,
+ * die sich von Takt zu Takt kaum ändern. Mit Kontextübernahme (Standard, Fenster 32 KB) findet zlib fast den ganzen
+ * vorigen Snapshot im Fenster wieder: Gemessen mit 8 laufenden Clients schrumpft ein Snapshot von 9,6 KB auf etwa
+ * 430 Bytes (4,5 %). Stufe 1 ist dabei die billigste; höhere Stufen sparen wenig mehr und kosten mehr CPU, ohne
+ * Kontextübernahme oder mit kleinerem Fenster sind es 13–15 %. Kosten: je Verbindung ein zlib-Kontext (etwa
+ * 256 KB fürs Packen, mehr erst, wenn auch der Client packt). Zahlen in docs/NETZ.md (Befund 4).
+ * Nur Nachrichten ab `threshold` Bytes werden gepackt (kurze Antworten wie Fehler lohnen nicht);
+ * `concurrencyLimit` bleibt beim Standard 10 (gleichzeitige zlib-Aufträge im ganzen Prozess).
+ */
+export const WS_DEFLATE: PerMessageDeflateOptions = {
+  threshold: 256,
+  zlibDeflateOptions: { level: 1 },
+};
 
 /** Origin vergleichbar machen: trimmen, kleinschreiben, Schrägstrich am Ende entfernen. */
 export function normalizeOrigin(origin: string): string {
@@ -370,6 +387,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const wss = new WebSocketServer({
     port: opts.port,
     maxPayload: MAX_MESSAGE_BYTES,
+    perMessageDeflate: opts.compression === false ? false : WS_DEFLATE,
     verifyClient: (info, done) => {
       if (wss.clients.size >= maxConnections) {
         done(false, 503, 'server full');
