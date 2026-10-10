@@ -3,7 +3,7 @@ import type { RoomInfo } from '@pfandraiders/core';
 import { sanitizeRoomCode } from './onlineMenuLogic';
 
 /** Spalten der Raumliste (Spec §5.3) */
-export const ROOM_LIST_HEADER: readonly string[] = ['Raumname', 'Host', 'Spieler', 'Status'];
+export const ROOM_LIST_HEADER: readonly string[] = ['Raumname', 'Karte', 'Host', 'Spieler', 'Status'];
 export const EMPTY_ROOM_LIST_TEXT = 'Keine öffentlichen Räume';
 /** Der Server beantwortet höchstens eine Anfrage pro Sekunde */
 export const ROOM_LIST_REFRESH_MS = 1000;
@@ -11,6 +11,8 @@ export const ROOM_LIST_REFRESH_MS = 1000;
 export interface RoomRow {
   code: string;
   name: string;
+  /** Anzeigename der Karte, "?" wenn der Server keinen schickt */
+  map: string;
   host: string;
   /** "3/8" */
   players: string;
@@ -58,6 +60,7 @@ export function roomRows(rooms: readonly RoomInfo[]): RoomRow[] {
   return rooms.map((r) => ({
     code: r.code,
     name: r.name,
+    map: r.mapName || '?',
     host: r.host,
     players: `${r.players}/${r.max}`,
     status: r.phase !== 'lobby' ? 'Läuft' : r.players < r.max ? 'Lobby' : 'Voll',

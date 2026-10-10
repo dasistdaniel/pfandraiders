@@ -794,6 +794,29 @@ describe('rooms, room list, avatars and round count', () => {
     expect(conn).toMatchObject({ roomName: 'Bude', visibility: 'private', locked: true, rounds: 5 });
   });
 
+  it('reads the lobby map and shows the server name even for maps it does not know', () => {
+    const { socket, conn } = setup();
+    expect(conn.lobbyMapId).toBe(DEFAULT_MAP_ID);
+    expect(conn.lobbyMapName).toBe('Stadt');
+    socket.receive({ ...lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS), mapId: 'retro', mapName: 'Retro' } as ServerMessage);
+    expect(conn).toMatchObject({ lobbyMapId: 'retro', lobbyMapName: 'Retro' });
+    socket.onmessage?.({ data: JSON.stringify({ ...lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS), mapId: 'moon', mapName: 'Mondbasis' }) });
+    expect(conn).toMatchObject({ lobbyMapId: 'retro', lobbyMapName: 'Mondbasis' });
+    socket.onmessage?.({ data: JSON.stringify({ ...lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS), mapId: 'city', mapName: 7 }) });
+    expect(conn).toMatchObject({ lobbyMapId: 'city', lobbyMapName: 'Stadt' });
+  });
+
+  it('sends setMap only as host', () => {
+    const { socket, conn } = setup();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p2', token: 't' });
+    socket.receive(lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS));
+    conn.setMap('retro');
+    expect(socket.sent.some((m) => m.t === 'setMap')).toBe(false);
+    socket.receive(lobbyMsg('p2', 'lobby', DEFAULT_ROUND_MS));
+    conn.setMap('retro');
+    expect(socket.sent.at(-1)).toEqual({ t: 'setMap', mapId: 'retro' });
+  });
+
   it('reads rounds and the round number from start', () => {
     const { socket, conn } = setup();
     socket.receive({ ...(startMessage() as Extract<ServerMessage, { t: 'start' }>), rounds: 1, round: 1 });
