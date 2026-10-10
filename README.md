@@ -78,6 +78,17 @@ Die Stadt wird aus einem ASCII-Plan erzeugt: `packages/core/src/maps/cityPlan.ts
 
 Bäume und Laternen sind weiche Hindernisse (Ebene `soft`): sie blockieren nur einen kleinen Kern in der Kachelmitte, man läuft also dicht daneben vorbei. Außerdem rutscht der Spieler an Ecken, die ihn nur wenige Pixel überlappen (bis `CONFIG.slideMaxPx`), automatisch um die Kante herum, statt hängen zu bleiben.
 
+## Eigene Karten
+
+Eigene Karten baut man mit [Tiled](https://www.mapeditor.org) (ab 1.10). Ausführlich: [docs/KARTEN.md](docs/KARTEN.md).
+
+1. `maps-src/pfandraiders.tiled-project` in Tiled öffnen, `maps-src/vorlage.tmx` kopieren und bearbeiten (Eigenschaften `name` und `tileset`, Ebenen `ground`, `below`, `above`, `walls`, `soft`, `objects`, `zones`).
+2. Als JSON exportieren nach `packages/core/src/maps/custom/<kennung>.tiled.json` (Kennung: `a-z`, `0-9`, `-`, höchstens 24 Zeichen). Exporteinstellungen: Kachelebenen-Format CSV, Karte nicht unendlich; Kachelsätze einbetten egal.
+3. `npm run maps` prüft alle eigenen Karten und trägt sie ein, danach `npm test`.
+4. Spielen: `?map=<kennung>` in der URL, in der lokalen Lobby (hoch/runter) oder online als Host in der Lobby.
+
+Regeln (die Prüfung meldet jeden Verstoß auf Deutsch mit Stelle): Kacheln 16 px, 32 x 20 bis 128 x 80 Kacheln, genau 8 Startpunkte, mindestens 1 Pfandautomat, 20 Spots und 2 NPC-Eingänge, nur Punkt-Objekte, nichts auf Wänden, alles von jedem Startpunkt erreichbar, keine gedrehten oder gespiegelten Kacheln, nur der Kachelsatz `kenney-city`. Wände werden von Hand in der Ebene `walls` gemalt. Beispiel: `packages/core/src/maps/custom/uebung.tiled.json` ("Übung").
+
 ## Grafik
 
 Die Spielwelt (Boden, Dächer, Fassaden, Spots, Pfandautomat) nutzt die freien Kacheln "Roguelike Modern City" von [Kenney](https://kenney.nl) (CC0, Lizenzdatei unter `packages/client/src/assets/kenney/`). Welche Zelle des Kachelbogens für welches Bild genutzt wird, steht als reine Tabelle in `packages/client/src/kenneyMap.ts`. Fehlt der Bogen, fällt das Spiel auf die selbst gezeichneten Muster zurück.
