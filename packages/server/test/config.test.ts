@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MAP_ID } from '@pfandraiders/core';
-import { parseGraceMs, parseMapId, parseRoundMs, SERVER_CONFIG } from '../src/config';
+import { DEFAULT_MAP_ID, MAP_LIST } from '@pfandraiders/core';
+import { mapIdWarning, parseGraceMs, parseMapId, parseRoundMs, SERVER_CONFIG } from '../src/config';
 
 describe('parseGraceMs', () => {
   const fb = SERVER_CONFIG.graceMs;
@@ -51,5 +51,12 @@ describe('parseMapId', () => {
   });
   it('flags unknown maps', () => {
     expect(parseMapId('moon')).toEqual({ value: DEFAULT_MAP_ID, invalid: true });
+  });
+
+  it('flags unknown maps and names the known ones in the warning', () => {
+    expect(parseMapId(' moon ')).toEqual({ value: DEFAULT_MAP_ID, invalid: true });
+    const known = MAP_LIST.map((m) => m.id).join(', ');
+    expect(mapIdWarning(' moon ')).toBe(`MAP_ID=moon ist ungültig (bekannt: ${known}), Standardwert city wird genutzt.`);
+    expect(mapIdWarning('moon')).toContain('city, retro');
   });
 });

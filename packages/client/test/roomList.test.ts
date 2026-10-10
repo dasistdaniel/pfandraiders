@@ -20,6 +20,7 @@ const info = (over: Partial<RoomInfo> = {}): RoomInfo => ({
   max: 8,
   phase: 'lobby',
   locked: false,
+  mapName: 'Stadt',
   ...over,
 });
 
@@ -53,11 +54,19 @@ describe('parseRoomList', () => {
   it('keeps at most 50 entries', () => {
     expect(parseRoomList(Array.from({ length: 60 }, () => info()))).toHaveLength(50);
   });
+
+  it('keeps entries without or with a broken map name and leaves the name empty', () => {
+    const old: Record<string, unknown> = { ...info() };
+    delete old.mapName;
+    const parsed = parseRoomList([old, info({ code: 'EFGH', mapName: 'x'.repeat(25) }), { ...info({ code: 'JKLM' }), mapName: 7 }]);
+    expect(parsed?.map((r) => r.mapName)).toEqual(['', '', '']);
+    expect(parseRoomList([info({ mapName: ' Übung ' })])?.[0].mapName).toBe('Übung');
+  });
 });
 
 describe('rows', () => {
   it('has the header and empty text of the spec', () => {
-    expect(ROOM_LIST_HEADER).toEqual(['Raumname', 'Host', 'Spieler', 'Status']);
+    expect(ROOM_LIST_HEADER).toEqual(['Raumname', 'Karte', 'Host', 'Spieler', 'Status']);
     expect(EMPTY_ROOM_LIST_TEXT).toBe('Keine öffentlichen Räume');
   });
 
@@ -70,10 +79,15 @@ describe('rows', () => {
 
   it('builds rows with player count and status text', () => {
     expect(roomRows([info({ locked: true }), info({ code: 'EFGH', players: 8 }), info({ code: 'JKLM', phase: 'shop' })])).toEqual([
-      { code: 'ABCD', name: 'Bude', host: 'Anna', players: '2/8', status: 'Lobby', joinable: true, locked: true },
-      { code: 'EFGH', name: 'Bude', host: 'Anna', players: '8/8', status: 'Voll', joinable: false, locked: false },
-      { code: 'JKLM', name: 'Bude', host: 'Anna', players: '2/8', status: 'Läuft', joinable: false, locked: false },
+      { code: 'ABCD', name: 'Bude', map: 'Stadt', host: 'Anna', players: '2/8', status: 'Lobby', joinable: true, locked: true },
+      { code: 'EFGH', name: 'Bude', map: 'Stadt', host: 'Anna', players: '8/8', status: 'Voll', joinable: false, locked: false },
+      { code: 'JKLM', name: 'Bude', map: 'Stadt', host: 'Anna', players: '2/8', status: 'Läuft', joinable: false, locked: false },
     ]);
+  });
+
+  it('shows "?" for rooms without a map name', () => {
+    expect(roomRows([info({ mapName: '' })])[0].map).toBe('?');
+    expect(roomRows([info({ mapName: 'Retro' })])[0].map).toBe('Retro');
   });
 });
 

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CONFIG, createGame, DEFAULT_MAP_ID, isMapId, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
+import { CONFIG, createGame, DEFAULT_MAP_ID, MAP_DEFS, NO_INPUT, ROOM_COLORS, TILE, totalBottles } from '@pfandraiders/core';
 import type { GameState, MapData, MapId, Npc, Player, Progress, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
@@ -32,9 +32,10 @@ import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
 import { padBLeaves } from '../sources';
 import type { InputSource } from '../sources';
-import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
+import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLocalMapId, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
 import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
+import { chooseLocalMapId } from '../mapChoice';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
@@ -85,6 +86,8 @@ export class GameScene extends Phaser.Scene {
   /** Lokale Serie: Fortschritt aus der Shop-Phase (leer in der ersten Runde) und Rundenzeit der Serie. */
   private progress: Record<string, Progress> | undefined;
   private roundMs: number | undefined;
+  /** Lokal: Karte der Serie aus Lobby bzw. Shop (wird an die nächste Runde weitergereicht) */
+  private chosenMapId: MapId | undefined;
   private conn!: GameConnection;
   /** Kennung der gespielten Karte (online vom Server, lokal aus ?map=). */
   private mapId: MapId = DEFAULT_MAP_ID;
@@ -157,11 +160,12 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
-  init(data?: { slots?: PlayerSlot[]; online?: OnlineConnection; progress?: Record<string, Progress>; roundMs?: number }): void {
+  init(data?: { slots?: PlayerSlot[]; online?: OnlineConnection; progress?: Record<string, Progress>; roundMs?: number; mapId?: MapId }): void {
     this.online = data?.online ?? null;
     this.slots = data?.slots ?? [];
     this.progress = data?.progress;
     this.roundMs = data?.roundMs;
+    this.chosenMapId = data?.mapId;
   }
 
   create(): void {
@@ -224,8 +228,8 @@ export class GameScene extends Phaser.Scene {
         ? Number(params.get('seed'))
         : (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
       const roundSec = Number(params.get('round'));
-      const mapParam = params.get('map');
-      this.mapId = isMapId(mapParam) ? mapParam : DEFAULT_MAP_ID;
+      // ?map= (Testhilfe) hat Vorrang, sonst die Karte der Serie aus Lobby/Shop, sonst die gespeicherte
+      this.mapId = chooseLocalMapId(params.get('map'), this.chosenMapId, loadLocalMapId());
       const ids = this.slots.map((s) => s.id);
       // ?round= (Testhilfe) hat Vorrang, sonst die Wahl aus der Lobby, sonst die gespeicherte
       if (roundSec > 0) this.roundMs = roundSec * 1000;
@@ -456,7 +460,7 @@ export class GameScene extends Phaser.Scene {
         this.scene.start(online.roomPhase === 'final' ? 'final' : 'shop', { online });
       } else {
         const ids = this.slots.map((s) => s.id);
-        this.scene.start('shop', { slots: this.slots, progress: LocalShop.fromState(state, ids), roundMs: this.roundMs });
+        this.scene.start('shop', { slots: this.slots, progress: LocalShop.fromState(state, ids), roundMs: this.roundMs, mapId: this.mapId });
       }
       return;
     }

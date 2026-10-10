@@ -1,9 +1,9 @@
-import type { MapId, SpotType } from '@pfandraiders/core';
+import type { MapId, SpotType, TilesetId } from '@pfandraiders/core';
 import type { PlayerFrame } from './sprites/characters';
 import type { TileKey } from './tiles';
 
-/** Kachelsatz einer Karte; Kacheln, Spots und Objekte tragen ihn als Präfix, Figuren nicht. */
-export type TilesetId = MapId;
+/** Kachelsatz einer Karte (city oder retro, aus dem Kern); Kacheln, Spots und Objekte tragen ihn als Präfix, Figuren nicht. */
+export type { TilesetId };
 
 export const tileTexture = (set: TilesetId, key: TileKey): string => `${set}:tile:${key}`;
 export const spotTexture = (set: TilesetId, type: SpotType, full: boolean): string =>

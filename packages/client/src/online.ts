@@ -1,4 +1,4 @@
-import { DEFAULT_MAP_ID, DEFAULT_ROUND_MS, DEFAULT_ROUNDS, isMapId, isRounds, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
+import { cleanMapName, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, DEFAULT_ROUNDS, isMapId, isRounds, mapName, parseServerBuild, stateFromSnapshot } from '@pfandraiders/core';
 import type {
   ChatMessage,
   ClientMessage,
@@ -85,6 +85,10 @@ export class OnlineConnection implements GameConnection {
   roster: RosterEntry[] = [];
   /** Karte der laufenden Runde (wird mit start gesetzt). */
   mapId: MapId = DEFAULT_MAP_ID;
+  /** Karte der Lobby (Wahl des Hosts für den nächsten Serienstart) laut lobby-Nachricht. */
+  lobbyMapId: MapId = DEFAULT_MAP_ID;
+  /** Anzeigename dazu, wie ihn der Server schickt (auch für Karten, die dieser Client nicht kennt). */
+  lobbyMapName: string = mapName(DEFAULT_MAP_ID);
   /** Build des Servers aus joined; null = unbekannt (älterer Server oder ungültige Angabe). */
   serverBuild: ServerBuild | null = null;
   /** Lobby-Chat, älteste zuerst (höchstens CLIENT_CHAT_SIZE). chathistory ersetzt die Liste. */
@@ -308,6 +312,12 @@ export class OnlineConnection implements GameConnection {
     this.sendMsg({ t: 'setRounds', rounds });
   }
 
+  /** Karte wählen (nur Host; der Server prüft zusätzlich Phase und Kennung). */
+  setMap(mapId: MapId): void {
+    if (this.status !== 'open' || !this.isHost()) return;
+    this.sendMsg({ t: 'setMap', mapId });
+  }
+
   /** Nach der Endwertung alle zurück in die Lobby (nur Host; der Server prüft zusätzlich). */
   toLobby(): void {
     if (this.status !== 'open' || !this.isHost()) return;
@@ -371,6 +381,11 @@ export class OnlineConnection implements GameConnection {
         if (msg.visibility === 'public' || msg.visibility === 'private') this.visibility = msg.visibility;
         if (typeof msg.locked === 'boolean') this.locked = msg.locked;
         if (isRounds(msg.rounds)) this.rounds = msg.rounds;
+        if (isMapId(msg.mapId)) this.lobbyMapId = msg.mapId;
+        // Der Name vom Server hat Vorrang (auch für unbekannte Karten), sonst der eigene Name der Karte
+        const shownMap = cleanMapName(msg.mapName);
+        if (shownMap !== null) this.lobbyMapName = shownMap;
+        else if (isMapId(msg.mapId)) this.lobbyMapName = mapName(msg.mapId);
         this.onLobby?.();
         break;
       case 'start':

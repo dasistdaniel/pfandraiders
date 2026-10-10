@@ -325,6 +325,13 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
       if (!r.ok) reply(conn, r.code, r.message);
       return;
     }
+    case 'setMap': {
+      if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
+      if (!isCurrent()) return;
+      const r = session.room.setMap(session.member.id, msg.mapId);
+      if (!r.ok) reply(conn, r.code, r.message);
+      return;
+    }
     case 'toLobby': {
       if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
       if (!isCurrent()) return;

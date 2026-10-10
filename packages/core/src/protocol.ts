@@ -4,6 +4,7 @@ import { isAvatar } from './avatars';
 import { isShopCategory, isShopItemId } from './shop';
 import type { Progress } from './shop';
 import type { RankEntry } from './ranking';
+import { isMapId } from './maps';
 import type { MapId } from './maps';
 import type { GameState, Input, MapData, ShopCategory, ShopItemId } from './types';
 
@@ -68,6 +69,8 @@ export interface RoomInfo {
   phase: 'lobby' | 'playing' | 'shop';
   /** Raum hat ein Passwort */
   locked: boolean;
+  /** Anzeigename der gewählten Karte */
+  mapName: string;
 }
 
 /** Standard-Raumname "<Name>s Raum"; auf s, ß, x, z endende Namen bekommen den Apostroph ("Klaus' Raum"). */
@@ -148,6 +151,8 @@ export type ClientMessage =
   | { t: 'setAvatar'; avatar: number }
   /** Rundenzahl setzen (nur Host, nur Lobby): 1, 3, 5 oder 0 = offen */
   | { t: 'setRounds'; rounds: number }
+  /** Karte wählen (nur Host, nur Lobby); unbekannte Kennungen machen die Nachricht ungültig */
+  | { t: 'setMap'; mapId: MapId }
   /** Nach der Endwertung zurück in die Lobby (nur Host, nur Phase final) */
   | { t: 'toLobby' };
 
@@ -181,6 +186,9 @@ export type ServerMessage =
       roundMs: number;
       /** Rundenzahl der Serie (0 = offen) */
       rounds: number;
+      /** Gewählte Karte für den nächsten Serienstart und ihr Anzeigename */
+      mapId: MapId;
+      mapName: string;
     }
   | {
       t: 'start';
@@ -339,6 +347,8 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return isAvatar(m.avatar) ? { t: 'setAvatar', avatar: m.avatar } : null;
     case 'setRounds':
       return isRounds(m.rounds) ? { t: 'setRounds', rounds: m.rounds } : null;
+    case 'setMap':
+      return isMapId(m.mapId) ? { t: 'setMap', mapId: m.mapId } : null;
     case 'toLobby':
       return { t: 'toLobby' };
     default:

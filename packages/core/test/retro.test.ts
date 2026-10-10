@@ -1,23 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE } from '../src/config';
+import { reachableTiles } from '../src/map';
 import { RETRO_MAP } from '../src/maps/retro';
-
-function reachableTiles(map: typeof RETRO_MAP, startX: number, startY: number): Set<number> {
-  const seen = new Set<number>();
-  const stack = [Math.floor(startY / TILE) * map.cols + Math.floor(startX / TILE)];
-  while (stack.length > 0) {
-    const i = stack.pop()!;
-    if (seen.has(i) || map.solid[i]) continue;
-    seen.add(i);
-    const c = i % map.cols;
-    const r = Math.floor(i / map.cols);
-    if (c > 0) stack.push(i - 1);
-    if (c < map.cols - 1) stack.push(i + 1);
-    if (r > 0) stack.push(i - map.cols);
-    if (r < map.rows - 1) stack.push(i + map.cols);
-  }
-  return seen;
-}
 
 describe('retro map', () => {
   it('has the expected content', () => {

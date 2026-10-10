@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
+import { DEFAULT_MAP_ID, stepMapId } from '@pfandraiders/core';
+import type { MapId } from '@pfandraiders/core';
 import { KEYBOARD_LAYOUTS, PLAYER_COLORS } from '../devices';
 import type { DeviceRef, PlayerSlot } from '../devices';
 import { GAME_W } from '../layout';
 import { addLogo } from '../logoTexture';
+import { mapLine } from '../mapChoice';
 import { roundMsLabel, stepRoundMs } from '../roundTime';
-import { loadLocalRoundMs, saveLocalRoundMs } from '../settings';
+import { loadLocalMapId, loadLocalRoundMs, saveLocalMapId, saveLocalRoundMs } from '../settings';
 import { sfx } from '../sfx';
 
 const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
@@ -12,6 +15,16 @@ const FONT = { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff' };
 const TEXT_TOP = 232;
 const MAX_PLAYERS = 4;
 const PAD_START_BUTTON = 9;
+
+interface PadPrev {
+  a: boolean;
+  b: boolean;
+  start: boolean;
+  left: boolean;
+  right: boolean;
+  up: boolean;
+  down: boolean;
+}
 
 function sameDevice(a: DeviceRef, b: DeviceRef): boolean {
   if (a.kind === 'keyboard' && b.kind === 'keyboard') return a.layout === b.layout;
@@ -28,9 +41,12 @@ export class LobbyScene extends Phaser.Scene {
   private text!: Phaser.GameObjects.Text;
   private joinKeys: Phaser.Input.Keyboard.Key[] = [];
   private startKey!: Phaser.Input.Keyboard.Key;
-  private padPrev: Record<number, { a: boolean; b: boolean; start: boolean; left: boolean; right: boolean }> = {};
+  private padPrev: Record<number, PadPrev> = {};
   private roundMs = 300_000;
   private roundKeys: { left: Phaser.Input.Keyboard.Key[]; right: Phaser.Input.Keyboard.Key[] } = { left: [], right: [] };
+  /** Karte der Serie; hoch/runter wechselt sie (links/rechts gehört der Rundenzeit) */
+  private mapId: MapId = DEFAULT_MAP_ID;
+  private mapKeys: { up: Phaser.Input.Keyboard.Key[]; down: Phaser.Input.Keyboard.Key[] } = { up: [], down: [] };
   private backKey!: Phaser.Input.Keyboard.Key;
   private notice = '';
 
@@ -45,6 +61,7 @@ export class LobbyScene extends Phaser.Scene {
   create(): void {
     this.slots = [];
     this.roundMs = loadLocalRoundMs();
+    this.mapId = loadLocalMapId();
     this.padPrev = {};
     const params = new URLSearchParams(window.location.search);
 
@@ -56,7 +73,7 @@ export class LobbyScene extends Phaser.Scene {
         color: PLAYER_COLORS[i],
         device: { kind: 'keyboard', layout: i % KEYBOARD_LAYOUTS.length },
       }));
-      this.scene.start('game', { slots, roundMs: this.roundMs });
+      this.scene.start('game', { slots, roundMs: this.roundMs, mapId: this.mapId });
       return;
     }
 
@@ -65,6 +82,7 @@ export class LobbyScene extends Phaser.Scene {
     this.backKey = this.input.keyboard!.addKey('ESC');
     const kb = this.input.keyboard!;
     this.roundKeys = { left: [kb.addKey('A'), kb.addKey('LEFT')], right: [kb.addKey('D'), kb.addKey('RIGHT')] };
+    this.mapKeys = { up: [kb.addKey('W'), kb.addKey('UP')], down: [kb.addKey('S'), kb.addKey('DOWN')] };
     addLogo(this, 32); // oben mittig, bis y 216
     this.text = this.add.text(GAME_W / 2, TEXT_TOP, '', { ...FONT, align: 'center' }).setOrigin(0.5, 0);
   }
@@ -85,26 +103,38 @@ export class LobbyScene extends Phaser.Scene {
     let roundDir: -1 | 0 | 1 = 0;
     if (this.roundKeys.left.some((k) => Phaser.Input.Keyboard.JustDown(k))) roundDir = -1;
     if (this.roundKeys.right.some((k) => Phaser.Input.Keyboard.JustDown(k))) roundDir = 1;
+    let mapDir: -1 | 0 | 1 = 0;
+    if (this.mapKeys.up.some((k) => Phaser.Input.Keyboard.JustDown(k))) mapDir = -1;
+    if (this.mapKeys.down.some((k) => Phaser.Input.Keyboard.JustDown(k))) mapDir = 1;
     let backPressed = false;
     let startPressed = Phaser.Input.Keyboard.JustDown(this.startKey);
     for (const pad of this.input.gamepad?.gamepads ?? []) {
       if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
-      // Erster Blick: aus der Vorszene gehaltenes A oder B zählt nicht als Druck
       const left = pad.left || pad.leftStick.x < -0.5;
       const right = pad.right || pad.leftStick.x > 0.5;
-      const prev = this.padPrev[pad.index] ?? { a: pad.A, b: pad.B, start: false, left, right };
+      const up = pad.up || pad.leftStick.y < -0.5;
+      const down = pad.down || pad.leftStick.y > 0.5;
+      // Erster Blick: aus der Vorszene gehaltene Tasten zählen nicht als Druck
+      const prev = this.padPrev[pad.index] ?? { a: pad.A, b: pad.B, start: false, left, right, up, down };
       if (left && !prev.left) roundDir = -1;
       if (right && !prev.right) roundDir = 1;
+      if (up && !prev.up) mapDir = -1;
+      if (down && !prev.down) mapDir = 1;
       if (pad.B && !prev.b) backPressed = true;
       const start = pad.buttons[PAD_START_BUTTON]?.pressed ?? false;
       if (pad.A && !prev.a) this.join({ kind: 'pad', index: pad.index });
       if (start && !prev.start && this.slots.length > 0) startPressed = true;
-      this.padPrev[pad.index] = { a: pad.A, b: pad.B, start, left, right };
+      this.padPrev[pad.index] = { a: pad.A, b: pad.B, start, left, right, up, down };
     }
     if (roundDir !== 0) {
       sfx.play('ui_move');
       this.roundMs = stepRoundMs(this.roundMs, roundDir);
       saveLocalRoundMs(this.roundMs);
+    }
+    if (mapDir !== 0) {
+      sfx.play('ui_move');
+      this.mapId = stepMapId(this.mapId, mapDir);
+      saveLocalMapId(this.mapId);
     }
 
     if (backPressed) {
@@ -114,7 +144,7 @@ export class LobbyScene extends Phaser.Scene {
     }
     if (startPressed && this.slots.length > 0) {
       sfx.play('ui_select');
-      this.scene.start('game', { slots: this.slots, roundMs: this.roundMs });
+      this.scene.start('game', { slots: this.slots, roundMs: this.roundMs, mapId: this.mapId });
       return;
     }
     this.text.setText(this.lines().join('\n'));
@@ -131,6 +161,7 @@ export class LobbyScene extends Phaser.Scene {
   private lines(): string[] {
     const lines = ['Beitreten: Tastatur 1 = E, Tastatur 2 = Enter, Gamepad = A'];
     lines.push(`Rundenzeit: ◄ ${roundMsLabel(this.roundMs)} ►  (links/rechts)`);
+    lines.push(mapLine(this.mapId));
     lines.push('');
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const slot = this.slots[i];

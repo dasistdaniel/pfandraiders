@@ -8,9 +8,11 @@ import {
   finalRanking,
   freshProgress,
   isAvatar,
+  isMapId,
   isRoundMs,
   isRounds,
   MAP_DEFS,
+  mapName,
   MAX_ROOM_PLAYERS,
   MIN_START_PLAYERS,
   NO_INPUT,
@@ -71,9 +73,9 @@ export interface Member {
 }
 
 export interface RoomOptions {
-  /** Kennung der Karte (Standard DEFAULT_MAP_ID); bestimmt die Karte und wird mit start gesendet. */
+  /** Startkarte des Raums (Standard DEFAULT_MAP_ID, Unbekanntes ebenso); der Host kann sie in der Lobby ändern (setMap). */
   mapId?: MapId;
-  /** Überschreibt die Kartendaten von mapId (für Tests). */
+  /** Überschreibt die Kartendaten (nur Tests); gilt, bis der Host eine andere Karte wählt. */
   map?: MapData;
   stepMs?: number;
   graceMs?: number;
@@ -131,8 +133,10 @@ export class Room {
   private readonly passwordHash: Buffer | null;
   private nextId = 1;
   private lastActive: number;
-  private readonly mapId: MapId;
-  private readonly map: MapData;
+  /** Gewählte Karte; gilt ab dem nächsten Serienstart für alle Runden und bleibt nach toLobby */
+  private mapId: MapId;
+  /** Kartendaten aus RoomOptions.map (Tests); null = die Daten der gewählten Karte */
+  private mapOverride: MapData | null;
   private readonly stepMs: number;
   private readonly graceMs: number;
   private readonly emptyMs: number;
@@ -162,8 +166,8 @@ export class Room {
     this.name = settings.name ?? `Raum ${code}`;
     this.visibility = settings.visibility ?? 'public';
     this.passwordHash = settings.password ? sha256(settings.password) : null;
-    this.mapId = opts.mapId ?? DEFAULT_MAP_ID;
-    this.map = opts.map ?? MAP_DEFS[this.mapId].map;
+    this.mapId = opts.mapId !== undefined && isMapId(opts.mapId) ? opts.mapId : DEFAULT_MAP_ID;
+    this.mapOverride = opts.map ?? null;
     this.stepMs = opts.stepMs ?? SERVER_CONFIG.stepMs;
     this.graceMs = opts.graceMs ?? SERVER_CONFIG.graceMs;
     // Ein leerer Raum darf nie vor Ablauf der Rückkehrfrist verschwinden
@@ -184,6 +188,16 @@ export class Room {
   /** Rundenzahl der Serie (0 = offen). */
   rounds(): number {
     return this.chosenRounds;
+  }
+
+  /** Gewählte Karte (gilt ab dem nächsten Serienstart). */
+  selectedMapId(): MapId {
+    return this.mapId;
+  }
+
+  /** Kartendaten der nächsten Runde. */
+  private currentMap(): MapData {
+    return this.mapOverride ?? MAP_DEFS[this.mapId].map;
   }
 
   /** Raum verlangt beim Beitritt ein Passwort. */
@@ -234,6 +248,8 @@ export class Room {
       phase: this.phase,
       roundMs: this.roundMs(),
       rounds: this.rounds(),
+      mapId: this.mapId,
+      mapName: mapName(this.mapId),
     };
   }
 
@@ -438,7 +454,7 @@ export class Room {
     const progress: Record<string, Progress> = {};
     for (const id of ids) progress[id] = this.progress.get(id) ?? freshProgress();
     // Jede Runde (auch nach der Shop-Phase) beginnt mit dem Countdown; der Raum ist dabei schon 'playing'
-    this.state = createGame(seed, this.map, ids, { roundMs: this.roundMs(), progress, countdownMs: this.countdownMs });
+    this.state = createGame(seed, this.currentMap(), ids, { roundMs: this.roundMs(), progress, countdownMs: this.countdownMs });
     for (const m of this.members) {
       m.input = { ...NO_INPUT };
       m.ackSeq = 0;
@@ -572,6 +588,20 @@ export class Room {
     return OK;
   }
 
+  /** Karte wählen (nur Host, nur Lobby). Gilt für alle Runden der nächsten Serie und bleibt nach toLobby erhalten. */
+  setMap(byId: string, mapId: string): Result<void> {
+    if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Karte wählen.');
+    if (this.phase !== 'lobby') return fail('wrong_phase', 'Die Karte wählt man in der Lobby.');
+    if (!isMapId(mapId)) return fail('bad_message', 'Unbekannte Karte.');
+    this.lastActive = this.now();
+    if (mapId !== this.mapId) {
+      this.mapId = mapId;
+      this.mapOverride = null;
+    }
+    this.broadcastLobby();
+    return OK;
+  }
+
   /** Serie vorzeitig beenden (nur Host, nur Shop): weiter zur Endwertung der bisherigen Runden. */
   endSeries(byId: string): Result<void> {
     if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Serie beenden.');
@@ -583,7 +613,7 @@ export class Room {
 
   /**
    * Nach der Endwertung zurück in die Lobby (nur Host, nur final). Bleibt: Code, Name, Sichtbarkeit, Passwort,
-   * Host, Rundenzahl, Rundenzeit, Mitglieder (auch Getrennte in der Frist), Figuren und Chat.
+   * Host, Rundenzahl, Rundenzeit, Karte, Mitglieder (auch Getrennte in der Frist), Figuren und Chat.
    * Zurückgesetzt: Fortschritt, Rangliste, Rundennummer. Abgelaufene fallen heraus.
    */
   toLobby(byId: string): Result<void> {
@@ -679,6 +709,7 @@ export class Room {
       max: MAX_ROOM_PLAYERS,
       phase: this.phase === 'final' ? 'shop' : this.phase,
       locked: this.locked,
+      mapName: mapName(this.mapId),
     };
   }
 }

@@ -1,8 +1,7 @@
-import { DEFAULT_MAP_ID } from '@pfandraiders/core';
 import { currentBuild, startupLine } from './buildInfo';
 import { startServer } from './server';
 import type { RunningServer } from './server';
-import { parseGraceMs, parseMapId, parseRoundMs, SERVER_CONFIG } from './config';
+import { mapIdWarning, parseGraceMs, parseMapId, parseRoundMs, SERVER_CONFIG } from './config';
 
 const port = Number(process.env.PORT ?? 8080);
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
@@ -22,9 +21,7 @@ if (graceRaw?.trim() && graceMs === SERVER_CONFIG.graceMs && Number(graceRaw.tri
 
 const map = parseMapId(process.env.MAP_ID);
 const mapId = map.value;
-if (map.invalid) {
-  console.warn(`MAP_ID=${process.env.MAP_ID?.trim()} ist ungültig (city oder retro), Standardwert ${DEFAULT_MAP_ID} wird genutzt.`);
-}
+if (map.invalid) console.warn(mapIdWarning(process.env.MAP_ID));
 
 // Letzte Rettung: loggen und weiterlaufen, damit ein Fehler nicht alle Räume beendet
 process.on('uncaughtException', (err) => {

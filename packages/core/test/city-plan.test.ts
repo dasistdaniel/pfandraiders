@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG, TILE } from '../src/config';
 import { createGame } from '../src/game';
-import { boxBlocked, isSolidAt } from '../src/map';
+import { boxBlocked, isSolidAt, reachableTiles } from '../src/map';
 import { walk } from '../src/movement';
 import { NO_INPUT } from '../src/types';
 import { CITY_PLAN, CITY_ZONES } from '../src/maps/cityPlan';
@@ -56,23 +56,9 @@ function components(chars: string): { ch: string; cells: Cell[] }[] {
   return out;
 }
 
-/** Flutfüllung über die begehbaren Kacheln der erzeugten Karte */
+/** Flutfüllung über die begehbaren Kacheln der erzeugten Karte (Wände und weiche Hindernisse sperren) */
 function reachable(start: Cell): Set<number> {
-  const { cols, rows, solid } = CITY_TILED_MAP;
-  const seen = new Set<number>();
-  const stack = [start.r * cols + start.c];
-  while (stack.length > 0) {
-    const i = stack.pop()!;
-    if (seen.has(i) || solid[i]) continue;
-    seen.add(i);
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    if (c > 0) stack.push(i - 1);
-    if (c < cols - 1) stack.push(i + 1);
-    if (r > 0) stack.push(i - cols);
-    if (r < rows - 1) stack.push(i + cols);
-  }
-  return seen;
+  return reachableTiles(CITY_TILED_MAP, start.c * TILE + TILE / 2, start.r * TILE + TILE / 2);
 }
 
 const dist = (a: Cell, b: Cell) => Math.hypot(a.r - b.r, a.c - b.c);

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BUY_REFUSAL_TEXT, freshProgress, ROOM_COLORS } from '@pfandraiders/core';
-import type { Progress } from '@pfandraiders/core';
+import type { MapId, Progress } from '@pfandraiders/core';
 import { createSource } from '../devices';
 import type { PlayerSlot } from '../devices';
 import { formatMoney } from '../format';
@@ -23,6 +23,8 @@ export interface ShopSceneData {
   slots?: PlayerSlot[];
   progress?: Record<string, Progress>;
   roundMs?: number;
+  /** Lokal: Karte der Serie (geht an die nächste Runde weiter) */
+  mapId?: MapId;
   /** Online: Verbindung (Stand und Bereit kommen vom Server) */
   online?: OnlineConnection;
 }
@@ -65,6 +67,7 @@ export class ShopScene extends Phaser.Scene {
   private local: LocalShop | null = null;
   private slots: PlayerSlot[] = [];
   private roundMs: number | undefined;
+  private mapId: MapId | undefined;
   private escKey!: Phaser.Input.Keyboard.Key;
   private leaving = false;
   private lastMoney: number | null = null;
@@ -78,6 +81,7 @@ export class ShopScene extends Phaser.Scene {
     this.online = data?.online ?? null;
     this.slots = data?.slots ?? [];
     this.roundMs = data?.roundMs;
+    this.mapId = data?.mapId;
     this.local = this.online ? null : new LocalShop(this.slots.map((s) => s.id), data?.progress ?? {});
     this.panels = [];
     this.leaving = false;
@@ -154,7 +158,7 @@ export class ShopScene extends Phaser.Scene {
       this.render(panel);
     }
     if (this.local?.allReady()) {
-      this.goTo('game', { slots: this.slots, progress: this.local.result(), roundMs: this.roundMs });
+      this.goTo('game', { slots: this.slots, progress: this.local.result(), roundMs: this.roundMs, mapId: this.mapId });
     }
   }
 

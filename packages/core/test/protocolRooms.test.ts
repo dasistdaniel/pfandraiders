@@ -11,6 +11,7 @@ import {
   parseClientMessage,
   ROUNDS_CHOICES,
 } from '../src/protocol';
+import type { RoomInfo, ServerMessage } from '../src/protocol';
 
 describe('room constants', () => {
   it('has the values of the spec', () => {
@@ -137,5 +138,23 @@ describe('parseClientMessage: new messages', () => {
   it('accepts setRounds only with 1, 3, 5 or 0', () => {
     for (const rounds of [1, 3, 5, 0]) expect(parseClientMessage({ t: 'setRounds', rounds })).toEqual({ t: 'setRounds', rounds });
     for (const rounds of [2, 7, -1, '3', undefined]) expect(parseClientMessage({ t: 'setRounds', rounds })).toBeNull();
+  });
+
+  it('accepts setMap only with a known map id and drops extra fields', () => {
+    expect(parseClientMessage({ t: 'setMap', mapId: 'retro', junk: 1 })).toEqual({ t: 'setMap', mapId: 'retro' });
+    expect(parseClientMessage({ t: 'setMap', mapId: 'city' })).toEqual({ t: 'setMap', mapId: 'city' });
+    for (const mapId of ['moon', '', 'CITY', ' city', '__proto__', 'constructor', 7, null, undefined, {}]) {
+      expect(parseClientMessage({ t: 'setMap', mapId }), String(mapId)).toBeNull();
+    }
+  });
+
+  it('carries the map in lobby messages and room list entries', () => {
+    const lobby: ServerMessage = {
+      t: 'lobby', room: 'ABCD', roomName: 'R', visibility: 'public', locked: false, host: 'p1', players: [],
+      phase: 'lobby', roundMs: 300_000, rounds: 3, mapId: 'retro', mapName: 'Retro',
+    };
+    expect(lobby.t === 'lobby' && lobby.mapName).toBe('Retro');
+    const info: RoomInfo = { code: 'ABCD', name: 'R', host: 'Anna', players: 1, max: 8, phase: 'lobby', locked: false, mapName: 'Stadt' };
+    expect(info.mapName).toBe('Stadt');
   });
 });

@@ -8,6 +8,7 @@ import {
   ROOM_CODE_LENGTH,
   ROUND_MS_CHOICES,
   ROUNDS_CHOICES,
+  stepMapId,
 } from '@pfandraiders/core';
 import { AVATAR_COLUMNS, avatarCells, stepAvatar, takenByOthers } from './avatarGrid';
 import { sfx } from './sfx';
@@ -130,7 +131,7 @@ export function showOnlineMenu(
 ): Promise<OnlineConnection | null> {
   return new Promise((resolve) => {
     const root = el('div', {}, 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#fff;font:16px monospace;z-index:10');
-    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;width:440px;min-height:340px;max-width:90vw;max-height:90vh;overflow:auto;box-sizing:border-box');
+    const box = el('div', {}, 'background:#222;padding:20px;border:2px solid #888;width:520px;min-height:340px;max-width:90vw;max-height:90vh;overflow:auto;box-sizing:border-box');
     root.appendChild(box);
     // Phaser hängt am window und verschluckt gefangene Tasten (E, O, Leertaste ...), also hier stoppen
     for (const type of ['keydown', 'keyup', 'keypress']) root.addEventListener(type, (e) => e.stopPropagation());
@@ -403,7 +404,7 @@ export function showOnlineMenu(
       }
 
       // Raumliste
-      const cols = 'grid-template-columns:minmax(0,2fr) minmax(0,1.3fr) 4em 4.5em';
+      const cols = 'grid-template-columns:minmax(0,2fr) minmax(0,1.3fr) minmax(0,1.3fr) 4em 4.5em';
       const header = el('div', {}, `display:grid;${cols};gap:6px;padding:2px 4px;color:#aaa;font-size:14px;border-bottom:1px solid #555`);
       for (const text of ROOM_LIST_HEADER) header.appendChild(el('span', { textContent: text }));
       const listBox = el('div', { tabIndex: 0 }, 'height:180px;max-height:30vh;overflow-y:auto;background:#111;border:1px solid #555;margin-bottom:8px;outline:none;font-size:14px');
@@ -445,7 +446,7 @@ export function showOnlineMenu(
           line.setAttribute('role', 'option');
           line.setAttribute('aria-selected', String(sel));
           line.setAttribute('aria-disabled', String(!r.joinable));
-          for (const text of [`${r.locked ? '🔒 ' : ''}${r.name}`, r.host, r.players, r.status]) {
+          for (const text of [`${r.locked ? '🔒 ' : ''}${r.name}`, r.map, r.host, r.players, r.status]) {
             line.appendChild(el('span', { textContent: text }, 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap'));
           }
           if (r.joinable) {
@@ -649,6 +650,27 @@ export function showOnlineMenu(
       };
       conn.onChat = showChat;
 
+      // Host: Karte mit ◄ ► (oder Pfeiltasten links/rechts auf der Zeile) wechseln; Gäste sehen nur den Namen
+      const mapRow = el('div', {}, 'margin-bottom:6px');
+      const mapPrev = el('button', { textContent: '◄' }, 'font:inherit;margin-left:6px');
+      const mapText = el('span', { textContent: '' }, 'display:inline-block;min-width:12em;text-align:center');
+      const mapNext = el('button', { textContent: '►' }, 'font:inherit');
+      mapPrev.setAttribute('aria-label', 'Vorige Karte');
+      mapNext.setAttribute('aria-label', 'Nächste Karte');
+      const stepMap = (dir: -1 | 1) => {
+        if (!conn.isHost()) return;
+        sfx.play('ui_move');
+        conn.setMap(stepMapId(conn.lobbyMapId, dir));
+      };
+      mapPrev.onclick = () => stepMap(-1);
+      mapNext.onclick = () => stepMap(1);
+      mapRow.onkeydown = (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        stepMap(e.key === 'ArrowLeft' ? -1 : 1);
+      };
+      mapRow.append(el('span', { textContent: 'Karte:' }), mapPrev, mapText, mapNext);
+
       // Host: Rundenzeit und Rundenzahl; Gäste sehen die Werte
       const roundRow = el('div', {}, 'margin-bottom:6px');
       const roundText = el('span', { textContent: '' });
@@ -672,6 +694,12 @@ export function showOnlineMenu(
         drawPlayers(conn.roster);
         drawGrid();
         const host = conn.isHost();
+        mapPrev.style.display = host ? 'inline-block' : 'none';
+        mapNext.style.display = host ? 'inline-block' : 'none';
+        mapText.textContent = conn.lobbyMapName;
+        mapText.style.textAlign = host ? 'center' : 'left';
+        // Gäste: ohne ◄ fehlt dessen Abstand
+        mapText.style.marginLeft = host ? '0' : '6px';
         start.style.display = host ? 'inline-block' : 'none';
         hint.style.display = host ? 'none' : 'block';
         start.disabled = conn.roster.filter((p) => p.connected).length < 2;
@@ -710,6 +738,7 @@ export function showOnlineMenu(
         grid,
         chatLog,
         chatInput,
+        mapRow,
         roundRow,
         roundsRow,
         start,

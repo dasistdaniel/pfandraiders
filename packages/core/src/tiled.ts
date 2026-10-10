@@ -90,7 +90,9 @@ export function parseTiledMap(json: unknown): MapData {
     const y = finite(o.y, 'object y');
     if (!inside(x, y)) fail(`object at (${x}, ${y}) is outside the map`);
     const at = { x, y };
-    switch (o.type) {
+    // Tiled 1.9 schreibt den Objekttyp als "class", ältere und neuere Versionen als "type"
+    const kind = typeof o.type === 'string' && o.type !== '' ? o.type : o.class;
+    switch (kind) {
       case 'spawn': spawns.push(at); break;
       case 'dropoff': dropoffs.push(at); break;
       case 'npc_spawn': npcSpawns.push(at); break;
@@ -100,7 +102,7 @@ export function parseTiledMap(json: unknown): MapData {
         spots.push({ id: spots.length, type: t as SpotType, ...at });
         break;
       }
-      default: fail(`unknown object type ${String(o.type)}`);
+      default: fail(`unknown object type ${String(kind)}`);
     }
   }
 

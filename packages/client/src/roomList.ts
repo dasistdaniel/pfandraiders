@@ -1,9 +1,9 @@
-import { MAX_LISTED_ROOMS, MAX_NAME_LENGTH, MAX_ROOM_NAME_LENGTH, MAX_ROOM_PLAYERS, ROOM_CODE_LENGTH } from '@pfandraiders/core';
+import { cleanMapName, MAX_LISTED_ROOMS, MAX_NAME_LENGTH, MAX_ROOM_NAME_LENGTH, MAX_ROOM_PLAYERS, ROOM_CODE_LENGTH } from '@pfandraiders/core';
 import type { RoomInfo } from '@pfandraiders/core';
 import { sanitizeRoomCode } from './onlineMenuLogic';
 
 /** Spalten der Raumliste (Spec §5.3) */
-export const ROOM_LIST_HEADER: readonly string[] = ['Raumname', 'Host', 'Spieler', 'Status'];
+export const ROOM_LIST_HEADER: readonly string[] = ['Raumname', 'Karte', 'Host', 'Spieler', 'Status'];
 export const EMPTY_ROOM_LIST_TEXT = 'Keine öffentlichen Räume';
 /** Der Server beantwortet höchstens eine Anfrage pro Sekunde */
 export const ROOM_LIST_REFRESH_MS = 1000;
@@ -11,6 +11,8 @@ export const ROOM_LIST_REFRESH_MS = 1000;
 export interface RoomRow {
   code: string;
   name: string;
+  /** Anzeigename der Karte, "?" wenn der Server keinen schickt */
+  map: string;
   host: string;
   /** "3/8" */
   players: string;
@@ -36,14 +38,15 @@ export function parseRoomList(x: unknown): RoomInfo[] | null {
   for (const e of x) {
     if (out.length >= MAX_LISTED_ROOMS) break;
     if (!isObj(e)) continue;
-    const { code, name, host, players, max, phase, locked } = e;
+    const { code, name, host, players, max, phase, locked, mapName } = e;
     if (typeof code !== 'string' || code.length !== ROOM_CODE_LENGTH || sanitizeRoomCode(code) !== code) continue;
     if (typeof name !== 'string' || name.length === 0 || name.length > MAX_ROOM_NAME_LENGTH) continue;
     if (typeof host !== 'string' || host.length === 0 || host.length > MAX_NAME_LENGTH) continue;
     if (!intIn(max, 1, MAX_ROOM_PLAYERS) || !intIn(players, 0, max)) continue;
     if (phase !== 'lobby' && phase !== 'playing' && phase !== 'shop') continue;
     if (typeof locked !== 'boolean') continue;
-    out.push({ code, name, host, players, max, phase, locked });
+    // Ältere Server schicken keinen Kartennamen: Eintrag behalten, Name leer (die Zeile zeigt "?")
+    out.push({ code, name, host, players, max, phase, locked, mapName: cleanMapName(mapName) ?? '' });
   }
   return out;
 }
@@ -57,6 +60,7 @@ export function roomRows(rooms: readonly RoomInfo[]): RoomRow[] {
   return rooms.map((r) => ({
     code: r.code,
     name: r.name,
+    map: r.mapName || '?',
     host: r.host,
     players: `${r.players}/${r.max}`,
     status: r.phase !== 'lobby' ? 'Läuft' : r.players < r.max ? 'Lobby' : 'Voll',

@@ -190,3 +190,30 @@ describe('setAvatar, setRounds and toLobby', () => {
     }
   });
 });
+
+describe('setMap', () => {
+  it('routes setMap to the room with its errors', () => {
+    const { send } = setup();
+    const a = fakeConn();
+    const b = fakeConn();
+    const sa = newSession(1000);
+    const sb = newSession(1000);
+    send(sa, a, { t: 'create', name: 'Anna' });
+    send(sb, b, { t: 'join', room: sa.room!.code, name: 'Bob' });
+    const room = sa.room!;
+    send(sb, b, { t: 'setMap', mapId: 'retro' });
+    expect(b.sent.at(-1)).toMatchObject({ t: 'error', code: 'not_host' });
+    send(sa, a, { t: 'setMap', mapId: 'moon' });
+    expect(a.sent.at(-1)).toMatchObject({ t: 'error', code: 'bad_message' });
+    send(sa, a, { t: 'setMap', mapId: 'retro' });
+    expect(room.selectedMapId()).toBe('retro');
+    expect(b.sent.at(-1)).toMatchObject({ t: 'lobby', mapId: 'retro', mapName: 'Retro' });
+  });
+
+  it('answers not_in_room without a room', () => {
+    const { send } = setup();
+    const c = fakeConn();
+    send(newSession(1000), c, { t: 'setMap', mapId: 'retro' });
+    expect(c.sent.at(-1)).toMatchObject({ t: 'error', code: 'not_in_room' });
+  });
+});
