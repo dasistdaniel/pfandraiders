@@ -272,7 +272,7 @@ function dispatch(env: Env, session: Session, conn: Conn, sock: Sock, raw: strin
     case 'input': {
       if (!session.room || !session.member) return reply(conn, 'not_in_room', 'Du bist in keinem Raum.');
       if (!isCurrent()) return;
-      session.room.setInput(session.member, msg.seq, msg.input);
+      session.room.setInput(session.member, msg.seq, msg.input, msg.held);
       return;
     }
     case 'chat': {

@@ -1,5 +1,7 @@
 import {
+  applyCreditSteps,
   BUY_REFUSAL_TEXT,
+  canWalk,
   CHAT_HISTORY_SIZE,
   createGame,
   DEFAULT_MAP_ID,
@@ -15,6 +17,7 @@ import {
   mapName,
   MAX_ROOM_PLAYERS,
   MIN_START_PLAYERS,
+  MoveCredit,
   NO_INPUT,
   pickAvatar,
   progressAfterRound,
@@ -66,6 +69,8 @@ export interface Member {
   /** Zuletzt gesendete Eingabe */
   input: Input;
   ackSeq: number;
+  /** Nachrechnen verschluckter Bewegung aus `held` (docs/NETZ.md, Befund 2) */
+  credit: MoveCredit;
   /** Shop-Phase: hat "Bereit" gedrückt */
   ready: boolean;
   /** Figur (Index 0 bis AVATAR_COUNT - 1), im Raum eindeutig; wird frei, wenn das Mitglied entfernt wird */
@@ -299,6 +304,7 @@ export class Room {
       if (back) {
         back.conn = conn;
         back.disconnectedAt = null;
+        back.credit.reset();
         back.ready = false; // wer wieder verbindet, ist nicht bereit
         conn.send({ t: 'joined', room: this.code, you: back.id, token: back.token, build: this.build });
         this.sendChatHistory(conn);
@@ -332,6 +338,7 @@ export class Room {
       expired: false,
       input: { ...NO_INPUT },
       ackSeq: 0,
+      credit: new MoveCredit(this.stepMs),
       ready: false,
       avatar,
     };
@@ -399,6 +406,7 @@ export class Room {
     member.conn = null;
     member.disconnectedAt = this.now();
     member.input = { ...NO_INPUT };
+    member.credit.reset();
     member.ready = false;
     if (this.phase === 'lobby') this.drop(member);
     this.forgetChatIfEmpty();
@@ -419,6 +427,7 @@ export class Room {
     member.disconnectedAt = this.now();
     member.expired = true;
     member.input = { ...NO_INPUT };
+    member.credit.reset();
     member.ready = false;
     if (this.phase !== 'playing') this.drop(member);
     this.forgetChatIfEmpty();
@@ -458,6 +467,7 @@ export class Room {
     for (const m of this.members) {
       m.input = { ...NO_INPUT };
       m.ackSeq = 0;
+      m.credit.reset();
       m.ready = false;
     }
     this.round++;
@@ -662,11 +672,17 @@ export class Room {
     this.broadcastLobby();
   }
 
-  /** Letzte Eingabe merken. */
-  setInput(m: Member, seq: number, input: Input): void {
+  /**
+   * Letzte Eingabe merken. `held` (optional): so lange galt die vorige Eingabe beim Client; damit rechnet der
+   * Raum Bewegung nach, die ein Stau sonst verschluckt hätte (MoveCredit). Ohne gültige seq zählt held nicht.
+   */
+  setInput(m: Member, seq: number, input: Input, held?: number): void {
     if (m.conn === null) return;
-    this.lastActive = this.now();
-    if (Number.isSafeInteger(seq) && seq >= 0) m.ackSeq = Math.max(m.ackSeq, seq);
+    const now = this.now();
+    this.lastActive = now;
+    const validSeq = Number.isSafeInteger(seq) && seq >= 0;
+    if (validSeq) m.ackSeq = Math.max(m.ackSeq, seq);
+    m.credit.onInput(now, seq, validSeq ? held : undefined, m.input, input);
     m.input = { ...input };
   }
 
@@ -678,11 +694,18 @@ export class Room {
     if (this.connected().length > 0) this.lastActive = now;
 
     const inputs: Record<string, Input> = {};
-    for (const m of this.members) inputs[m.id] = m.conn ? m.input : NO_INPUT;
+    for (const m of this.members) {
+      inputs[m.id] = m.conn ? m.input : NO_INPUT;
+      if (!m.conn) continue;
+      // Nachgerechnete Bewegung gehört zu früheren Eingaben: vor dem normalen Schritt
+      const moving = m.input.moveX !== 0 || m.input.moveY !== 0;
+      applyCreditSteps(this.state, m.id, m.credit.tick(now, canWalk(this.state, m.id), moving));
+    }
     step(this.state, inputs, this.stepMs);
 
     for (const m of this.members) {
-      m.conn?.send({ t: 'snap', snap: projectSnapshot(this.state, m.id), ack: m.ackSeq });
+      // ack nur so weit, wie die Bewegung der Eingaben schon gerechnet ist
+      m.conn?.send({ t: 'snap', snap: projectSnapshot(this.state, m.id), ack: m.credit.ackLimit(m.ackSeq) });
     }
     if (this.state.phase === 'ended') this.endRound();
   }

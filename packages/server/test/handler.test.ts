@@ -263,3 +263,25 @@ describe('series messages', () => {
     expect(room.phase).toBe('lobby');
   });
 });
+
+describe('input with held', () => {
+  it('passes a valid held to the room and drops an invalid one', () => {
+    const { env, manager } = setup();
+    const a = fakeConn();
+    const created = manager.create('Anna', a.conn);
+    if (!created.ok) throw new Error('create failed');
+    const { room, member } = created.value;
+    const calls: unknown[][] = [];
+    room.setInput = (...args: unknown[]) => void calls.push(args);
+    const sock = fakeSock();
+    const session: Session = { ...newSession(1000), room, member };
+    handleMessage(env, session, a.conn, sock, JSON.stringify({ ...INPUT, held: 120 }));
+    handleMessage(env, session, a.conn, sock, JSON.stringify({ ...INPUT, seq: 2, held: 9999 }));
+    handleMessage(env, session, a.conn, sock, JSON.stringify({ ...INPUT, seq: 3 }));
+    expect(calls.map((c) => [c[1], c[3]])).toEqual([
+      [1, 120],
+      [2, undefined],
+      [3, undefined],
+    ]);
+  });
+});
