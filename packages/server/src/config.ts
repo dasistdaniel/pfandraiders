@@ -1,4 +1,4 @@
-import { DEFAULT_MAP_ID, isMapId } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, isMapId, MAP_LIST } from '@pfandraiders/core';
 import type { MapId } from '@pfandraiders/core';
 
 /** Serverwerte (Spielwerte stehen in core/config.ts). */
@@ -73,4 +73,10 @@ export function parseMapId(raw: string | undefined): { value: MapId; invalid: bo
   const text = raw?.trim();
   if (!text) return { value: DEFAULT_MAP_ID, invalid: false };
   return isMapId(text) ? { value: text, invalid: false } : { value: DEFAULT_MAP_ID, invalid: true };
+}
+
+/** Warnung für eine unbekannte MAP_ID mit der Liste der bekannten Kennungen (eingebaute und eigene Karten). */
+export function mapIdWarning(raw: string | undefined): string {
+  const known = MAP_LIST.map((m) => m.id).join(', ');
+  return `MAP_ID=${raw?.trim() ?? ''} ist ungültig (bekannt: ${known}), Standardwert ${DEFAULT_MAP_ID} wird genutzt.`;
 }

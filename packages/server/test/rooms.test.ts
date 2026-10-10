@@ -121,6 +121,14 @@ describe('RoomManager.create with options', () => {
     expect(r.value.room).toMatchObject({ name: 'Bude', visibility: 'private', locked: true });
     expect(r.value.member.name).toBe('Anna');
   });
+
+  it('opens new rooms on the map of the manager options (MAP_ID)', () => {
+    const manager = new RoomManager({ mapId: 'retro' });
+    const r = manager.create('Anna', conn);
+    if (!r.ok) throw new Error('create failed');
+    expect(r.value.room.selectedMapId()).toBe('retro');
+    expect(r.value.room.info()).toMatchObject({ mapName: 'Retro' });
+  });
 });
 
 describe('RoomManager.listRooms', () => {
