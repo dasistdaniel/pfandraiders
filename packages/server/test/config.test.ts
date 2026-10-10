@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP_ID, MAP_LIST } from '@pfandraiders/core';
-import { mapIdWarning, parseGraceMs, parseMapId, parseRoundMs, SERVER_CONFIG } from '../src/config';
+import { mapIdWarning, parseGraceMs, parseMapId, parseRoundMs, parseWsCompression, SERVER_CONFIG } from '../src/config';
 
 describe('parseGraceMs', () => {
   const fb = SERVER_CONFIG.graceMs;
@@ -38,6 +38,20 @@ describe('parseRoundMs', () => {
   });
   it('flags invalid values', () => {
     for (const raw of ['999', 'abc', '-5', 'Infinity']) expect(parseRoundMs(raw)).toEqual({ value: undefined, invalid: true });
+  });
+});
+
+describe('parseWsCompression', () => {
+  it('is on for missing, empty and blank values without a warning', () => {
+    for (const raw of [undefined, '', '  ']) expect(parseWsCompression(raw)).toEqual({ value: true, invalid: false });
+  });
+  it('accepts on and off regardless of case and spaces', () => {
+    expect(parseWsCompression('on')).toEqual({ value: true, invalid: false });
+    expect(parseWsCompression(' OFF ')).toEqual({ value: false, invalid: false });
+    expect(parseWsCompression('Off')).toEqual({ value: false, invalid: false });
+  });
+  it('flags anything else and stays on', () => {
+    for (const raw of ['0', 'false', 'no', 'aus', 'yes']) expect(parseWsCompression(raw)).toEqual({ value: true, invalid: true });
   });
 });
 
