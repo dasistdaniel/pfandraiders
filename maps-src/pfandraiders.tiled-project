@@ -1,0 +1,29 @@
+{
+    "automappingRulesFile": "",
+    "commands": [
+    ],
+    "compatibilityVersion": 1100,
+    "extensionsPath": "extensions",
+    "folders": [
+        ".",
+        "../packages/core/src/maps/custom"
+    ],
+    "properties": [
+    ],
+    "propertyTypes": [
+        {
+            "id": 1,
+            "name": "SpotType",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "bus_stop",
+                "bench",
+                "bush",
+                "bin",
+                "park"
+            ],
+            "valuesAsFlags": false
+        }
+    ]
+}

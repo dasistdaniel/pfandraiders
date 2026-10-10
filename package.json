@@ -10,7 +10,8 @@
     "build:server": "npm run build -w @pfandraiders/server",
     "build": "npm run build -w @pfandraiders/client",
     "logo": "tsx scripts/generate-logo.mjs",
-    "maps": "tsx packages/core/scripts/generateCustomMaps.ts"
+    "maps": "tsx packages/core/scripts/generateCustomMaps.ts",
+    "maps:vorlage": "tsx packages/core/scripts/generateTemplate.ts"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
