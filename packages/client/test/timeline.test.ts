@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_WINDOW_MS, OFFSET_SLEW, RATE_MIN_SPAN_MS, RESYNC_MS, ServerTimeline } from '../src/timeline';
+import { LATE_WINDOW_MS, MIN_WINDOW_MS, OFFSET_SLEW, RATE_MIN_SPAN_MS, RESYNC_MS, ServerTimeline } from '../src/timeline';
 
 /** Ruhige Leitung: Tick k kommt bei start + k * ms an (mit optionaler Verspätung je Tick). */
 function feed(tl: ServerTimeline, ticks: number, ms = 50, late: (k: number) => number = () => 0, start = 1000): number {
@@ -48,9 +48,23 @@ describe('ServerTimeline', () => {
     // Die Ticks bleiben je 50 ms auseinander, an ihrer alten Stelle
     expect(tl.timeOf(41) - tl.timeOf(40)).toBeCloseTo(50, 6);
     expect(tl.timeOf(47)).toBeCloseTo(1000 + 47 * 50, 6);
-    // Die Verspätung zeigt den Stau: der älteste gehaltene Tick 350 ms, der neueste 0
-    expect(late[0]).toBeCloseTo(350, 6);
-    expect(late[late.length - 1]).toBeCloseTo(0, 6);
+    // Länger als LATE_WINDOW_MS: die Verspätung sieht den Stau nicht mehr (dafür zählt die offene Lücke, siehe
+    // DelayController), sie wird aber auch nicht negativ
+    expect(Math.min(...late)).toBeGreaterThanOrEqual(-1e-6);
+  });
+
+  it('measures a short stall as lateness of the held ticks', () => {
+    const tl = new ServerTimeline();
+    feed(tl, 40);
+    // 250 ms Stau (kürzer als LATE_WINDOW_MS): Ticks 40..44 kommen bei 3200 an
+    const late: number[] = [];
+    for (let k = 40; k <= 44; k++) {
+      tl.advance(3200);
+      late.push(tl.noteSnapshot(k, 3200));
+    }
+    expect(LATE_WINDOW_MS).toBeGreaterThan(250);
+    expect(late[0]).toBeCloseTo(200, 6);
+    expect(late[4]).toBeCloseTo(0, 6);
   });
 
   it('follows the minimum, not the mean: late snapshots do not move it', () => {
@@ -92,6 +106,22 @@ describe('ServerTimeline', () => {
     expect(Math.max(...late.slice(settledAt + 1).map(Math.abs))).toBeLessThan(3);
     tl.reset();
     expect(tl.settled).toBe(false);
+  });
+
+  it('keeps the lateness small when the server tick wanders (Windows: 53 to 61 ms, single 65 ms steps)', () => {
+    const tl = new ServerTimeline();
+    const late: number[] = [];
+    let t = 1000;
+    for (let k = 0; k < 600; k++) {
+      // alle 3 s wechselt der mittlere Takt; jeder fünfte Takt dauert 15 ms länger (Timer-Raster)
+      const slow = Math.floor((k * 57) / 3000) % 2 === 1;
+      t += (slow ? 58 : 50) + (k % 5 === 0 ? 15 : 0) - 3;
+      tl.advance(t);
+      late.push(tl.noteSnapshot(k, t));
+    }
+    const settled = late.slice(60);
+    expect(Math.max(...settled)).toBeLessThan(40);
+    expect(settled.reduce((a, b) => a + Math.max(0, b), 0) / settled.length).toBeLessThan(15);
   });
 
   it('estimates the tick despite jitter', () => {

@@ -23,16 +23,19 @@ describe('DelayController', () => {
     expect(Math.min(...d)).toBe(BASE_DELAY_MS);
   });
 
-  it('grows quickly after a stall, but never faster than GROW_PER_MS', () => {
+  it('grows quickly with stalled ticks, but never faster than GROW_PER_MS', () => {
     const c = new DelayController();
     run(c, 2000, () => 0);
-    // Stau: 400 ms nichts, dann acht Snapshots auf einmal (Verspätung 350 .. 0)
-    for (let k = 7; k >= 0; k--) c.observe(k * 50);
-    const before = c.delayMs;
-    c.step(100);
-    expect(c.delayMs - before).toBeLessThanOrEqual(GROW_PER_MS * 100 + 1e-9);
-    c.step(400);
-    expect(c.delayMs).toBeGreaterThanOrEqual(200);
+    // Stau von 250 ms: fünf Snapshots auf einmal (Verspätung 200 .. 0), mehrmals
+    for (let r = 0; r < 3; r++) {
+      for (let k = 4; k >= 0; k--) c.observe(k * 50);
+      for (let t = 0; t < 1000; t += 10) {
+        const before = c.delayMs;
+        c.step(10);
+        expect(c.delayMs - before).toBeLessThanOrEqual(GROW_PER_MS * 10 + 1e-9);
+      }
+    }
+    expect(c.delayMs).toBeGreaterThan(130);
     expect(c.delayMs).toBeLessThanOrEqual(MAX_DELAY_MS);
   });
 

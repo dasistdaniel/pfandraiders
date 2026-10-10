@@ -19,11 +19,20 @@ import { SERVER_STEP_MS } from './prediction';
  */
 
 /** Fenster für das Minimum der Ankünfte (ms Client-Zeit) */
-export const MIN_WINDOW_MS = 1500;
+export const MIN_WINDOW_MS = 1000;
+/**
+ * Fenster für die Verspätung (ms): gemessen gegen das Minimum der letzten LATE_WINDOW_MS, nicht gegen die
+ * geglättete Zeitachse. So zählen ein schwankender Server-Takt (Windows: 53 bis 61 ms je Tick) und Fehler der
+ * Takt-Schätzung kaum als Jitter. Kürzere Staus zeigen sich als Verspätung der gehaltenen Ticks; längere sieht
+ * der DelayController über die offene Lücke.
+ */
+export const LATE_WINDOW_MS = 300;
 /** So lange werden Ankünfte für die Schätzung des Server-Takts gemerkt (ms) */
-export const RATE_WINDOW_MS = 8000;
+export const RATE_WINDOW_MS = 3000;
 /** Erst ab so viel Zeitspanne im Fenster wird der Takt geschätzt (ms) */
-export const RATE_MIN_SPAN_MS = 1000;
+export const RATE_MIN_SPAN_MS = 1200;
+/** Stücke des Fensters, aus denen je der schnellste Snapshot in die Takt-Schätzung eingeht (ms) */
+export const RATE_BUCKET_MS = 400;
 /** Gewicht einer neuen Takt-Schätzung je Snapshot */
 export const RATE_GAIN = 0.2;
 /** Grenzen der Takt-Schätzung (ms je Tick) */
@@ -88,8 +97,8 @@ export class ServerTimeline {
   }
 
   /**
-   * Snapshot mit `tick` ist zur Client-Zeit `at` angekommen. Gibt seine Verspätung gegenüber der Zeitachse zurück
-   * (ms; bei schneller Leitung um 0, im Stau groß).
+   * Snapshot mit `tick` ist zur Client-Zeit `at` angekommen. Gibt seine Verspätung zurück (ms; bei schneller
+   * Leitung um 0, im Stau groß), gemessen gegen die Ankünfte der letzten LATE_WINDOW_MS.
    */
   noteSnapshot(tick: number, at: number): number {
     if (!Number.isFinite(tick) || !Number.isFinite(at)) return 0;
@@ -114,10 +123,10 @@ export class ServerTimeline {
     while (drop < this.samples.length - 1 && this.samples[drop].at < newest - RATE_WINDOW_MS) drop++;
     if (drop > 0) this.samples.splice(0, drop);
     const first = this.estimateRate();
-    this.target = this.envelope(newest);
+    this.target = this.envelope(newest, MIN_WINDOW_MS);
     // Mit der ersten Takt-Schätzung direkt auf die Hülle: die alte Zuordnung (50 ms je Tick) war geraten
     if (first || Math.abs(this.target - this.base) > RESYNC_MS) this.base = this.target;
-    return at - this.timeOf(tick);
+    return at - (this.envelope(newest, LATE_WINDOW_MS) + (tick - this.baseTick) * this.msPerTick);
   }
 
   /** Ein Frame zur Client-Zeit `now`: die Zeitachse rückt langsam an die Hülle heran. */
@@ -135,20 +144,21 @@ export class ServerTimeline {
     this.base += Math.max(-step, Math.min(step, diff));
   }
 
-  /** Minimum von (Ankunft - Tick-Zeit) der letzten MIN_WINDOW_MS, bezogen auf `baseTick`. */
-  private envelope(newest: number): number {
+  /** Minimum von (Ankunft - Tick-Zeit) der letzten `windowMs`, bezogen auf `baseTick`. */
+  private envelope(newest: number, windowMs: number): number {
     let min = Number.POSITIVE_INFINITY;
     for (const s of this.samples) {
-      if (s.at < newest - MIN_WINDOW_MS) continue;
+      if (s.at < newest - windowMs) continue;
       min = Math.min(min, s.at - (s.tick - this.baseTick) * this.msPerTick);
     }
     return min;
   }
 
   /**
-   * Takt aus der unteren Hülle: in der älteren und der neueren Hälfte des Fensters je den Snapshot mit der
-   * kleinsten Verspätung suchen; die Steigung zwischen beiden ist die Dauer eines Ticks. Staus und Jitter
-   * verspäten Snapshots nur, die schnellsten bleiben brauchbar. Gibt true bei der ersten Schätzung zurück.
+   * Takt aus der unteren Hülle: das Fenster in Stücke von RATE_BUCKET_MS teilen, je Stück den Snapshot mit der
+   * kleinsten Verspätung nehmen und durch diese Punkte eine Gerade legen (kleinste Quadrate); ihre Steigung ist
+   * die Dauer eines Ticks. Staus und Jitter verspäten Snapshots nur, die schnellsten bleiben brauchbar. Ändert sich
+   * der Takt, ziehen die neuen Stücke die Gerade mit. Gibt true bei der ersten Schätzung zurück.
    */
   private estimateRate(): boolean {
     const s = this.samples;
@@ -156,25 +166,31 @@ export class ServerTimeline {
     const first = s[0].at;
     const span = s[s.length - 1].at - first;
     if (span < RATE_MIN_SPAN_MS) return false;
-    const mid = first + span / 2;
-    let a: Sample | null = null;
-    let b: Sample | null = null;
-    let av = Number.POSITIVE_INFINITY;
-    let bv = Number.POSITIVE_INFINITY;
+    // Das jüngste Stück ist noch nicht fertig (ein Stau-Schwall käme dort nur halb an) und zählt nicht mit
+    const open = Math.floor(span / RATE_BUCKET_MS);
+    const best = new Map<number, { x: Sample; v: number }>();
     for (const x of s) {
+      const bucket = Math.floor((x.at - first) / RATE_BUCKET_MS);
+      if (bucket >= open) continue;
       const v = x.at - (x.tick - this.baseTick) * this.msPerTick;
-      if (x.at < mid) {
-        if (v < av) {
-          av = v;
-          a = x;
-        }
-      } else if (v < bv) {
-        bv = v;
-        b = x;
-      }
+      const cur = best.get(bucket);
+      if (!cur || v < cur.v) best.set(bucket, { x, v });
     }
-    if (!a || !b || b.tick - a.tick < 10) return false;
-    const raw = Math.max(RATE_MIN, Math.min(RATE_MAX, (b.at - a.at) / (b.tick - a.tick)));
+    const pts = [...best.values()].map((b) => b.x);
+    if (pts.length < 3 || pts[pts.length - 1].tick - pts[0].tick < 10) return false;
+    // Gerade at = c + Steigung · tick (Ticks relativ zum Bezugspunkt, damit die Zahlen klein bleiben)
+    const n = pts.length;
+    const mx = pts.reduce((a, p) => a + (p.tick - this.baseTick), 0) / n;
+    const my = pts.reduce((a, p) => a + p.at, 0) / n;
+    let sxy = 0;
+    let sxx = 0;
+    for (const p of pts) {
+      const dx = p.tick - this.baseTick - mx;
+      sxy += dx * (p.at - my);
+      sxx += dx * dx;
+    }
+    if (!(sxx > 0)) return false;
+    const raw = Math.max(RATE_MIN, Math.min(RATE_MAX, sxy / sxx));
     if (!this.rateKnown) {
       this.rateKnown = true;
       this.msPerTick = raw;
