@@ -18,6 +18,7 @@ services:
       ROUND_MS: ${ROUND_MS:-}
       GRACE_MS: ${GRACE_MS:-}
       MAP_ID: ${MAP_ID:-}
+      WS_COMPRESSION: ${WS_COMPRESSION:-}
     networks:
       - proxy-net
 networks:
