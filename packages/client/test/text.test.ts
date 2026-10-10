@@ -3,7 +3,8 @@ import type { GameState } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import type { KeyLabels } from '../src/sources';
 import { formatMoney } from '../src/format';
-import { alertText, hintLines, playerName, resultFooter, resultHeader, resultLines, resultRows, seizeText, statusLines } from '../src/text';
+import { alertText, hintLines, playerName, resultFooter, resultHeader, resultLines, resultNameWidth, resultRows, resultRowText, seizeText, statusLines } from '../src/text';
+import type { ResultRow } from '../src/text';
 
 /** Spiel ohne Countdown: Hinweise erscheinen erst, wenn die Runde läuft (Countdown-Test unten). */
 function createGame(...args: Parameters<typeof coreCreateGame>): GameState {
@@ -27,12 +28,24 @@ describe('playerName', () => {
 });
 
 describe('statusLines', () => {
-  it('shows time and money, health and an item line; the bottles are icons now', () => {
+  it('shows time, money and round earnings, health and an item line; the bottles are icons now', () => {
     const s = twoGame();
     s.players.p1.money = 150;
+    s.players.p1.earnedRound = 228;
     s.players.p1.bottles = { plastic: 2, glass: 1, crate: 0 };
     const lines = statusLines(s, s.players.p1);
-    expect(lines).toEqual(['Zeit 5:00   Geld 1,50 €', 'Leben 100/100', '']);
+    expect(lines).toEqual(['Zeit 5:00   Geld 1,50 €   Runde +2,28 €', 'Leben 100/100', '']);
+  });
+
+  it('keeps the first line short enough for the smallest split-screen view even in the worst case', () => {
+    const s = twoGame();
+    s.timeLeftMs = 600000;
+    s.players.p1.money = 12345;
+    s.players.p1.earnedRound = 4560;
+    const first = statusLines(s, s.players.p1)[0];
+    expect(first).toBe('Zeit 10:00   Geld 123,45 €   Runde +45,60 €');
+    // 478 px Ansicht, Umbruch bei 462 px; Monospace 16 px ist höchstens ~9,7 px breit, Name P1..P4 rechts
+    expect(first.length).toBeLessThanOrEqual(43);
   });
 
 });
@@ -260,7 +273,14 @@ function moneyGame(amounts: number[]): GameState {
 describe('resultRows', () => {
   it('handles a single player', () => {
     const rows = resultRows(moneyGame([300]), 'p1');
-    expect(rows).toEqual([{ place: 1, id: 'p1', name: 'P1', round: 300, total: 600, isWinner: true, isViewer: true }]);
+    expect(rows).toEqual([{ place: 1, id: 'p1', name: 'P1', money: 0, round: 300, total: 600, isWinner: true, isViewer: true }]);
+  });
+
+  it('carries the money (wallet) next to the earnings', () => {
+    const s = moneyGame([228]);
+    s.players.p1.money = 312;
+    s.players.p1.earnedTotal = 762;
+    expect(resultRows(s, 'p1')[0]).toMatchObject({ money: 312, round: 228, total: 762 });
   });
 
   it('orders two players by round earnings', () => {
@@ -398,7 +418,62 @@ describe('inventory and fight hints', () => {
 });
 
 describe('series ranking texts', () => {
-  it('has a header with round and total earnings', () => {
-    expect(resultHeader()).toBe('Platz  Name              Runde     Gesamt');
+  const row = (over: Partial<ResultRow> = {}): ResultRow => ({
+    place: 1, id: 'p1', name: 'P1', money: 312, round: 228, total: 762, isWinner: true, isViewer: true, ...over,
+  });
+
+  it('has two header lines: earnings grouped under "Verdienst", money in its own column', () => {
+    expect(resultHeader(4)).toEqual([
+      `${' '.repeat(31)}Verdienst`,
+      'Platz  Name        Geld     Runde    Gesamt',
+    ]);
+  });
+
+  it('formats a row with money, round and total earnings right below their headers', () => {
+    const text = resultRowText(row(), 4);
+    expect(text).toBe('★>1.   P1        3,12 €    2,28 €    7,62 €');
+    const header = resultHeader(4)[1];
+    expect(text.length).toBe(header.length);
+    // Spaltenenden stimmen überein (rechtsbündig)
+    expect(header.indexOf('Geld') + 'Geld'.length).toBe(text.indexOf('3,12 €') + '3,12 €'.length);
+    expect(header.indexOf('Runde') + 'Runde'.length).toBe(text.indexOf('2,28 €') + '2,28 €'.length);
+    expect(header.length).toBe(text.indexOf('7,62 €') + '7,62 €'.length);
+  });
+
+  it('centres "Verdienst" over the round and total columns', () => {
+    const [group, header] = resultHeader(10);
+    const start = header.indexOf('Runde');
+    const mid = (start + header.length) / 2;
+    const groupMid = group.indexOf('Verdienst') + 'Verdienst'.length / 2;
+    expect(Math.abs(groupMid - mid)).toBeLessThanOrEqual(1);
+  });
+
+  it('keeps columns aligned for large amounts and other places', () => {
+    const big = resultRowText(row({ place: 8, isWinner: false, isViewer: false, money: 12345, round: 9999, total: 123456 }), 4);
+    expect(big).toBe('  8.   P1      123,45 €   99,99 € 1234,56 €');
+    expect(big.length).toBe(resultHeader(4)[1].length);
+  });
+
+  it('truncates names to the column and pads short ones', () => {
+    expect(resultRowText(row({ name: 'ABCDEFGHIJKLMNOP' }), 6)).toMatch(/^★>1\. {3}ABCDEF {2} /);
+    expect(resultRowText(row({ name: 'Al' }), 6).length).toBe(resultHeader(6)[1].length);
+  });
+
+  it('sizes the name column by the longest name, at least "Name", within the available characters', () => {
+    expect(resultNameWidth([row({ name: 'P1' }), row({ name: 'P2' })], 60)).toBe(4);
+    expect(resultNameWidth([row({ name: 'Annabelle' })], 60)).toBe(9);
+    expect(resultNameWidth([row({ name: 'ABCDEFGHIJKLMNOP' })], 60)).toBe(16);
+    // nur 47 Zeichen Platz: Name auf 8 Zeichen gekürzt
+    expect(resultNameWidth([row({ name: 'ABCDEFGHIJKLMNOP' })], 47)).toBe(8);
+    expect(resultHeader(8)[1].length).toBe(47);
+    // nie unter "Name"
+    expect(resultNameWidth([row({ name: 'ABCDEFGHIJKLMNOP' })], 10)).toBe(4);
+  });
+
+  it('fits four local players (P1..P4) into the smallest split-screen panel', () => {
+    // 4er-Splitscreen: Ansicht 478 px, Feld 462 px, innen 438 px; Monospace 16 px höchstens ~9,7 px je Zeichen
+    const chars = Math.floor(438 / 9.7);
+    const width = resultNameWidth([row({ name: 'P1' })], chars);
+    expect(resultHeader(width)[1].length).toBeLessThanOrEqual(chars);
   });
 });
