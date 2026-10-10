@@ -91,6 +91,26 @@ Was man sieht: Bei steam springt die eigene Figur im Takt der Staus. Im Browser 
 4. **Snapshots sind groß:** etwa 6,3 KB JSON je Snapshot (Proxy-Zusammenfassung: 594 KiB in 94 Frames je 5 s), also rund 120 KiB/s ≈ 1 Mbit/s pro Client, unkomprimiert (`ws` ohne `perMessageDeflate`). Läuft nebenher ein Download, stehen die Snapshots in derselben vollen Warteschlange, und genau dann entstehen die Staus aus den Messungen. Vorschläge:
    - `perMessageDeflate` am Server einschalten; JSON mit vielen gleichen Schlüsseln schrumpft stark.
    - Später: unveränderte Teile (Spots, Spawn) seltener schicken oder als Delta.
+   - **Umgesetzt** (`feature/ws-kompression`): permessage-deflate ist am Server an (`WS_DEFLATE` in `server.ts`: Stufe 1, Kontextübernahme mit 32-KB-Fenster, erst ab 256 Bytes), abschaltbar mit `WS_COMPRESSION=off`. Das Nachrichtenformat ist unverändert; ein Client, der die Erweiterung nicht anbietet, bekommt weiter unkomprimierte Frames.
+   - **Messung:** 8 Clients in einem Raum, alle laufen (Richtung wechselt jede Sekunde zufällig), Server in eigenem Prozess (Quellcode mit `tsx`, Windows 11), je 15–20 s, 1–4 Läufe je Einstellung. Bytes = TCP-Bytes beim Client (`bytesRead`, mit Rahmen-Köpfen), CPU = `process.cpuUsage()` des ganzen Server-Prozesses (zlib rechnet in Hintergrund-Threads, das zählt mit). Ein Snapshot hat bei 8 Spielern etwa 9,6 KB Text (bei 2 Spielern etwa 6,1 KB).
+
+     | Einstellung | Bytes je Snapshot auf der Leitung | Anteil | pro Client | Server-CPU (8 Clients) |
+     |---|---|---|---|---|
+     | aus | 9 600–9 700 | 100 % | 1,26 Mbit/s | 118–175 ms/s |
+     | **Stufe 1, Kontextübernahme (gewählt)** | 420–440 | 4,5 % | 58 kbit/s | 183–247 ms/s |
+     | Stufe 3, Kontextübernahme | 370–390 | 4 % | 51 kbit/s | 167–230 ms/s |
+     | Stufe 6, Kontextübernahme | 196–208 | 2 % | 27 kbit/s | 215–248 ms/s |
+     | Stufe 1, Fenster 16 KB | 600 | 6 % | 81 kbit/s | 184–224 ms/s |
+     | Stufe 1, Fenster 8 KB | 1 210–1 250 | 13 % | 164 kbit/s | 214–219 ms/s |
+     | Stufe 1/3/6 ohne Kontextübernahme | 1 280–1 420 | 13–15 % | 174–192 kbit/s | 202–261 ms/s |
+     | Stufe 1/3, Fenster 4 KB, memLevel 7 | 1 380–1 430 | 15 % | 190 kbit/s | 189–263 ms/s |
+
+     Was man sieht: Der große Gewinn kommt aus der Kontextübernahme. Ein Snapshot unterscheidet sich vom vorigen nur in wenigen Zahlen, und solange der vorige ganz im Fenster liegt (32 KB; 16 KB reicht knapp), packt zlib fast nur die Änderungen. Ohne Kontextübernahme oder mit kleinerem Fenster als ein Snapshot bleiben 13–15 %. Die Stufe spielt daneben kaum eine Rolle; Stufe 6 halbiert die ohnehin kleinen Bytes noch einmal, kostet aber eher mehr CPU. Die CPU-Werte streuen unter Windows stark (aus: 118–175 ms/s); grob kostet die Kompression 40–100 ms CPU pro Sekunde für 8 Clients, also etwa 0,3–0,6 ms je Snapshot.
+   - **Speicher:** je Verbindung ein zlib-Kontext zum Packen (Fenster 32 KB, memLevel 8: etwa 256 KB) und erst, wenn der Client selbst packt, einer zum Entpacken (etwa 40 KB). Gemessen stieg der RSS des Servers mit 8 Clients von 67–69 auf 77–81 MB (darin auch die zlib-Threads). Bei der Obergrenze von 400 Verbindungen wären es rechnerisch um 120 MB; für die erwarteten Raumgrößen ist das vertretbar. Kleinere Fenster sparen Speicher, verlieren aber den Gewinn (Tabelle). `concurrencyLimit` bleibt beim Standard 10 (gleichzeitige zlib-Aufträge im Prozess).
+   - **Hinter dem Nginx Proxy Manager:** nichts zu ändern. permessage-deflate handeln Browser und Server direkt aus; Nginx reicht `Sec-WebSocket-Extensions` beim Upgrade durch und danach die Frames unverändert. Prüfen in den Entwicklerwerkzeugen des Browsers (Netzwerk → WebSocket-Verbindung → Antwort-Header `Sec-WebSocket-Extensions: permessage-deflate`). Lokal geprüft im eingebauten Browser (Chromium): `extensions` = `permessage-deflate`, Snapshots kommen an und lassen sich lesen.
+   - **Nebenwirkung:** `bufferedAmount` zählt bei `ws` auch Nachrichten, die noch auf die Kompression warten, und zwar mit ihrer Textgröße. Die Grenze `maxBufferedBytes` (256 KB) greift deshalb eher etwas früher als vorher; geändert wurde sie nicht.
+   - **Der Lag-Proxy** (`scripts/lag-proxy.mjs`) beendet die WebSocket-Verbindung auf beiden Seiten. Seine KiB-Zusammenfassung zählt deshalb Text, nicht die Bytes auf der Leitung; zum Server hin handelt er die Kompression selbst aus, zum Client hin nicht.
+   - **Offen:** Bandbreite weiter senken über Deltas oder seltener geschickte unveränderte Teile (Spots, Spawn, Zonen); das Nachrichtenformat ist dafür bisher nicht geändert.
 5. **Sonstiges:**
    - Die Pufferlänge steht wegen `MAX_BUFFER` immer auf 32; das Overlay zeigt deshalb zusätzlich „vor“.
    - Unter Windows kommen lokal nur 16–19 Snapshots pro Sekunde an statt 20. Das liegt am Timer-Raster von `setInterval` am Server, nicht am Netz.

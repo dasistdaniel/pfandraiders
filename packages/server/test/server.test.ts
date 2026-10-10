@@ -1,6 +1,6 @@
 import { MAX_MESSAGE_BYTES, ROOM_CODE_LENGTH } from '@pfandraiders/core';
 import type { ClientMessage, ServerMessage } from '@pfandraiders/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { startServer } from '../src/server';
 import type { RunningServer } from '../src/server';
@@ -25,9 +25,12 @@ async function waitFor(pred: () => boolean, timeoutMs = 3000): Promise<void> {
 
 class Bot {
   messages: ServerMessage[] = [];
+  /** Empfangene Nachrichten als Text (nach dem Entpacken) */
+  raw: string[] = [];
   private waiters: Array<() => void> = [];
   constructor(readonly ws: WebSocket) {
     ws.on('message', (data) => {
+      this.raw.push(String(data));
       this.messages.push(JSON.parse(String(data)) as ServerMessage);
       for (const w of this.waiters.splice(0)) w();
     });
@@ -57,8 +60,8 @@ class Bot {
   }
 }
 
-async function connect(port: number, headers: Record<string, string> = {}): Promise<Bot> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers });
+async function connect(port: number, headers: Record<string, string> = {}, perMessageDeflate = true): Promise<Bot> {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers, perMessageDeflate });
   sockets.push(ws);
   const bot = new Bot(ws);
   await new Promise<void>((resolve, reject) => {
@@ -238,11 +241,12 @@ describe('websocket server', () => {
 
   it('ignores input from a stale socket after a token rejoin and closes it', async () => {
     const { a, code, joinedA } = await twoBotsInStartedRoom();
+    // vor der Rückkehr lauschen: mit Kompression kann das Schliessen schon fertig sein, bevor start ankommt
+    const oldClosed = new Promise<number>((resolve) => a.ws.once('close', (c) => resolve(c)));
     const a2 = await connect(server.port);
     a2.send({ t: 'join', room: code, name: 'Anna', token: joinedA.token });
     await a2.until('joined');
     await a2.until('start');
-    const oldClosed = new Promise<number>((resolve) => a.ws.once('close', (c) => resolve(c)));
     const room = server.manager.get(code)!;
     const x0 = room.state!.players.p1.x;
     // Der Server hat die alte Verbindung zum Schliessen markiert, sie kann aber noch Nachrichten schicken
@@ -380,5 +384,62 @@ describe('websocket server', () => {
     const b = await connect(server.port);
     b.send({ t: 'create', name: 'Bob' });
     await b.until('joined');
+  });
+});
+
+describe('websocket compression (permessage-deflate)', () => {
+  /** Bytes, die über TCP angekommen sind (inklusive Rahmen-Köpfe). */
+  const wireBytes = (bot: Bot) => (bot.ws as unknown as { _socket: { bytesRead: number } })._socket.bytesRead;
+  const textBytes = (bot: Bot) => bot.raw.reduce((n, s) => n + Buffer.byteLength(s), 0);
+
+  async function startedRoom(port: number, deflateA: boolean, deflateB: boolean) {
+    const a = await connect(port, {}, deflateA);
+    const b = await connect(port, {}, deflateB);
+    a.send({ t: 'create', name: 'Anna' });
+    const joined = await a.until('joined');
+    b.send({ t: 'join', room: joined.room, name: 'Bob' });
+    await b.until('joined');
+    a.send({ t: 'start' });
+    await a.until('start');
+    await b.until('start');
+    a.send({ t: 'input', seq: 1, input: { moveX: 1, moveY: 0, action: false, steal: false, attack: false } });
+    await a.until('snap', (m) => m.snap.tick >= 10);
+    await b.until('snap', (m) => m.snap.tick >= 10);
+    return { a, b };
+  }
+
+  it('negotiates the extension by default and delivers the snapshots exactly as sent', async () => {
+    const sent = new Set<string>();
+    const orig = WebSocket.prototype.send;
+    const spy = vi.spyOn(WebSocket.prototype, 'send').mockImplementation(function (this: WebSocket, data: unknown, ...rest: unknown[]) {
+      if (typeof data === 'string' && data.startsWith('{"t":"snap"')) sent.add(data);
+      return (orig as (...args: unknown[]) => void).call(this, data, ...rest);
+    });
+    try {
+      server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
+      const { a, b } = await startedRoom(server.port, true, false);
+      expect(a.ws.extensions).toContain('permessage-deflate');
+      // Ein Client ohne Angebot (ältere Proxys, Werkzeuge) bekommt dieselben Nachrichten unkomprimiert
+      expect(b.ws.extensions).toBe('');
+      for (const bot of [a, b]) {
+        const snaps = bot.raw.filter((r) => r.startsWith('{"t":"snap"'));
+        expect(snaps.length).toBeGreaterThanOrEqual(5);
+        for (const r of snaps) expect(sent.has(r)).toBe(true);
+      }
+      // komprimiert: deutlich weniger Bytes auf der Leitung als Text; unkomprimiert: mindestens so viele
+      expect(wireBytes(a)).toBeLessThan(textBytes(a) * 0.5);
+      expect(wireBytes(b)).toBeGreaterThanOrEqual(textBytes(b));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('sends uncompressed frames when compression is off', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, compression: false });
+    const { a } = await startedRoom(server.port, true, true);
+    expect(a.ws.extensions).toBe('');
+    const snap = await a.until('snap');
+    expect(snap.snap.players.p1).toBeDefined();
+    expect(wireBytes(a)).toBeGreaterThanOrEqual(textBytes(a));
   });
 });

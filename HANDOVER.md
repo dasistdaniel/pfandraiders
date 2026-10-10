@@ -38,7 +38,7 @@ Teststand: core 445, client 731, server 196 Tests, alle grün; Typecheck und bei
 
 - **Client:** `.github/workflows/pages.yml` baut bei jedem Push auf `master` und veröffentlicht auf GitHub Pages. Server-Adresse kommt aus `vars.SERVER_URL`, die Build-Nummer aus `GITHUB_RUN_NUMBER`.
 - **Server:** auf dem VPS `deploy/update.sh` ausführen (`git pull --ff-only`, setzt `GIT_SHA` und `BUILD_NUMBER`, dann `docker compose up -d --build`). Der Reverse-Proxy ist ein Nginx Proxy Manager (externes Docker-Netz `proxy-net`), `deploy/.env` enthält `ALLOWED_ORIGINS`.
-- Optionale Umgebungsvariablen: `ROUND_MS` (feste Rundenlänge, überschreibt die Wahl des Hosts, nur für Tests), `GRACE_MS` (Rückkehrfrist, Standard 120 s), `MAP_ID` (`city` oder `retro`). Details im README ("Online spielen und Server").
+- Optionale Umgebungsvariablen: `ROUND_MS` (feste Rundenlänge, überschreibt die Wahl des Hosts, nur für Tests), `GRACE_MS` (Rückkehrfrist, Standard 120 s), `MAP_ID` (`city` oder `retro`), `WS_COMPRESSION` (`on`/`off`, Standard `on`: permessage-deflate). Details im README ("Online spielen und Server").
 - **Protokolländerungen** erfordern Client **und** Server neu. Die Lobby zeigt eine Versionswarnung, wenn Build-Nummern abweichen.
 
 ## 5. Spielablauf (aktueller Stand)

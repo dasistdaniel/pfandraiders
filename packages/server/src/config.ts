@@ -68,6 +68,17 @@ export function parseRoundMs(raw: string | undefined): { value: number | undefin
   return Number.isFinite(n) && n >= MIN_ROUND_MS ? { value: n, invalid: false } : { value: undefined, invalid: true };
 }
 
+/**
+ * Wertet WS_COMPRESSION aus (permessage-deflate für die WebSocket-Nachrichten). Fehlend oder leer: an, ohne
+ * Warnung; `on`/`off` (Groß-/Kleinschreibung und Leerzeichen egal); alles andere: an, invalid = true.
+ */
+export function parseWsCompression(raw: string | undefined): { value: boolean; invalid: boolean } {
+  const text = raw?.trim().toLowerCase();
+  if (!text || text === 'on') return { value: true, invalid: false };
+  if (text === 'off') return { value: false, invalid: false };
+  return { value: true, invalid: true };
+}
+
 /** Wertet MAP_ID aus. Fehlend oder leer: Standardkarte ohne Warnung; unbekannt: Standardkarte, invalid = true. */
 export function parseMapId(raw: string | undefined): { value: MapId; invalid: boolean } {
   const text = raw?.trim();

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Holt den neuesten Stand und baut den Server-Container neu.
 # Buildnummer = Anzahl der Commits, Hash = Kurz-Hash des Commits (Anzeige in der Online-Lobby).
-# ALLOWED_ORIGINS (und optional ROUND_MS, GRACE_MS, MAP_ID) in deploy/.env oder in der Umgebung setzen.
+# ALLOWED_ORIGINS (und optional ROUND_MS, GRACE_MS, MAP_ID, WS_COMPRESSION) in deploy/.env oder in der Umgebung setzen.
 set -euo pipefail
 
 # Alles in einer Funktion: git pull darf dieses Skript ändern, während bash es noch liest.
