@@ -545,7 +545,7 @@ export class OnlineConnection implements GameConnection {
     // gelaufen). Damit rechnet der Server Bewegung nach, die ein Stau sonst verschluckt (docs/NETZ.md, Befund 2).
     if (this.lastSent !== null) msg.held = Math.min(MAX_HELD_MS, Math.max(0, Math.round(this.sinceSent)));
     this.sendMsg(msg);
-    this.predictor.noteSent(this.seq, this.clock);
+    this.predictor.noteSent(this.seq, this.clock, input);
     this.stats?.noteSent(this.seq);
     this.lastSent = input;
     this.sinceSent = 0;
