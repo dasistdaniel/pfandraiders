@@ -92,4 +92,13 @@ describe('map choice in the room', () => {
     b.room.start('p1');
     expect(b.conns[0].last('start').map.cols).toBe(CITY_MAP.cols);
   });
+
+  it('starts the example map uebung when the host picks it', () => {
+    const { room, conns } = twoInLobby();
+    expect(room.setMap('p1', 'uebung').ok).toBe(true);
+    expect(conns[1].last('lobby')).toMatchObject({ mapId: 'uebung', mapName: 'Übung' });
+    room.start('p1');
+    expect(conns[1].last('start')).toMatchObject({ mapId: 'uebung' });
+    expect(conns[1].last('start').map.cols).toBe(40);
+  });
 });

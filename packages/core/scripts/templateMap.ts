@@ -253,8 +253,11 @@ const json = (m: TemplateJson): string => JSON.stringify(m, null, 1) + '\n';
 /** Alle erzeugten Dateien mit Pfad relativ zum Wurzelordner (Reihenfolge = Schreibreihenfolge). */
 export function templateFiles(): { path: string; content: string }[] {
   const vorlage = templateTiledMap({ name: 'Vorlage', tilesetSource: 'kenney-city.tsx' });
+  // Beispielkarte: dieselbe Vorlage; der Kachelsatz-Pfad zeigt von custom/ zurück nach maps-src/
+  const uebung = templateTiledMap({ name: 'Übung', tilesetSource: '../../../../../maps-src/kenney-city.tsx' });
   return [
     { path: 'maps-src/vorlage.tiled.json', content: json(vorlage) },
     { path: 'maps-src/vorlage.tmx', content: toTmx(vorlage) },
+    { path: 'packages/core/src/maps/custom/uebung.tiled.json', content: json(uebung) },
   ];
 }
