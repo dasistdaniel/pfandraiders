@@ -178,3 +178,13 @@ Grenzen (nicht für großen öffentlichen Betrieb gedacht):
 - Das Limit pro IP-Adresse gilt nur pro Server-Prozess und hängt am Header `X-Forwarded-For`.
 - Eine leere Lobby bleibt offen, solange ein Client verbunden ist.
 - Das Raumcode-Raten ist nur pro Verbindung begrenzt, nicht global.
+
+## Netz testen
+
+Um Ruckeln bei schlechter Leitung nachzustellen und zu messen (Details, Bedeutung der Werte und Befunde in [docs/NETZ.md](docs/NETZ.md)):
+
+    npm run build:server && node packages/server/dist/server.cjs     # Server auf ws://localhost:8080
+    node scripts/lag-proxy.mjs --preset steam                        # Proxy auf ws://localhost:8081
+    npm run dev                                                      # Client
+
+Dann den Client mit `?server=ws://localhost:8081&debug=net` öffnen (zwei Tabs, der Server braucht zwei Spieler). `?debug=net` zeigt oben rechts das Netz-Overlay (RTT, Jitter, Snapshots pro Sekunde, größte Lücke, Puffer, Frame-Zeit, Korrekturen und harte Sprünge der eigenen Figur), F3 schaltet es in der Runde ein und aus. Der Proxy kennt `--preset wifi|congested|steam` oder einzelne Werte, zum Beispiel `--delay 80 --jitter 60 --burst-every 3000 --burst-ms 500 --loss-stall 0`, und mit `--stall-dir down` staut er nur die Richtung Server→Client. Alle 5 s schreibt er eine Zusammenfassung.
