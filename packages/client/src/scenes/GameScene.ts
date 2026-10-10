@@ -36,6 +36,7 @@ import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLoc
 import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 import { chooseLocalMapId } from '../mapChoice';
+import { formatNetStats, isNetDebug } from '../netStats';
 
 /** Nach Rundenende so lange Neustart sperren, damit Dauerdrücken der Aktionstaste die Ergebnisse nicht überspringt. */
 const RESTART_DELAY_MS = 1500;
@@ -122,6 +123,12 @@ export class GameScene extends Phaser.Scene {
   private menuKey!: Phaser.Input.Keyboard.Key;
   private padBPrev: Record<number, boolean> = {};
   private muteKey!: Phaser.Input.Keyboard.Key;
+  /** F3: Netz-Diagnose ein/aus (nur online) */
+  private netKey!: Phaser.Input.Keyboard.Key;
+  /** Netz-Diagnose oben rechts in der eigenen UI-Kamera; null = lokal */
+  private netText: Phaser.GameObjects.Text | null = null;
+  /** Zeit seit dem letzten Neuschreiben des Overlays (ms) */
+  private netTextMs = 0;
   /** Zustand des vorigen Frames für Sound-Ereignisse, null = noch keiner (erster Frame ohne Sounds) */
   private prevSoundState: GameState | null = null;
   private ownSoundIds: string[] | 'all' = 'all';
@@ -176,6 +183,8 @@ export class GameScene extends Phaser.Scene {
     this.endedForMs = 0;
     this.plan = null;
     this.overlay = null;
+    this.netText = null;
+    this.netTextMs = 0;
     this.joinedWatch = null;
     this.connectingMs = 0;
     this.joinedSeen = false;
@@ -364,6 +373,19 @@ export class GameScene extends Phaser.Scene {
       this.uiCams.forEach((ui, j) => {
         if (j !== 0) ui.ignore(this.overlay!);
       });
+
+      // Netz-Diagnose (?debug=net oder F3): klein oben rechts unter Name und Lebensbalken, nur in der eigenen UI-Kamera
+      if (isNetDebug(window.location.search)) online.enableNetStats(true);
+      this.netText = this.add
+        .text(v.w - 8, 48, '', { fontFamily: 'monospace', fontSize: '11px', color: '#b9f6ca', backgroundColor: '#000000b0', padding: { x: 4, y: 3 } })
+        .setOrigin(1, 0)
+        .setScrollFactor(0)
+        .setDepth(30)
+        .setVisible(false);
+      cams.forEach((cam) => cam.ignore(this.netText!));
+      this.uiCams.forEach((ui, j) => {
+        if (j !== 0) ui.ignore(this.netText!);
+      });
     }
 
     this.createPauseMenu([...cams, ...this.uiCams]);
@@ -372,6 +394,7 @@ export class GameScene extends Phaser.Scene {
     this.enterKey = this.input.keyboard!.addKey('ENTER');
     this.menuKey = this.input.keyboard!.addKey('ESC');
     this.muteKey = this.input.keyboard!.addKey('M');
+    this.netKey = this.input.keyboard!.addKey('F3');
     const kb = this.input.keyboard!;
     this.navKeys = {
       up: kb.addKey('UP'),
@@ -425,6 +448,7 @@ export class GameScene extends Phaser.Scene {
       this.conn.setInput(slot.id, paused ? { ...NO_INPUT } : buildInput(keys));
     });
     if (!frozen) this.conn.update(delta);
+    this.updateNetOverlay(delta);
     const viewDelta = frozen ? 0 : delta;
 
     const state = this.conn.getState();
@@ -550,6 +574,24 @@ export class GameScene extends Phaser.Scene {
    * ganze Fläche, zuletzt angelegt und damit obenauf) zeigt nur die Menüobjekte; alle anderen Kameras
    * ignorieren sie. Später erzeugte Weltobjekte (NPCs) ignoriert sie in renderNpcs.
    */
+  /** F3 schaltet die Netz-Diagnose; der Text wird höchstens viermal pro Sekunde neu gesetzt. */
+  private updateNetOverlay(delta: number): void {
+    const online = this.online;
+    const text = this.netText;
+    if (!online || !text) return;
+    if (Phaser.Input.Keyboard.JustDown(this.netKey)) {
+      online.enableNetStats(online.netStats === null);
+      this.netTextMs = Infinity;
+    }
+    const stats = online.netStats;
+    text.setVisible(stats !== null);
+    if (!stats) return;
+    this.netTextMs += delta;
+    if (this.netTextMs < 250) return;
+    this.netTextMs = 0;
+    text.setText(formatNetStats(stats.view(), online.netInfo()).join('\n'));
+  }
+
   private createPauseMenu(otherCams: Phaser.Cameras.Scene2D.Camera[]): void {
     const others = [...this.children.list];
     const text = (size: number, color: string): Phaser.GameObjects.Text =>
