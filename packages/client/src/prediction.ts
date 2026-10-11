@@ -141,7 +141,8 @@ export class Predictor {
 
   private pos: Pos | null = null;
   private history: HistoryEntry[] = [];
-  private sends = new Map<number, number>();
+  /** Sendezeit je seq und, falls bekannt, die Laufrichtung der Eingabe ("x,y") */
+  private sends = new Map<number, { t: number; dir: string | null }>();
   private lastAck = -1;
   /** Zeitpunkt im Verlauf, dem der letzte Snapshot mit neuem ack entsprach, wann er ankam und sein Takt (tick). */
   private fresh: { at: number; recvAt: number; tick: number | null } | null = null;
@@ -180,10 +181,11 @@ export class Predictor {
     this.offset = { x: 0, y: 0 };
   }
 
-  /** Merkt, wann die Eingabe `seq` gesendet wurde. */
-  noteSent(seq: number, nowMs: number): void {
+  /** Merkt, wann die Eingabe `seq` gesendet wurde, und (optional) welche Laufrichtung sie hatte. */
+  noteSent(seq: number, nowMs: number, input?: Input): void {
     if (!Number.isSafeInteger(seq) || !finite(nowMs)) return;
-    this.sends.set(seq, nowMs);
+    const inp = input === undefined ? null : sanitizeInput(input);
+    this.sends.set(seq, { t: nowMs, dir: inp ? `${inp.moveX},${inp.moveY}` : null });
     while (this.sends.size > MAX_SENDS) {
       const oldest = this.sends.keys().next().value as number;
       this.sends.delete(oldest);
@@ -260,6 +262,17 @@ export class Predictor {
     return null;
   }
 
+  /** Stand die Eingabe `ack`: Sendezeit der ersten späteren Eingabe mit Laufrichtung; sonst oder unbekannt null. */
+  private nextDirChange(ack: number): number | null {
+    const dir = this.sends.get(ack)?.dir ?? null;
+    if (dir !== '0,0') return null;
+    let best: number | null = null;
+    for (const [seq, s] of this.sends) {
+      if (seq > ack && s.dir !== null && s.dir !== dir && (best === null || s.t < best)) best = s.t;
+    }
+    return best;
+  }
+
   /**
    * Snapshot angekommen: `server` ist die eigene Position darin, `ack` die höchste Eingabenummer, die der Server
    * bis dahin hatte, `moving` ob die aktuelle Eingabe läuft, `tick` der Server-Takt des Snapshots (optional).
@@ -275,7 +288,7 @@ export class Predictor {
 
     // Welche Zeit im eigenen Verlauf entspricht dieser Snapshot?
     let at: number | null = null;
-    const sentAt = Number.isSafeInteger(ack) ? this.sends.get(ack) : undefined;
+    const sentAt = Number.isSafeInteger(ack) ? this.sends.get(ack)?.t : undefined;
     const t = finite(tick) ? tick : null;
     if (sentAt !== undefined && ack > this.lastAck) {
       at = sentAt + ACK_OFFSET_MS;
@@ -289,6 +302,12 @@ export class Predictor {
         t !== null && fresh.tick !== null && t > fresh.tick
           ? fresh.at + (t - fresh.tick) * SERVER_STEP_MS
           : fresh.at + (nowMs - fresh.recvAt);
+      // Stand die bestätigte Eingabe und ist der Client danach losgelaufen, kennt der Server das noch nicht (Stau
+      // Client→Server): Dann höchstens bis zum Senden des Losgehens vergleichen, sonst zöge der stehende Server die
+      // schon laufende Figur zurück (docs/NETZ.md, Befund 2). Lief die bestätigte Eingabe, bleibt es beim alten
+      // Vergleich: Der Server läuft im Stau wirklich weiter, und die Vorhersage folgt dem besser nach und nach.
+      const change = this.nextDirChange(ack);
+      if (change !== null) at = Math.min(at, change + ACK_OFFSET_MS);
     }
 
     const ref = at === null ? null : closestOnHistory(this.history, at - ACK_WINDOW_MS, at + ACK_WINDOW_MS, s);

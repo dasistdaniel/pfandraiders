@@ -5,6 +5,7 @@ import {
   DEFAULT_ROUND_MS,
   isRoundMs,
   MAX_BUILD_FIELD_LENGTH,
+  MAX_HELD_MS,
   MAX_NAME_LENGTH,
   parseClientMessage,
   parseServerBuild,
@@ -68,6 +69,22 @@ describe('parseClientMessage', () => {
       seq: 7,
       input: { moveX: 0, moveY: 0, action: true, steal: false, attack: false, spray: false },
     });
+  });
+
+  it('keeps a valid held duration on input (integer ms, 0 to MAX_HELD_MS)', () => {
+    const input = { moveX: 1, moveY: 0, action: false, steal: false, attack: false, spray: false };
+    for (const held of [0, 1, 100, MAX_HELD_MS]) {
+      expect(parseClientMessage({ t: 'input', seq: 3, input, held })).toEqual({ t: 'input', seq: 3, input, held });
+    }
+  });
+
+  it('treats a missing or invalid held as absent (like an old client)', () => {
+    const input = { moveX: 1, moveY: 0, action: false, steal: false, attack: false, spray: false };
+    for (const held of [undefined, -1, 1.5, MAX_HELD_MS + 1, NaN, Infinity, '100', null, true, {}]) {
+      const msg = parseClientMessage({ t: 'input', seq: 3, input, held });
+      expect(msg).toEqual({ t: 'input', seq: 3, input });
+      expect(msg && 'held' in msg).toBe(false);
+    }
   });
 
   it('rejects input with a bad sequence number', () => {

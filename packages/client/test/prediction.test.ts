@@ -1,4 +1,4 @@
-import { CITY_MAP, CONFIG, createGame, NO_INPUT, parseMap, step, walk } from '@pfandraiders/core';
+import { applyCreditSteps, canWalk, CITY_MAP, CONFIG, createGame, MAX_HELD_MS, MoveCredit, NO_INPUT, parseMap, step, walk } from '@pfandraiders/core';
 import type { Input, MapData, Player } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
 import {
@@ -79,6 +79,10 @@ interface SimOptions {
    * at + ms auf einmal an.
    */
   stall?: { at: number; ms: number };
+  /** Richtung des Staus: beide (Standard), nur Client→Server (up) oder nur Server→Client (down). */
+  stallDir?: 'both' | 'up' | 'down';
+  /** Server rechnet gehaltene Eingaben nach (MoveCredit, wie room.ts); false = Server wie vor Befund 2. */
+  credit?: boolean;
 }
 
 interface Frame {
@@ -98,7 +102,8 @@ interface Frame {
 
 /**
  * Simulierter Server wie in room.ts: fester 50-ms-Takt, jeder Takt nimmt die zuletzt angekommene Eingabe,
- * `ack` = höchste angekommene seq, step() zuerst, dann Snapshot. Der Client sendet wie OnlineConnection
+ * `ack` = höchste angekommene seq, step() zuerst, dann Snapshot. Mit `credit` (Standard) rechnet er wie room.ts
+ * Bewegung aus `held` nach (MoveCredit vor step(), ack nicht über eine offene Gutschrift hinaus). Der Client sendet wie OnlineConnection
  * (bei Änderung sofort, sonst alle 100 ms) und läuft mit festen Frames. Nachrichten kommen in Reihenfolge an
  * (WebSocket = TCP): Ankunft = max(vorige Ankunft, Senden + Latenz + Jitter).
  */
@@ -109,6 +114,10 @@ function simulate(o: SimOptions) {
   const rand = rng(o.seed ?? 1);
   const jit = () => rand() * jitter;
   const stall = (at: number) => (o.stall && at >= o.stall.at && at < o.stall.at + o.stall.ms ? o.stall.at + o.stall.ms : at);
+  const stallUp = (at: number) => (o.stallDir === 'down' ? at : stall(at));
+  const stallDown = (at: number) => (o.stallDir === 'up' ? at : stall(at));
+  const useCredit = o.credit ?? true;
+  const credit = new MoveCredit(50);
   const state = createGame(1, map, ['p1'], { countdownMs: 0 });
   const me = state.players.p1;
   const pred = new Predictor();
@@ -118,7 +127,7 @@ function simulate(o: SimOptions) {
 
   let serverInput: Input = { ...NO_INPUT };
   let ackSeq = 0;
-  const inputQ: { at: number; seq: number; input: Input }[] = [];
+  const inputQ: { at: number; seq: number; input: Input; held?: number }[] = [];
   const snapQ: { at: number; player: Player; ack: number; tick: number }[] = [];
   let lastInAt = 0;
   let lastSnapAt = 0;
@@ -145,16 +154,22 @@ function simulate(o: SimOptions) {
       while (inputQ.length > 0 && inputQ[0].at <= nextTick) {
         const m = inputQ.shift()!;
         ackSeq = Math.max(ackSeq, m.seq);
+        if (useCredit) credit.onInput(m.at, m.seq, m.held, serverInput, m.input);
         serverInput = m.input;
       }
       if (o.serverEvent && !eventDone && nextTick >= o.serverEvent.at) {
         eventDone = true;
         o.serverEvent.apply(me);
       }
+      if (useCredit) {
+        const moving = serverInput.moveX !== 0 || serverInput.moveY !== 0;
+        applyCreditSteps(state, 'p1', credit.tick(nextTick, canWalk(state, 'p1'), moving));
+      }
       step(state, { p1: serverInput }, 50);
       ticks.push({ t: nextTick, x: me.x, y: me.y });
-      lastSnapAt = Math.max(lastSnapAt, stall(nextTick + o.latency + jit()));
-      snapQ.push({ at: lastSnapAt, player: JSON.parse(JSON.stringify(me)) as Player, ack: ackSeq, tick: state.tick });
+      lastSnapAt = Math.max(lastSnapAt, stallDown(nextTick + o.latency + jit()));
+      const ack = useCredit ? credit.ackLimit(ackSeq) : ackSeq;
+      snapQ.push({ at: lastSnapAt, player: JSON.parse(JSON.stringify(me)) as Player, ack, tick: state.tick });
       nextTick += 50;
     }
     // Snapshots kommen zwischen den Frames an (Uhr steht noch auf dem letzten Frame)
@@ -174,9 +189,11 @@ function simulate(o: SimOptions) {
     const changed = lastSent === null || lastSent.moveX !== mx || lastSent.moveY !== my;
     if (changed || sinceSent >= 100) {
       seq++;
-      lastInAt = Math.max(lastInAt, stall(clock + o.latency + jit()));
-      inputQ.push({ at: lastInAt, seq, input: pending });
-      pred.noteSent(seq, clock);
+      lastInAt = Math.max(lastInAt, stallUp(clock + o.latency + jit()));
+      // held wie OnlineConnection: Spieluhr seit der vorigen input-Nachricht
+      const held = lastSent === null ? undefined : Math.min(MAX_HELD_MS, Math.round(sinceSent));
+      inputQ.push({ at: lastInAt, seq, input: pending, held });
+      pred.noteSent(seq, clock, pending);
       lastSent = pending;
       sinceSent = 0;
     }
@@ -438,8 +455,9 @@ describe('Predictor against a simulated server', () => {
       [120, 40],
     ]) {
       it(`places held snapshots by their tick after a ${stall.ms} ms stall (${name}, ${latency}+${jitter} ms)`, () => {
-        for (const phase of [3, 21, 38]) {
-          const sim = simulate({ latency, jitter, script, phase, seed: latency + phase, stall });
+        // credit: false = alter Server (neuer Client vor dem Server-Update)
+        for (const [phase, credit] of [3, 21, 38].flatMap((p) => [[p, true], [p, false]] as [number, boolean][])) {
+          const sim = simulate({ latency, jitter, script, phase, seed: latency + phase, stall, credit });
           for (let i = 1; i < sim.frames.length; i++) {
             const a = sim.frames[i - 1];
             const b = sim.frames[i];
@@ -454,7 +472,7 @@ describe('Predictor against a simulated server', () => {
           expect(held.filter((s) => s.repeated).length).toBeGreaterThanOrEqual(3);
           if (process.env.PRED_DETAIL) {
             const big = after.filter((s) => s.err > 4).map((s) => `${Math.round(s.t)}:${s.err.toFixed(1)}${s.repeated ? 'R' : 'N'}`);
-            console.log(name, latency, jitter, phase, big.join(' '));
+            console.log(name, latency, jitter, phase, credit, big.join(' '));
           }
           // klein: im Rahmen von Takt-Raster und Jitter wie (b) oben (alt: bis über SNAP_DIST)
           const err = Math.max(...after.map((s) => s.err));
@@ -463,6 +481,88 @@ describe('Predictor against a simulated server', () => {
       });
     }
   }
+});
+
+describe('Server with held inputs (docs/NETZ.md, Befund 2)', () => {
+  it('turns inside an up-stall without hard snap or jerks (the overshoot itself stays)', () => {
+    // Zickzack, der Richtungswechsel liegt im Stau: Der Server läuft bis zum Ende des Staus in die alte Richtung
+    // (das lässt sich nicht zurücknehmen); nachgerechnet wird nur, was das Budget hergibt. Gilt auch gegen einen
+    // alten Server (credit: false), also für einen neuen Client vor dem Server-Update.
+    const zig: Script = [
+      [1000, 1, 0],
+      [1000, -1, 0],
+      [1000, 1, 0],
+      [1000, -1, 0],
+    ];
+    for (const credit of [true, false]) {
+      for (const at of [700, 800, 900, 1000, 1100, 1200, 1700, 1850]) {
+        const seed = at % 7;
+        const sim = simulate({ latency: 60, jitter: 80, script: zig, seed, stall: { at, ms: 400 }, stallDir: 'up', credit });
+        expect(sim.pred.snaps).toBe(0);
+        for (let i = 1; i < sim.frames.length; i++) {
+          const p = sim.frames[i - 1];
+          const q = sim.frames[i];
+          expect(Math.hypot(q.x - p.x, q.y - p.y)).toBeLessThanOrEqual((SPEED * q.dt * 1.01) / 1000 + 6);
+        }
+      }
+    }
+  });
+
+  const GO_STOP: Script = [
+    [1000, 0, 0],
+    [300, 1, 0],
+  ];
+  const STALL = { at: 950, ms: 500 };
+  // [60, 160]: Jitter-Spanne wie das steam-Preset des Lag-Proxys (±80 ms)
+  const LINES: [number, number][] = [
+    [60, 0],
+    [60, 30],
+    [120, 40],
+    [60, 160],
+  ];
+
+  for (const [latency, jitter] of LINES) {
+    it(`walks a "go" held 300 ms that arrived together with its "stop" (${latency}+${jitter} ms)`, () => {
+      for (const phase of [3, 21, 38]) {
+        const sim = simulate({ latency, jitter, script: GO_STOP, phase, seed: latency + phase, stall: STALL, stallDir: 'up' });
+        const last = sim.frames[sim.frames.length - 1];
+        // der Server ist am Ende dort, wo der Client lokal gelaufen ist (vorher: 34,5 px daneben)
+        expect(Math.abs(sim.finalServer.x - last.lx)).toBeLessThan(1.5);
+        expect(sim.finalServer.y).toBe(last.ly);
+        // kein harter Sprung, keine sichtbaren Rucke, die Anzeige landet genau auf der Serverposition
+        for (let i = 1; i < sim.frames.length; i++) {
+          const a = sim.frames[i - 1];
+          const b = sim.frames[i];
+          expect(b.snaps).toBe(0);
+          expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThanOrEqual((SPEED * b.dt * 1.01) / 1000 + 3);
+        }
+        expect(Math.abs(last.x - sim.finalServer.x)).toBeLessThanOrEqual(DEADBAND_STILL);
+        // Abweichung der Snapshots klein, auch während der Server nachrechnet (das ack wartet darauf)
+        const err = Math.max(...sim.snapErrors.filter((s) => s.t >= STALL.at).map((s) => s.err));
+        if (process.env.PRED_DETAIL) console.log('go/stop', latency, jitter, phase, err.toFixed(1), (sim.finalServer.x - last.lx).toFixed(2));
+        expect(err).toBeLessThan(10 + (2 * SPEED * jitter) / 1000);
+      }
+    });
+  }
+
+  it('the old server (no credit) loses the whole "go" in the same situation', () => {
+    const sim = simulate({ latency: 60, script: GO_STOP, stall: STALL, stallDir: 'up', credit: false });
+    const last = sim.frames[sim.frames.length - 1];
+    expect(last.lx - sim.finalServer.x).toBeGreaterThan(30);
+  });
+
+  it('changes nothing without a stall: the same server positions as without credit', () => {
+    for (const [latency, jitter] of LINES) {
+      for (const script of [SCRIPTS.straight, SCRIPTS.tapTap]) {
+        const on = simulate({ latency, jitter, script, seed: latency });
+        const off = simulate({ latency, jitter, script, seed: latency, credit: false });
+        const diff = Math.max(...on.ticks.map((t, i) => Math.hypot(t.x - off.ticks[i].x, t.y - off.ticks[i].y)));
+        if (process.env.PRED_DETAIL) console.log('no stall', latency, jitter, diff.toFixed(2));
+        // ohne Jitter gar nicht, mit Jitter höchstens in der Größe einzelner Takte
+        expect(diff).toBeLessThanOrEqual(jitter === 0 ? 0 : (SPEED * 2 * 50) / 1000);
+      }
+    }
+  });
 });
 
 describe('Predictor unit behaviour', () => {
@@ -585,6 +685,25 @@ describe('Predictor unit behaviour', () => {
     for (let k = 1; k <= 4; k++) pr.onSnapshot({ x: xAt(125 + k * 50), y: me.y }, 1, true, 900, 10 + k);
     expect(pr.corrections).toBe(0);
     expect(pr.lastError).toBeLessThan(0.5);
+  });
+
+  it('does not pull back a figure that started walking while the server, still without that input, keeps it standing', () => {
+    // Stau Client→Server: "los" (seq 2) hängt, die Snapshots kommen weiter mit ack 1 (Stand)
+    const pr = new Predictor();
+    const me = player();
+    pr.reset({ x: me.x, y: me.y });
+    for (let t = 10; t <= 200; t += 10) pr.step(10, NO_INPUT, me, MAP, t);
+    pr.noteSent(1, 100, NO_INPUT);
+    pr.onSnapshot({ x: me.x, y: me.y }, 1, false, 200, 10);
+    const right = { ...NO_INPUT, moveX: 1 } as Input;
+    pr.noteSent(2, 210, right);
+    for (let t = 210; t <= 600; t += 10) {
+      pr.step(10, right, me, MAP, t);
+      // je 50 ms ein Snapshot mit unverändertem ack: der Server steht noch
+      if (t % 50 === 0) pr.onSnapshot({ x: me.x, y: me.y }, 1, true, t, 10 + (t - 200) / 50);
+    }
+    expect(pr.corrections).toBe(0);
+    expect(pr.position!.x).toBeCloseTo(me.x + (SPEED * 400) / 1000, 6);
   });
 
   it('falls back to the arrival time without a usable tick', () => {

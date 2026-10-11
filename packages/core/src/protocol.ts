@@ -42,6 +42,15 @@ export const MAX_PASSWORD_LENGTH = 16;
 export const ROUNDS_CHOICES: readonly number[] = [1, 3, 5, 0];
 /** Standard-Rundenzahl */
 export const DEFAULT_ROUNDS = 3;
+/**
+ * Größte Haltedauer (ms) im Feld `held` der input-Nachricht. Der Client kappt längere Dauern auf diesen Wert,
+ * der Server rechnet nie mehr als so viel Bewegung nach (docs/NETZ.md, Befund 2).
+ */
+export const MAX_HELD_MS = 500;
+/** Gültige Haltedauer: ganze Zahl von 0 bis MAX_HELD_MS. */
+export function isHeldMs(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_HELD_MS;
+}
 /** Höchstens so viele Einträge hat die Raumliste */
 export const MAX_LISTED_ROOMS = 50;
 
@@ -132,7 +141,12 @@ export type ClientMessage =
   | { t: 'join'; room: string; name: string; token?: string; password?: string; avatar?: number }
   /** Serie starten (nur Host, nur Lobby); roundMs optional, der Server prüft ihn gegen ROUND_MS_CHOICES */
   | { t: 'start'; roundMs?: number }
-  | { t: 'input'; seq: number; input: Input }
+  /**
+   * Eingabe Nr. seq. `held` (optional, ganze ms 0 bis MAX_HELD_MS): so lange galt die vorige Eingabe (seq - 1) beim
+   * Client, gemessen mit der Client-Uhr vom Senden der vorigen bis zum Senden dieser Nachricht (auch bei
+   * unveränderten Wiederholungen). Fehlt bei älteren Clients; dann rechnet der Server nichts nach.
+   */
+  | { t: 'input'; seq: number; input: Input; held?: number }
   /** Spieler verlässt den Raum absichtlich: sein Platz wird sofort frei, keine Rückkehr mit dem Token. */
   | { t: 'leave' }
   /** Chatnachricht, nur in der Lobby */
@@ -321,7 +335,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'input': {
       const seq = m.seq;
       if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) return null;
-      return { t: 'input', seq, input: sanitizeInput(m.input) };
+      const msg: Extract<ClientMessage, { t: 'input' }> = { t: 'input', seq, input: sanitizeInput(m.input) };
+      // Ungültige Haltedauer zählt wie keine (alter Client): keine Nachrechnung, die Eingabe gilt trotzdem
+      if (isHeldMs(m.held)) msg.held = m.held;
+      return msg;
     }
     case 'leave':
       return { t: 'leave' };

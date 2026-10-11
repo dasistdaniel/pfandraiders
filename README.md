@@ -128,7 +128,7 @@ Ohne Audiodateien erzeugt das Spiel alle Effekte und die Musik selbst (WebAudio)
 
 ## Online spielen und Server
 
-Der Mehrspieler-Server (`packages/server`) ist ein WebSocket-Server mit Räumen. Die Spiellogik liegt im Paket `core`. Der Server rechnet 20 Schritte pro Sekunde; die eigene Figur bewegt der Client trotzdem sofort mit derselben Laufregel vorher (Vorhersage), Abweichungen zum Server werden sanft korrigiert, große (Respawn, Neustart) sofort übernommen. Fremde Figuren werden mit 100 ms Verzögerung zwischen zwei Server-Ständen gezeigt.
+Der Mehrspieler-Server (`packages/server`) ist ein WebSocket-Server mit Räumen. Die Spiellogik liegt im Paket `core`. Der Server rechnet 20 Schritte pro Sekunde; die eigene Figur bewegt der Client trotzdem sofort mit derselben Laufregel vorher (Vorhersage), Abweichungen zum Server werden sanft korrigiert, große (Respawn, Neustart) sofort übernommen. Fremde Figuren werden mit 100 ms Verzögerung zwischen zwei Server-Ständen gezeigt. Jede Eingabe-Nachricht (`input`) meldet im optionalen Feld `held` (ganze ms, höchstens 500), wie lange die vorige Eingabe galt; kommen nach einem Stau mehrere Eingaben auf einmal an, rechnet der Server die sonst verschluckte Bewegung nach (höchstens Echtzeit + 500 ms Laufzeit, siehe [docs/NETZ.md](docs/NETZ.md), Befund 2). Ältere Clients ohne `held` und ältere Server, die das Feld ignorieren, funktionieren weiter wie bisher.
 
 Lokal starten (zwei Terminals):
 

@@ -1,4 +1,4 @@
-import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, DEFAULT_ROUNDS, RETRO_MAP, createGame, freshProgress, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
+import { CITY_MAP, CONFIG, DEFAULT_MAP_ID, DEFAULT_ROUND_MS, DEFAULT_ROUNDS, MAX_HELD_MS, RETRO_MAP, createGame, freshProgress, NO_INPUT, projectSnapshot, ROOM_COLORS } from '@pfandraiders/core';
 import type { ClientMessage, Player, RoomPhase, ServerMessage } from '@pfandraiders/core';
 import { describe, expect, it, vi } from 'vitest';
 import { OnlineConnection } from '../src/online';
@@ -219,6 +219,37 @@ describe('OnlineConnection input', () => {
     expect(socket.sent.filter((m) => m.t === 'input')).toHaveLength(1);
     conn.update(90); // 100 ms seit dem letzten Senden
     expect(socket.sent.filter((m) => m.t === 'input')).toHaveLength(2);
+  });
+
+  it('tells the server how long the previous input was held (time since the previous input message)', () => {
+    const { socket, conn } = setup();
+    socket.receive(startMessage());
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    conn.update(10); // erste Eingabe der Runde: keine vorige, kein held
+    conn.update(16.4);
+    conn.update(16.4);
+    conn.setInput('p1', NO_INPUT);
+    conn.update(16.4); // Stopp nach 49.2 ms
+    conn.update(60);
+    conn.update(60); // Wiederholung 120 ms nach dem Stopp
+    conn.setInput('p1', { ...NO_INPUT, moveX: -1 });
+    conn.update(250); // Wechsel nach 250 ms (ein Frame zählt höchstens MAX_FRAME_MS)
+    conn.update(250); // Wiederholung
+    const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
+    expect(inputs.map((m) => m.held)).toEqual([undefined, 49, 120, 250, 250]);
+    expect('held' in inputs[0]).toBe(false);
+  });
+
+  it('caps held at MAX_HELD_MS', () => {
+    const { socket, conn } = setup();
+    socket.receive(startMessage());
+    conn.setInput('p1', { ...NO_INPUT, moveX: 1 });
+    conn.update(10);
+    (conn as unknown as { sinceSent: number }).sinceSent = 5000; // z. B. Socket hing, Uhr lief weiter
+    conn.setInput('p1', NO_INPUT);
+    conn.update(10);
+    const inputs = socket.sent.filter((m) => m.t === 'input') as Extract<ClientMessage, { t: 'input' }>[];
+    expect(inputs.at(-1)!.held).toBe(MAX_HELD_MS);
   });
 
   it('does not send inputs before a game has started', () => {

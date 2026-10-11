@@ -19,7 +19,7 @@ import type {
   ShopItemId,
   Snapshot,
 } from '@pfandraiders/core';
-import { NO_INPUT } from '@pfandraiders/core';
+import { MAX_HELD_MS, NO_INPUT } from '@pfandraiders/core';
 import type { SoundId } from './audioIds';
 import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
 import { chatSound, errorSound, rosterSounds } from './eventSounds';
@@ -568,8 +568,12 @@ export class OnlineConnection implements GameConnection {
     const input: Input = { ...this.pendingInput };
     const changed = this.lastSent === null || !sameInput(this.lastSent, input);
     if (!changed && this.sinceSent < HEARTBEAT_MS) return;
-    this.sendMsg({ t: 'input', seq: ++this.seq, input });
-    this.predictor.noteSent(this.seq, this.clock);
+    const msg: Extract<ClientMessage, { t: 'input' }> = { t: 'input', seq: ++this.seq, input };
+    // So lange galt die vorige Eingabe (Spieluhr seit der vorigen input-Nachricht, so weit ist die Vorhersage
+    // gelaufen). Damit rechnet der Server Bewegung nach, die ein Stau sonst verschluckt (docs/NETZ.md, Befund 2).
+    if (this.lastSent !== null) msg.held = Math.min(MAX_HELD_MS, Math.max(0, Math.round(this.sinceSent)));
+    this.sendMsg(msg);
+    this.predictor.noteSent(this.seq, this.clock, input);
     this.stats?.noteSent(this.seq);
     this.lastSent = input;
     this.sinceSent = 0;
