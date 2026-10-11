@@ -69,13 +69,13 @@ Die genaue Regelbeschreibung steht im README. Maßgebliche Entwürfe: `docs/supe
 
 ## 8. Assets und Lizenzen
 
-Kenney "Roguelike Modern City" (CC0), "Tiny Characters Set" von Fleurman (CC0), "Dog Spritesheets" von Jason of GDN (CC0), "Officer Character" von Chasersgaming (CC0). Texte dazu in `assets-src/*/CREDITS.txt` und im README ("Grafik"). Der Cozy-Fae-Pack wurde aus Lizenzgründen **nicht** verwendet. Ton und Musik werden komplett per WebAudio im Browser erzeugt (kein Asset). Das Logo wird aus einem Zellraster generiert (`npm run logo`).
+Kenney "Roguelike Modern City" (CC0), "Tiny Characters Set" von Fleurman (CC0), "Dog Spritesheets" von Jason of GDN (CC0), "Officer Character" von Chasersgaming (CC0). Texte dazu in `assets-src/*/CREDITS.txt` und im README ("Grafik"). Der Cozy-Fae-Pack wurde aus Lizenzgründen **nicht** verwendet. Ton und Musik werden standardmäßig per WebAudio im Browser erzeugt; eigene Audiodateien aus `packages/client/public/sounds` und `music` ersetzen sie (siehe `docs/SOUNDLISTE.md`). Das Logo wird aus einem Zellraster generiert (`npm run logo`).
 
 ## 9. Offene Punkte
 
 Aus `todo.md`:
 - **Hund jagt kürzer** (nur teilweise: ein Hund pro Spieler ist drin, die Jagdzeit von 30 s ist unverändert).
-- **Nervige Musik ändern** (offen: was genau stört, Tempo, Melodie oder Bass?).
+- Die Musik macht ein Bekannter des Nutzers. Sie kommt als Dateien (`music_menu`, `music_game`, `music_ended` in `packages/client/public/music/`, Liste in `docs/SOUNDLISTE.md`); bis dahin spielt die erzeugte Musik. An der erzeugten Musik nichts mehr ändern.
 - **Upgrades überarbeiten** (Werte und Aufbau, am besten nach Testrunden).
 
 Weitere Beobachtungen aus der Arbeit, nicht vom Nutzer beauftragt:
