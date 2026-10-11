@@ -18,3 +18,8 @@ export function roundsLabel(rounds: number): string {
   if (rounds === 0) return 'offen';
   return rounds === 1 ? '1 Runde' : `${rounds} Runden`;
 }
+
+/** Zeile der lokalen Lobby; links/rechts wählt dort die Figur, die Rundenzeit hat eigene Tasten. */
+export function localRoundLine(ms: number): string {
+  return `Rundenzeit: ◄ ${roundMsLabel(ms)} ►  (- / +, Gamepad LB / RB)`;
+}
