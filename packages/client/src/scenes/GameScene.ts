@@ -10,7 +10,7 @@ import { LocalShop } from '../localShop';
 import type { PlayerSlot } from '../devices';
 import { bobOffset, initialPose, npcFrame, stepPose } from '../pose';
 import type { PoseState } from '../pose';
-import { CHAR_ORIGIN_Y, charFrameIndex, characterFor, characterIndex, characterOfAvatar } from '../playerChars';
+import { CHAR_ORIGIN_Y, charFrameIndex, characterIndex, characterOfAvatar } from '../playerChars';
 import { bakeMapLayers, ensurePlayerTextures } from '../textures';
 import { charTexture, dogTexture, mapTexture, objectTexture, playerTexture, policeTexture, spotTexture, tileTexture } from '../textureKeys';
 import { advanceClock, dogAnim, npcLook, policeAnim } from '../npcAnim';
@@ -282,14 +282,16 @@ export class GameScene extends Phaser.Scene {
       this.spotSprites.push(this.add.image(spot.x, spot.y, spotTexture(this.tileset, spot.type, true)));
       this.spotFull.push(true);
     }
-    // Figur je Spieler: online die gewählte Figur aus der Raumliste (sonst nach Position), lokal nach Slot-Index
+    // Figur je Spieler: online aus der Raumliste, lokal aus der Lobby (Slot); fehlt sie, nach Position
     const orderIds = this.online ? this.online.roster.map((r) => r.id) : this.slots.map((s) => s.id);
     const playerIds = Object.keys(state.players);
     for (const p of Object.values(state.players)) {
       const color = this.playerColors.get(p.id) ?? 0xffffff;
       const index = characterIndex(p.id, orderIds, playerIds);
-      const avatar = this.online?.roster.find((r) => r.id === p.id)?.avatar;
-      const sheet = charTexture(this.online ? characterOfAvatar(avatar, index) : characterFor(index));
+      const avatar = this.online
+        ? this.online.roster.find((r) => r.id === p.id)?.avatar
+        : this.slots.find((s) => s.id === p.id)?.avatar;
+      const sheet = charTexture(characterOfAvatar(avatar, index));
       const charKey = this.textures.exists(sheet) ? sheet : null;
       this.charKeys.set(p.id, charKey);
       this.rings.set(

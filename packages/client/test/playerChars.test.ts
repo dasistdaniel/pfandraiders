@@ -11,6 +11,9 @@ import {
   characterFor,
   characterOfAvatar,
   characterIndex,
+  framePosition,
+  PREVIEW_FRAME_MS,
+  previewFrame,
 } from '../src/playerChars';
 
 describe('character list', () => {
@@ -137,5 +140,24 @@ describe('avatars and characters', () => {
     expect(characterOfAvatar(24, 2)).toBe(characterFor(2));
     expect(characterOfAvatar(1.5, 0)).toBe(characterFor(0));
     expect(characterOfAvatar('3', 0)).toBe(characterFor(0));
+  });
+});
+
+describe('walk preview (lobby)', () => {
+  it('cycles the walk-down frames every PREVIEW_FRAME_MS', () => {
+    expect(PREVIEW_FRAME_MS).toBe(150);
+    expect([0, 149, 150, 300, 450, 600].map(previewFrame)).toEqual([0, 0, 4, 0, 8, 0]);
+  });
+
+  it('is safe for NaN and negative times', () => {
+    expect(previewFrame(NaN)).toBe(0);
+    expect(previewFrame(-500)).toBe(0);
+  });
+
+  it('gives the pixel offset of a frame in the 4 x 3 sheet', () => {
+    expect(framePosition(0)).toEqual({ x: 0, y: 0 });
+    expect(framePosition(4)).toEqual({ x: 0, y: CHAR_FRAME_H });
+    expect(framePosition(8)).toEqual({ x: 0, y: 2 * CHAR_FRAME_H });
+    expect(framePosition(7)).toEqual({ x: 3 * CHAR_FRAME_W, y: CHAR_FRAME_H });
   });
 });
