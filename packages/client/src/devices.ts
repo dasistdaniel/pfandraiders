@@ -52,6 +52,8 @@ export interface PlayerSlot {
   id: string;
   color: number;
   device: DeviceRef;
+  /** Gewählte Figur (Index in ALL_CHARACTERS); fehlt sie, gilt die Figur nach Position (characterFor). */
+  avatar?: number;
 }
 
 export const PLAYER_COLORS = [0xef5350, 0xab47bc, 0x26c6da, 0xec407a];
