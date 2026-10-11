@@ -123,7 +123,7 @@ Weitere Regeln:
 | `ui_move` | Auswahl bewegen (Menü, Shop, Raumliste, Avatar-Raster) | Hauptmenü und Einstellungen (nur wenn sich die Auswahl ändert), Esc-Menü im Spiel, Shop, Rundenzeit in der lokalen Lobby, Raumliste und Tabs im Online-Dialog. Im Avatar-Raster wählt jeder Schritt sofort eine Figur, dort klingt `avatar_pick` |
 | `ui_select` | Bestätigen | Menüpunkt bestätigen, Esc-Menü öffnen oder bestätigen, lokale Runde starten, Raum erstellen, beitreten, Spiel starten |
 | `ui_back` | Zurück oder Abbrechen | Esc bzw. B in Menü, Lobby, Shop und Endwertung, Esc-Menü schließen, "Zurück"-Eintrag, "Abbrechen" und "Verlassen" im Online-Dialog |
-| `avatar_pick` | Figur gewählt | Klick oder Pfeiltaste im Figurenraster der Online-Lobby |
+| `avatar_pick` | Figur gewählt | Klick oder Pfeiltaste im Figurenraster der Online-Lobby; links/rechts am eigenen Gerät in der lokalen Lobby |
 
 ## Entscheidungen
 
