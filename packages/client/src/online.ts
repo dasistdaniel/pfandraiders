@@ -25,16 +25,18 @@ import { CLIENT_CHAT_SIZE, parseChatMessage } from './chatLogic';
 import { chatSound, errorSound, rosterSounds } from './eventSounds';
 import { countdownLeft } from './countdown';
 import type { GameConnection } from './connection';
+import { extrapolateSnapshot, extrapolationTicks } from './extrapolate';
 import { interpolateSnapshot } from './interpolate';
 import { NetStats } from './netStats';
 import type { NetExtra } from './netStats';
 import { Predictor } from './prediction';
+import { RemoteBlend } from './remoteBlend';
+import { DelayController } from './renderDelay';
 import { parseRoomList } from './roomList';
 import { parseProgress, parseRanking } from './shopGuard';
 import { isValidSnapshot } from './snapshotGuard';
+import { ServerTimeline } from './timeline';
 
-/** Fremde Figuren werden so viel später gezeigt, damit zwischen zwei Snapshots interpoliert werden kann. */
-export const INTERP_DELAY_MS = 100;
 /** Ungeänderte Eingaben werden trotzdem so oft wiederholt (Lebenszeichen). */
 export const HEARTBEAT_MS = 100;
 const MAX_BUFFER = 32;
@@ -54,6 +56,7 @@ export type SocketFactory = (url: string) => SocketLike;
 export type ConnStatus = 'idle' | 'connecting' | 'open' | 'closed';
 
 interface Buffered {
+  /** Ankunft (Uhr); eingeordnet wird über den Tick (ServerTimeline), das hier ist nur zur Diagnose */
   at: number;
   snap: Snapshot;
 }
@@ -149,6 +152,19 @@ export class OnlineConnection implements GameConnection {
   private rendered: GameState | null = null;
   /** Vorhersage der eigenen Figur (Position sofort aus der eigenen Eingabe, Server korrigiert sanft). */
   private readonly predictor = new Predictor();
+  /**
+   * Fremde Figuren und NPCs (docs/NETZ.md, Befund 3): Snapshots liegen über ihren Tick auf einer Zeitachse des
+   * Servers, gezeigt wird `delay` ms (100..250, nach Jitter) in der Vergangenheit. Liegt die Anzeigezeit hinter
+   * dem neuesten Snapshot, wird höchstens 150 ms fortgeschrieben und danach gehalten; neue Daten danach werden
+   * über `blend` sanft übernommen.
+   */
+  private readonly timeline = new ServerTimeline();
+  private readonly delay = new DelayController();
+  private readonly blend = new RemoteBlend();
+  /** Anzeigezeit in Ticks; läuft nie rückwärts */
+  private renderTick = Number.NEGATIVE_INFINITY;
+  /** Im letzten Frame fortgeschrieben, und zwar ab diesem neuesten Tick */
+  private extrapolatedFrom: number | null = null;
   private warned = false;
   private lastName = '';
   /** Netz-Diagnose (Overlay); null = aus, dann kostet sie nichts */
@@ -402,6 +418,13 @@ export class OnlineConnection implements GameConnection {
         this.roster = msg.players;
         if (Array.isArray(msg.players)) this.soundRoster = [...msg.players];
         this.buffer = [{ at: this.clock, snap: msg.snap }];
+        this.timeline.reset();
+        this.timeline.advance(this.clock);
+        this.timeline.noteSnapshot(msg.snap.tick, this.clock);
+        this.delay.reset();
+        this.blend.reset();
+        this.renderTick = Number.NEGATIVE_INFINITY;
+        this.extrapolatedFrom = null;
         this.rendered = stateFromSnapshot(msg.map, msg.snap);
         this.predictor.reset(msg.snap.players[msg.you] ?? null);
         this.seq = 0;
@@ -418,6 +441,11 @@ export class OnlineConnection implements GameConnection {
         if (this.buffer.length > 0 && msg.snap.tick <= this.buffer[this.buffer.length - 1].snap.tick) break;
         this.buffer.push({ at: this.clock, snap: msg.snap });
         if (this.buffer.length > MAX_BUFFER) this.buffer.splice(0, this.buffer.length - MAX_BUFFER);
+        {
+          const late = this.timeline.noteSnapshot(msg.snap.tick, this.clock);
+          // Erst mit geschätztem Server-Takt ist die Verspätung aussagekräftig
+          if (this.timeline.settled) this.delay.observe(late);
+        }
         {
           const me = msg.snap.players[this.you];
           if (me) this.predictor.onSnapshot({ x: me.x, y: me.y }, msg.ack, this.moving(), this.clock, msg.snap.tick);
@@ -496,7 +524,7 @@ export class OnlineConnection implements GameConnection {
     this.sinceSent += dt;
     this.sendInputIfNeeded();
     try {
-      this.rendered = this.computeRendered();
+      this.rendered = this.computeRendered(dt);
     } catch {
       // Beschädigter Snapshot im Puffer: neuesten verwerfen, letzten guten Zustand behalten.
       this.buffer.pop();
@@ -547,20 +575,41 @@ export class OnlineConnection implements GameConnection {
     this.sinceSent = 0;
   }
 
-  private computeRendered(): GameState | null {
+  /**
+   * Zustand für diesen Frame: fremde Figuren und NPCs zur Anzeigezeit (Uhr − Verzögerung auf der Zeitachse des
+   * Servers), zwischen zwei Snapshots gemischt oder hinter dem neuesten höchstens 150 ms fortgeschrieben. Alle
+   * anderen Felder kommen aus dem neuesten Snapshot, die eigene Position danach aus der Vorhersage.
+   */
+  private computeRendered(dt: number): GameState | null {
     if (!this.map || this.buffer.length === 0) return this.rendered;
     const latest = this.buffer[this.buffer.length - 1];
-    const renderTime = this.clock - INTERP_DELAY_MS;
+    const newest = latest.snap.tick;
+    this.timeline.advance(this.clock);
+    // Offene Lücke: so viel später als erwartet ist der nächste Tick schon (lässt die Verzögerung im Stau wachsen)
+    this.delay.step(dt, this.timeline.settled ? this.clock - this.timeline.timeOf(newest + 1) : 0);
+    this.renderTick = Math.max(this.renderTick, this.timeline.tickAt(this.clock - this.delay.delayMs));
+    const rt = this.renderTick;
     let snap = latest.snap;
-    if (this.buffer.length > 1 && renderTime < latest.at) {
-      let i = this.buffer.length - 1;
-      while (i > 0 && this.buffer[i - 1].at > renderTime) i--;
-      const newer = this.buffer[i];
-      const older = this.buffer[Math.max(0, i - 1)];
-      const span = newer.at - older.at;
-      const alpha = span > 0 ? (renderTime - older.at) / span : 1;
-      snap = interpolateSnapshot(older.snap, newer.snap, alpha, latest.snap, this.you);
+    let extrapolated = false;
+    if (this.buffer.length > 1) {
+      if (rt < newest) {
+        let i = this.buffer.length - 1;
+        while (i > 0 && this.buffer[i - 1].snap.tick > rt) i--;
+        const newer = this.buffer[i].snap;
+        const older = this.buffer[Math.max(0, i - 1)].snap;
+        const span = newer.tick - older.tick;
+        const alpha = span > 0 ? (rt - older.tick) / span : 1;
+        snap = interpolateSnapshot(older, newer, alpha, latest.snap, this.you);
+      } else {
+        const ticks = extrapolationTicks(rt, newest, this.timeline.msPerTick);
+        snap = extrapolateSnapshot(this.buffer[this.buffer.length - 2].snap, latest.snap, ticks, this.you);
+        extrapolated = ticks > 0;
+      }
     }
+    // Eben noch fortgeschrieben (oder gehalten), jetzt neue Daten: Übergang statt Sprung
+    const jump = this.extrapolatedFrom !== null && this.extrapolatedFrom !== newest;
+    snap = this.blend.apply(snap, this.you, dt, jump);
+    this.extrapolatedFrom = extrapolated ? newest : null;
     return stateFromSnapshot(this.map, snap);
   }
 
@@ -585,10 +634,10 @@ export class OnlineConnection implements GameConnection {
 
   /** Puffer und Vorhersage für die Netz-Diagnose (nur lesen). */
   netInfo(): NetExtra {
-    const renderTime = this.clock - INTERP_DELAY_MS;
     return {
       buffered: this.buffer.length,
-      ahead: this.buffer.filter((b) => b.at > renderTime).length,
+      ahead: this.buffer.filter((b) => b.snap.tick > this.renderTick).length,
+      delayMs: this.delay.delayMs,
       offsetPx: this.predictor.offsetSize,
       errorPx: this.predictor.lastError,
     };

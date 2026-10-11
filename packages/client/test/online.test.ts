@@ -263,11 +263,108 @@ describe('OnlineConnection rendering state', () => {
     const { socket, conn } = setup();
     socket.receive(startMessage(0, 40));
     conn.update(100);
-    socket.receive(snapMessage(1, 80)); // kommt bei Uhr 100 an
-    conn.update(50); // Uhr 150, Renderzeit 50: zwischen Start (Uhr 0, x 40) und Snapshot (Uhr 100, x 80)
+    socket.receive(snapMessage(2, 80)); // Tick 2 (100 ms Serverzeit) kommt bei Uhr 100 an
+    conn.update(50); // Uhr 150, Anzeigezeit 50 = Tick 1: zwischen Start (Tick 0, x 40) und Snapshot (Tick 2, x 80)
     expect(conn.getState().players.p2.x).toBeCloseTo(60, 3);
-    conn.update(100); // Uhr 250, Renderzeit 150: hinter dem letzten Snapshot
-    expect(conn.getState().players.p2.x).toBe(80);
+    expect(conn.netInfo().delayMs).toBe(100);
+  });
+
+  /** Fremde Figur läuft 5 px je Tick nach rechts; Snapshots kommen zu den angegebenen Uhrzeiten. */
+  function walk(arrivals: (tick: number) => number, ticks: number, frames: number, frameMs = 16) {
+    const { socket, conn } = setup();
+    socket.receive(startMessage(0, 100));
+    const xs: number[] = [];
+    const delays: number[] = [];
+    let clock = 0;
+    let next = 1;
+    for (let f = 0; f < frames; f++) {
+      clock += frameMs;
+      // alle bis jetzt fälligen Snapshots kommen vor dem Frame an
+      while (next <= ticks && arrivals(next) <= clock) {
+        socket.receive(snapMessage(next, 100 + 5 * next));
+        next++;
+      }
+      conn.update(frameMs);
+      xs.push(conn.getState().players.p2.x);
+      delays.push(conn.netInfo().delayMs);
+    }
+    return { xs, delays, conn };
+  }
+
+  it('on a calm network moves other players exactly as before (100 ms behind, evenly)', () => {
+    const { xs, delays } = walk((k) => k * 50, 200, 500, 10);
+    expect(Math.max(...delays)).toBe(100);
+    // Ankunft wird mit der Uhr des letzten Frames gestempelt (10 ms früher). Wie bisher zeigt Uhr c also
+    // Tick (c - 100 + 10) / 50, x = 100 + 5 * (c - 90) / 50 = 0,1 * c + 91
+    for (let f = 40; f < 500; f++) expect(xs[f]).toBeCloseTo(0.1 * (f + 1) * 10 + 91, 6);
+  });
+
+  it('keeps 100 ms on a calm network with a slower server tick (Windows: about 61 ms), also while starting', () => {
+    const { xs, delays } = walk((k) => k * 61, 300, 1100);
+    expect(Math.max(...delays)).toBe(100);
+    // gleichmäßig: nach dem Einschwingen höchstens 1 px Abweichung vom mittleren Schritt (5 px je 61 ms)
+    const steps = xs.slice(200).map((x, i, a) => (i === 0 ? null : x - a[i - 1])).slice(1) as number[];
+    for (const d of steps) expect(Math.abs(d - (5 * 16) / 61)).toBeLessThan(1);
+  });
+
+  it('does not freeze and then jump after a stall: extrapolates, slows down, blends back', () => {
+    // 2 s ruhig, dann 400 ms Stau (Ticks 40..47 kommen alle bei 2350 an), dann wieder ruhig
+    const arrive = (k: number) => (k >= 40 && k <= 47 ? 2350 : k * 50);
+    const { xs, delays } = walk(arrive, 120, 330);
+    const steps = xs.slice(1).map((x, i) => x - xs[i]);
+    const from = 60; // nach dem Einschwingen
+    const late = steps.slice(from);
+    // nie rückwärts, nie mehr als das Doppelte des normalen Schritts (1,6 px je 16 ms)
+    expect(Math.min(...late)).toBeGreaterThanOrEqual(-1e-9);
+    expect(Math.max(...late)).toBeLessThanOrEqual(3.2);
+    // höchstens wenige Frames ganz ohne Bewegung (vorher: der ganze Stau, etwa 15 Frames)
+    expect(late.filter((d) => d < 1e-9).length).toBeLessThanOrEqual(6);
+    // die Verzögerung ist gewachsen, aber nicht über 250 ms
+    expect(Math.max(...delays)).toBeGreaterThan(150);
+    expect(Math.max(...delays)).toBeLessThanOrEqual(250);
+  });
+
+  it('extrapolates at most 150 ms when snapshots stop, then holds', () => {
+    const { xs } = walk((k) => k * 50, 40, 300);
+    // letzter Snapshot Tick 40 bei x 300; höchstens 3 Ticks (150 ms) weiter: 315
+    expect(Math.max(...xs)).toBeGreaterThan(300);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(315 + 1e-9);
+    expect(xs[xs.length - 1]).toBe(xs[xs.length - 20]);
+  });
+
+  it('survives a hidden tab: snapshots without update() stay bounded and the timeline recovers', () => {
+    const { socket, conn } = setup();
+    socket.receive(startMessage(0, 100));
+    let tick = 0;
+    // 3 s ruhig
+    for (let f = 0; f < 60; f++) {
+      socket.receive(snapMessage(++tick, 100 + 5 * tick));
+      conn.update(50);
+    }
+    // Tab im Hintergrund: 5000 Snapshots, kein update() (die Uhr steht)
+    for (let i = 0; i < 5000; i++) socket.receive(snapMessage(++tick, 100 + 5 * tick));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tl = (conn as any).timeline;
+    expect(tl.samples.length).toBeLessThanOrEqual(200);
+    // wieder sichtbar: ruhig weiter
+    const delays: number[] = [];
+    for (let f = 0; f < 200; f++) {
+      socket.receive(snapMessage(++tick, 100 + 5 * tick));
+      conn.update(50);
+      delays.push(conn.netInfo().delayMs);
+    }
+    expect(Math.abs(tl.msPerTick - 50)).toBeLessThan(3);
+    expect(delays[delays.length - 1]).toBe(100);
+  });
+
+  it('a new start resets the delay', () => {
+    const { conn } = walk((k) => (k >= 40 ? 2350 + k : k * 50), 60, 200);
+    expect(conn.netInfo().delayMs).toBeGreaterThan(100);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const socket = (conn as any).socket as FakeSocket;
+    socket.receive(startMessage(0, 40));
+    conn.update(16);
+    expect(conn.netInfo().delayMs).toBe(100);
   });
 
   it('snaps the own player to a far away server position', () => {
