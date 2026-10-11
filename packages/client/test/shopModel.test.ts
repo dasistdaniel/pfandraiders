@@ -61,6 +61,22 @@ describe('ShopModel navigation', () => {
     expect(m.activate(p)).toEqual({ kind: 'buy', category: 'defense', item: 'dog_treat', qty: 2 });
   });
 
+  it('steps the category on any row, with wrap-around, starting at the first entry', () => {
+    const m = new ShopModel();
+    const p = rich();
+    m.selectCategory(3);
+    m.selectRow(0); // Pfefferspray
+    m.changeQty(4, p);
+    m.stepCategory(1);
+    expect(m.category).toBe('bags');
+    expect(m.row).toBe(0);
+    expect(m.qty).toBe(1);
+    m.stepCategory(-1);
+    expect(m.category).toBe('defense');
+    m.stepCategory(-1);
+    expect(m.category).toBe('weapons');
+  });
+
   it('keeps the quantity at 1 on bag rows, so left and right switch the category', () => {
     const m = new ShopModel();
     const p = rich();

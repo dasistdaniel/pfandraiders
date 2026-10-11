@@ -140,6 +140,11 @@ export class ShopModel {
       this.changeQty(d, p);
       return;
     }
+    this.stepCategory(d);
+  }
+
+  /** Vorige (-1) oder nächste (+1) Kategorie mit Umlauf, auf jeder Zeile (eigene Tasten, auch auf Mengen-Zeilen). */
+  stepCategory(d: -1 | 1): void {
     const n = SHOP_CATEGORIES.length;
     this.selectCategory((this.categoryIndex + d + n) % n);
   }

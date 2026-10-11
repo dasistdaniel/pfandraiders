@@ -11,6 +11,8 @@ const NONE: KeyState = {
   steal: false,
   attack: false,
   spray: false,
+  tabPrev: false,
+  tabNext: false,
 };
 
 describe('buildInput', () => {

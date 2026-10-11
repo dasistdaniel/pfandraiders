@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { KeyState } from './input';
-import { isHeldOver, PAD_LABELS, padToHeld } from './sources';
-import type { InputSource, KeyLabels } from './sources';
+import { isHeldOver, keyboardTabLabels, PAD_LABELS, PAD_TAB_LABELS, padToHeld } from './sources';
+import type { InputSource, KeyLabels, TabLabels } from './sources';
 
 export interface KeyboardLayout {
   name: string;
@@ -63,9 +63,13 @@ type Key = Phaser.Input.Keyboard.Key;
 class KeyboardSource implements InputSource {
   readonly label: string;
   readonly labels: KeyLabels;
+  readonly tabLabels: TabLabels;
   private readonly keys: Record<string, Key>;
   /** Aktionstaste wurde schon in der vorigen Szene gedrückt: zählt erst nach dem Loslassen. */
   private actionHeldOver = false;
+  /** Dasselbe für Ausrauben und Schlagen, nur für den Kategoriewechsel im Shop (im Spiel bleibt alles wie es war). */
+  private stealHeldOver = false;
+  private attackHeldOver = false;
 
   constructor(
     keyboard: Phaser.Input.Keyboard.KeyboardPlugin,
@@ -73,11 +77,18 @@ class KeyboardSource implements InputSource {
   ) {
     this.label = layout.name;
     this.labels = layout.labels;
+    this.tabLabels = keyboardTabLabels(layout.labels);
     const names = [layout.left, layout.right, layout.up, layout.down, layout.action, layout.steal, layout.attack, layout.spray];
     this.keys = keyboard.addKeys(names.join(',')) as Record<string, Key>;
     // 'down' kommt nur beim Wechsel auf gedrückt, mit dem auslösenden Ereignis
     this.keys[layout.action].on('down', (_key: Key, event: KeyboardEvent) => {
       this.actionHeldOver = isHeldOver(event);
+    });
+    this.keys[layout.steal].on('down', (_key: Key, event: KeyboardEvent) => {
+      this.stealHeldOver = isHeldOver(event);
+    });
+    this.keys[layout.attack].on('down', (_key: Key, event: KeyboardEvent) => {
+      this.attackHeldOver = isHeldOver(event);
     });
   }
 
@@ -93,6 +104,8 @@ class KeyboardSource implements InputSource {
       steal: k[l.steal].isDown,
       attack: k[l.attack].isDown,
       spray: k[l.spray].isDown,
+      tabPrev: k[l.steal].isDown && !this.stealHeldOver,
+      tabNext: k[l.attack].isDown && !this.attackHeldOver,
     };
   }
 
@@ -106,6 +119,7 @@ type Pad = Phaser.Input.Gamepad.Gamepad;
 class GamepadSource implements InputSource {
   readonly label: string;
   readonly labels: KeyLabels = PAD_LABELS;
+  readonly tabLabels: TabLabels = PAD_TAB_LABELS;
   private prevA = false;
 
   constructor(

@@ -13,6 +13,10 @@ export interface KeyState {
   attack: boolean;
   /** Pfefferspray-Taste gehalten */
   spray: boolean;
+  /** Shop: vorige Kategorie (Tastatur: Ausrauben-Taste, Gamepad: LB); im Spiel ohne Wirkung */
+  tabPrev: boolean;
+  /** Shop: nächste Kategorie (Tastatur: Schlagen-Taste, Gamepad: RB); im Spiel ohne Wirkung */
+  tabNext: boolean;
 }
 
 function axis(negative: boolean, positive: boolean): -1 | 0 | 1 {

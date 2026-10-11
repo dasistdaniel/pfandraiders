@@ -12,10 +12,25 @@ export interface KeyLabels {
 /** Beschriftung der Gamepad-Tasten, passend zu padToHeld. */
 export const PAD_LABELS: KeyLabels = { action: 'A', steal: 'B', attack: 'X', spray: 'Y' };
 
+/** Beschriftung der Tasten für vorige und nächste Shop-Kategorie. */
+export interface TabLabels {
+  prev: string;
+  next: string;
+}
+
+/** Gamepad: Schultertasten wechseln die Shop-Kategorie. */
+export const PAD_TAB_LABELS: TabLabels = { prev: 'LB', next: 'RB' };
+
+/** Tastatur: Ausrauben-Taste = vorige, Schlagen-Taste = nächste Shop-Kategorie (Q/F bzw. / und .). */
+export function keyboardTabLabels(labels: KeyLabels): TabLabels {
+  return { prev: labels.steal, next: labels.attack };
+}
+
 /** Ein Gerät, das einem Spieler gehört. Phaser-Anbindung steht in devices.ts. */
 export interface InputSource {
   readonly label: string;
   readonly labels: KeyLabels;
+  readonly tabLabels: TabLabels;
   /** Eingabe dieses Frames (alles gehalten). */
   read(): KeyState;
   /** Wurde die Bestätigungstaste in diesem Frame neu gedrückt (Neustart nach Rundenende)? */
@@ -40,7 +55,10 @@ export interface PadSnapshot {
 /** Sticks unterhalb dieses Betrags zählen als in Ruhe. */
 export const STICK_DEADZONE = 0.4;
 
-/** A = Aktion, B = Ausrauben, X = Schlagen, Y = Pfefferspray. Stick und Steuerkreuz laufen. Schultertasten sind frei. */
+/**
+ * A = Aktion, B = Ausrauben, X = Schlagen, Y = Pfefferspray. Stick und Steuerkreuz laufen.
+ * Schultertasten (LB/RB) wechseln nur im Shop die Kategorie.
+ */
 export function padToHeld(s: PadSnapshot): KeyState {
   return {
     left: s.left || s.stickX < -STICK_DEADZONE,
@@ -51,6 +69,8 @@ export function padToHeld(s: PadSnapshot): KeyState {
     steal: s.b,
     attack: s.x,
     spray: s.y,
+    tabPrev: s.l1,
+    tabNext: s.r1,
   };
 }
 

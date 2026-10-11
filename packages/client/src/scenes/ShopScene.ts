@@ -14,7 +14,7 @@ import { preferAlternatives } from '../eventSounds';
 import { sfx } from '../sfx';
 import { ShopModel, shopPointerEnabled } from '../shopModel';
 import type { ShopAction, ShopRowView } from '../shopModel';
-import { ShopNav } from '../shopNav';
+import { ShopNav, shopHint } from '../shopNav';
 import type { InputSource } from '../sources';
 import { playerName } from '../text';
 
@@ -60,7 +60,7 @@ interface Panel {
 
 const toCss = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 
-/** Shop-Phase zwischen zwei Runden: ein Feld je lokalem Spieler (online eines), Bedienung nur mit Bewegungs- und Aktionstaste. */
+/** Shop-Phase zwischen zwei Runden: ein Feld je lokalem Spieler (online eines), Bedienung mit Bewegungs- und Aktionstaste, Kategorie auch per eigener Taste (Ausrauben/Schlagen bzw. LB/RB). */
 export class ShopScene extends Phaser.Scene {
   private panels: Panel[] = [];
   private online: OnlineConnection | null = null;
@@ -149,7 +149,10 @@ export class ShopScene extends Phaser.Scene {
       const progress = this.progressOf(panel.id);
       for (const cmd of panel.nav.update(panel.source.read(), delta)) {
         if (cmd === 'confirm') this.run(panel, panel.model.activate(progress));
-        else {
+        else if (cmd === 'prevCategory' || cmd === 'nextCategory') {
+          panel.model.stepCategory(cmd === 'nextCategory' ? 1 : -1);
+          sfx.play('ui_move');
+        } else {
           panel.model.move(cmd, progress);
           sfx.play('ui_move');
         }
@@ -280,8 +283,7 @@ export class ShopScene extends Phaser.Scene {
     });
     ui.message.setText(panel.messageMs > 0 ? panel.message : '');
     ui.others.setText(this.othersText(panel));
-    const action = panel.source.labels.action;
-    ui.hint.setText(`Hoch/runter: wählen   Links/rechts: Kategorie oder Menge   ${action}: kaufen / bereit   Esc: verlassen`);
+    ui.hint.setText(shopHint(panel.source.labels.action, panel.source.tabLabels));
   }
 
   /** Wer ist schon bereit? Online aus der Raumliste, lokal aus dem lokalen Shop. */

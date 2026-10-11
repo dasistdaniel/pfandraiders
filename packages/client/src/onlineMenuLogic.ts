@@ -25,6 +25,53 @@ export function nextTab(current: MenuTab, key: string): MenuTab {
   return TABS[(i + step + TABS.length) % TABS.length];
 }
 
+/** Tab um `d` Schritte weiter (-1 vorige, +1 nächste), mit Umbruch. */
+export function stepTab(current: MenuTab, d: number): MenuTab {
+  const i = TABS.indexOf(current);
+  const n = TABS.length;
+  return TABS[(((i + Math.sign(d)) % n) + n) % n];
+}
+
+/** Bild↑ = voriger Tab, Bild↓ = nächster Tab (überall im Dialog, auch in Eingabefeldern); sonst 0. */
+export function pageTabStep(key: string): -1 | 0 | 1 {
+  return key === 'PageUp' ? -1 : key === 'PageDown' ? 1 : 0;
+}
+
+/** Gamepad-Knöpfe im Standard-Layout: 4 = LB (L1), 5 = RB (R1). */
+const PAD_LB = 4;
+const PAD_RB = 5;
+
+/** Was der Dialog von navigator.getGamepads() braucht. */
+export interface PadLike {
+  buttons: readonly { pressed: boolean }[];
+}
+
+/**
+ * Erkennt neu gedrückte LB/RB auf allen Gamepads (-1 voriger Tab, +1 nächster, 0 nichts).
+ * Ein Pad, das zum ersten Mal (oder nach dem Abziehen wieder) auftaucht, zählt erst nach dem Loslassen,
+ * damit eine beim Öffnen des Dialogs gehaltene Taste nicht umschaltet.
+ */
+export class PadTabEdges {
+  private prev = new Map<number, { lb: boolean; rb: boolean }>();
+
+  update(pads: readonly (PadLike | null | undefined)[]): -1 | 0 | 1 {
+    const next = new Map<number, { lb: boolean; rb: boolean }>();
+    let step = 0;
+    pads.forEach((pad, i) => {
+      if (!pad) return;
+      const now = { lb: pad.buttons[PAD_LB]?.pressed === true, rb: pad.buttons[PAD_RB]?.pressed === true };
+      const before = this.prev.get(i);
+      if (before) {
+        if (now.lb && !before.lb) step -= 1;
+        if (now.rb && !before.rb) step += 1;
+      }
+      next.set(i, now);
+    });
+    this.prev = next;
+    return Math.sign(step) as -1 | 0 | 1;
+  }
+}
+
 /** Gespeicherten Tab lesen; alles Unbekannte ergibt 'host'. */
 export function parseTab(raw: unknown): MenuTab {
   return raw === 'join' || raw === 'list' ? raw : 'host';
