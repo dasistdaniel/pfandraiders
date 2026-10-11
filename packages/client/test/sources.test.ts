@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isHeldOver, padBLeaves, padToHeld, PAD_LABELS, STICK_DEADZONE } from '../src/sources';
+import { isHeldOver, keyboardTabLabels, padBLeaves, padToHeld, PAD_LABELS, PAD_TAB_LABELS, STICK_DEADZONE } from '../src/sources';
 import type { PadSnapshot } from '../src/sources';
 
 const IDLE: PadSnapshot = {
@@ -23,15 +23,19 @@ describe('padToHeld', () => {
     expect(padToHeld(IDLE)).toMatchObject({ steal: false });
   });
 
-  it('maps buttons: A action, B steal, X attack, Y spray; the shoulders do nothing', () => {
+  it('maps buttons: A action, B steal, X attack, Y spray; the shoulders only switch shop categories', () => {
     expect(padToHeld({ ...IDLE, a: true })).toMatchObject({ action: true, attack: false, spray: false });
     expect(padToHeld({ ...IDLE, x: true })).toMatchObject({ attack: true, spray: false });
     expect(padToHeld({ ...IDLE, y: true })).toMatchObject({ spray: true, attack: false });
-    expect(padToHeld({ ...IDLE, l1: true, r1: true })).toEqual(padToHeld(IDLE));
+    expect(padToHeld({ ...IDLE, l1: true, r1: true })).toEqual({ ...padToHeld(IDLE), tabPrev: true, tabNext: true });
+    expect(padToHeld({ ...IDLE, l1: true })).toMatchObject({ tabPrev: true, tabNext: false, steal: false, attack: false });
+    expect(padToHeld({ ...IDLE, r1: true })).toMatchObject({ tabPrev: false, tabNext: true });
+    expect(padToHeld({ ...IDLE, b: true, x: true })).toMatchObject({ tabPrev: false, tabNext: false });
   });
 
   it('labels the pad buttons like padToHeld maps them', () => {
     expect(PAD_LABELS).toEqual({ action: 'A', steal: 'B', attack: 'X', spray: 'Y' });
+    expect(PAD_TAB_LABELS).toEqual({ prev: 'LB', next: 'RB' });
   });
 
   it('maps the d-pad', () => {
@@ -80,5 +84,12 @@ describe('isHeldOver', () => {
     expect(isHeldOver({ repeat: false })).toBe(false);
     expect(isHeldOver({})).toBe(false);
     expect(isHeldOver(undefined)).toBe(false);
+  });
+});
+
+describe('keyboardTabLabels', () => {
+  it('uses the steal key for the previous and the attack key for the next shop category', () => {
+    expect(keyboardTabLabels({ action: 'E', steal: 'Q', attack: 'F', spray: 'C' })).toEqual({ prev: 'Q', next: 'F' });
+    expect(keyboardTabLabels({ action: 'Enter', steal: '/', attack: '.', spray: ',' })).toEqual({ prev: '/', next: '.' });
   });
 });

@@ -1,7 +1,8 @@
 import type { KeyState } from './input';
 import type { ShopDir } from './shopModel';
+import type { TabLabels } from './sources';
 
-export type ShopNavCommand = ShopDir | 'confirm';
+export type ShopNavCommand = ShopDir | 'confirm' | 'prevCategory' | 'nextCategory';
 
 /** Gehaltene Richtung wiederholt sich nach so langer Zeit ... */
 export const NAV_REPEAT_DELAY_MS = 350;
@@ -14,7 +15,8 @@ function repeats(t: number): number {
 }
 
 /**
- * Macht aus dem Tastenzustand eines Geräts Shop-Befehle: nur Bewegungstasten und die Aktionstaste (Spec §3.3).
+ * Macht aus dem Tastenzustand eines Geräts Shop-Befehle: Bewegungstasten, Aktionstaste (Spec §3.3) und die Tasten für
+ * vorige/nächste Kategorie (Tastatur: Ausrauben/Schlagen, Gamepad: LB/RB), die auf jeder Zeile wirken, auch auf Mengen-Zeilen.
  * Was beim ersten Frame schon gedrückt ist (etwa die Aktionstaste von der Rangliste), zählt nicht.
  */
 export class ShopNav {
@@ -22,6 +24,8 @@ export class ShopNav {
   private dir: ShopDir | null = null;
   private heldMs = 0;
   private prevAction = false;
+  private prevTabPrev = false;
+  private prevTabNext = false;
 
   update(k: KeyState, dtMs: number): ShopNavCommand[] {
     const dir: ShopDir | null = k.up ? 'up' : k.down ? 'down' : k.left ? 'left' : k.right ? 'right' : null;
@@ -31,6 +35,8 @@ export class ShopNav {
       this.dir = dir;
       this.heldMs = 0;
       this.prevAction = k.action;
+      this.prevTabPrev = k.tabPrev;
+      this.prevTabNext = k.tabNext;
       // gehaltene Richtung vom Vorbild zählt erst nach dem Loslassen
       if (dir !== null) this.heldMs = -Infinity;
       return [];
@@ -47,8 +53,18 @@ export class ShopNav {
       this.heldMs += dt;
       for (let i = repeats(before); i < repeats(this.heldMs); i++) out.push(dir);
     }
+    // Kategorie nur bei neuem Druck, ohne Wiederholung
+    if (k.tabPrev && !this.prevTabPrev) out.push('prevCategory');
+    if (k.tabNext && !this.prevTabNext) out.push('nextCategory');
+    this.prevTabPrev = k.tabPrev;
+    this.prevTabNext = k.tabNext;
     if (k.action && !this.prevAction) out.push('confirm');
     this.prevAction = k.action;
     return out;
   }
+}
+
+/** Hinweiszeile unten im Shop-Feld mit den Tasten des eigenen Geräts. */
+export function shopHint(action: string, tabs: TabLabels): string {
+  return `Hoch/runter: wählen   Links/rechts: Kategorie oder Menge   ${tabs.prev} ${tabs.next}: Kategorie   ${action}: kaufen / bereit   Esc: verlassen`;
 }
