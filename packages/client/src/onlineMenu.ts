@@ -15,7 +15,7 @@ import { sfx } from './sfx';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
 import { CHARACTER_URLS } from './characterAssets';
 import { chatColorHex, rosterDiff } from './chatLogic';
-import { createRequest, nextTab, parseTab, sanitizeRoomCode, shouldReportClose, TAB_LABELS, TABS } from './onlineMenuLogic';
+import { createRequest, nextTab, PadTabEdges, pageTabStep, parseTab, sanitizeRoomCode, shouldReportClose, stepTab, TAB_LABELS, TABS } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
 import { ALL_CHARACTERS, CHAR_FRAME_H, CHAR_FRAME_W } from './playerChars';
@@ -136,6 +136,26 @@ export function showOnlineMenu(
     // Phaser hängt am window und verschluckt gefangene Tasten (E, O, Leertaste ...), also hier stoppen
     for (const type of ['keydown', 'keyup', 'keypress']) root.addEventListener(type, (e) => e.stopPropagation());
     document.body.appendChild(root);
+    // Tabwechsel von überall im Dialog (auch aus Eingabefeldern): Bild↑/↓ und Gamepad LB/RB, nur solange Tabs zu sehen sind
+    const tabsShown = () => box.querySelector('[role="tablist"]') !== null;
+    const stepTabFrom = (d: number, viaKeyboard: boolean) => {
+      if (d === 0 || !tabsShown()) return false;
+      // Fokus auf einem Tab bleibt auf dem Tab, sonst landet er im ersten Feld des neuen Tabs
+      switchTab(stepTab(form.tab, d), viaKeyboard && document.activeElement?.getAttribute('role') === 'tab');
+      return true;
+    };
+    root.addEventListener('keydown', (e) => {
+      if (stepTabFrom(pageTabStep(e.key), true)) e.preventDefault();
+    });
+    const padEdges = new PadTabEdges();
+    const readPads = () => {
+      try {
+        return typeof navigator.getGamepads === 'function' ? Array.from(navigator.getGamepads()) : [];
+      } catch {
+        return [];
+      }
+    };
+    const padTimer = setInterval(() => stepTabFrom(padEdges.update(readPads()), false), 50);
 
     const conn = opts.resume ?? new OnlineConnection(url, socketFactory);
     // Lobby, Chat und Fehler klingen über die ganze Verbindung (auch später im Spiel und im Shop)
@@ -144,6 +164,7 @@ export function showOnlineMenu(
     const finish = (result: OnlineConnection | null) => {
       if (finished) return;
       finished = true;
+      clearInterval(padTimer);
       conn.onStart = null;
       conn.onClosed = null;
       conn.onError = null;
@@ -297,6 +318,7 @@ export function showOnlineMenu(
         tabBar.appendChild(b);
       }
       box.appendChild(tabBar);
+      box.appendChild(el('div', { textContent: 'Bild↑/↓ oder LB/RB: Tab wechseln' }, 'color:#888;font-size:12px;margin:-6px 0 10px'));
 
       const cancel = el('button', { textContent: 'Abbrechen' }, 'font:inherit');
       cancel.onclick = () => {
