@@ -21,5 +21,5 @@ export function roundsLabel(rounds: number): string {
 
 /** Zeile der lokalen Lobby; links/rechts wählt dort die Figur, die Rundenzeit hat eigene Tasten. */
 export function localRoundLine(ms: number): string {
-  return `Rundenzeit: ◄ ${roundMsLabel(ms)} ►  (- / +, Gamepad LB / RB)`;
+  return `Rundenzeit: − ${roundMsLabel(ms)} +  (Tasten - / +, Gamepad LB / RB)`;
 }

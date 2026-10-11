@@ -37,6 +37,6 @@ describe('roundsLabel', () => {
 
 describe('localRoundLine', () => {
   it('names the round time and its own keys (left/right belongs to the figure choice)', () => {
-    expect(localRoundLine(300_000)).toBe('Rundenzeit: ◄ 5 min ►  (- / +, Gamepad LB / RB)');
+    expect(localRoundLine(300_000)).toBe('Rundenzeit: − 5 min +  (Tasten - / +, Gamepad LB / RB)');
   });
 });
