@@ -68,3 +68,17 @@ export function charFrameIndex(dir: CharDir, step: number): number {
   const s = Number.isFinite(step) && step > 0 ? Math.floor(step) % STEP_ROW.length : 0;
   return STEP_ROW[s] * 4 + DIR_COLUMN[dir];
 }
+
+/** Dauer eines Gehbilds in der großen Figurvorschau der Lobbys (ms). */
+export const PREVIEW_FRAME_MS = 150;
+
+/** Bild der Lobby-Vorschau nach verstrichener Zeit: Gehzyklus nach vorn (unten), je PREVIEW_FRAME_MS ein Schritt. */
+export function previewFrame(elapsedMs: number): number {
+  const step = Number.isFinite(elapsedMs) && elapsedMs > 0 ? Math.floor(elapsedMs / PREVIEW_FRAME_MS) : 0;
+  return charFrameIndex('down', step);
+}
+
+/** Lage eines Bildes im Bogen in Pixeln (4 Spalten zu CHAR_FRAME_W, Zeilen zu CHAR_FRAME_H), Maßstab 1. */
+export function framePosition(frame: number): { x: number; y: number } {
+  return { x: (frame % 4) * CHAR_FRAME_W, y: Math.floor(frame / 4) * CHAR_FRAME_H };
+}

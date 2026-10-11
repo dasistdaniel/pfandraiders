@@ -37,6 +37,11 @@ export function takenByOthers(roster: readonly RosterEntry[], you: string): Set<
   return new Set(roster.filter((p) => p.id !== you).map((p) => p.avatar));
 }
 
+/** Figur der großen Vorschau: der eigene Wunsch, solange der Server ihn noch nicht bestätigt hat, sonst die eigene. */
+export function shownAvatar(pending: number | null, own: number | null): number | null {
+  return pending ?? own;
+}
+
 const DELTA: Record<string, (columns: number) => number> = {
   ArrowLeft: () => -1,
   ArrowRight: () => 1,

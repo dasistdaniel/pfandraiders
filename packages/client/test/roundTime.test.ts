@@ -1,6 +1,6 @@
 import { DEFAULT_ROUND_MS } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
-import { roundMsLabel, roundsLabel, stepRoundMs } from '../src/roundTime';
+import { localRoundLine, roundMsLabel, roundsLabel, stepRoundMs } from '../src/roundTime';
 
 describe('roundMsLabel', () => {
   it('shows whole minutes and other values in seconds', () => {
@@ -32,5 +32,11 @@ describe('roundsLabel', () => {
     expect(roundsLabel(1)).toBe('1 Runde');
     expect(roundsLabel(3)).toBe('3 Runden');
     expect(roundsLabel(5)).toBe('5 Runden');
+  });
+});
+
+describe('localRoundLine', () => {
+  it('names the round time and its own keys (left/right belongs to the figure choice)', () => {
+    expect(localRoundLine(300_000)).toBe('Rundenzeit: − 5 min +  (Tasten - / +, Gamepad LB / RB)');
   });
 });

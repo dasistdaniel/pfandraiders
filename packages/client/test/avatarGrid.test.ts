@@ -1,6 +1,6 @@
 import type { RosterEntry } from '@pfandraiders/core';
 import { describe, expect, it } from 'vitest';
-import { AVATAR_COLUMNS, avatarCells, stepAvatar, takenByOthers } from '../src/avatarGrid';
+import { AVATAR_COLUMNS, avatarCells, shownAvatar, stepAvatar, takenByOthers } from '../src/avatarGrid';
 
 const r = (id: string, name: string, avatar: number): RosterEntry => ({ id, name, color: 0xffffff, connected: true, ready: false, avatar });
 
@@ -38,5 +38,13 @@ describe('stepAvatar', () => {
     const allButZero = new Set(Array.from({ length: 23 }, (_, i) => i + 1));
     expect(stepAvatar(0, 'ArrowRight', allButZero)).toBe(0);
     expect(stepAvatar(5, 'Enter', new Set())).toBe(5);
+  });
+});
+
+describe('shownAvatar', () => {
+  it('shows the pending wish before the server confirms it, else the own figure', () => {
+    expect(shownAvatar(7, 3)).toBe(7);
+    expect(shownAvatar(null, 3)).toBe(3);
+    expect(shownAvatar(null, null)).toBeNull();
   });
 });
