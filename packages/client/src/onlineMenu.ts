@@ -10,7 +10,7 @@ import {
   ROUNDS_CHOICES,
   stepMapId,
 } from '@pfandraiders/core';
-import { AVATAR_COLUMNS, avatarCells, stepAvatar, takenByOthers } from './avatarGrid';
+import { AVATAR_COLUMNS, avatarCells, shownAvatar, stepAvatar, takenByOthers } from './avatarGrid';
 import { sfx } from './sfx';
 import { buildLabel, currentBuild, versionMismatch } from './buildInfo';
 import { CHARACTER_URLS } from './characterAssets';
@@ -18,7 +18,7 @@ import { chatColorHex, rosterDiff } from './chatLogic';
 import { createRequest, nextTab, parseTab, sanitizeRoomCode, shouldReportClose, TAB_LABELS, TABS } from './onlineMenuLogic';
 import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
-import { ALL_CHARACTERS, CHAR_FRAME_H, CHAR_FRAME_W } from './playerChars';
+import { ALL_CHARACTERS, CHAR_FRAME_H, CHAR_FRAME_W, framePosition, PREVIEW_FRAME_MS, previewFrame } from './playerChars';
 import { EMPTY_ROOM_LIST_TEXT, firstSelectable, listAction, moveSelection, refreshAllowed, ROOM_LIST_HEADER, roomRows } from './roomList';
 import { roundMsLabel, roundsLabel } from './roundTime';
 import { loadAvatarWish, saveAvatarWish } from './settings';
@@ -117,6 +117,15 @@ function avatarSprite(index: number, scale: number): HTMLDivElement {
   return d;
 }
 
+/** Zeigt Bild `frame` des Bogens in einem avatarSprite mit demselben Maßstab. */
+function setSpriteFrame(d: HTMLDivElement, frame: number, scale: number): void {
+  const { x, y } = framePosition(frame);
+  d.style.backgroundPosition = `${-x * scale}px ${-y * scale}px`;
+}
+
+/** Maßstab der großen Vorschau der eigenen Figur (96 x 102 px) */
+const PREVIEW_SCALE = 6;
+
 /**
  * Zeigt ein Overlay zum Erstellen, Betreten oder Auswählen eines Raums und die Lobby.
  * Löst mit der Verbindung auf, sobald der Server die Runde startet, ein Rückkehrer im Shop landet oder die
@@ -165,8 +174,14 @@ export function showOnlineMenu(
     };
     /** Selbst gewählte Figur, bis die Lobby sie bestätigt (dann wird sie als Wunsch gemerkt) */
     let pendingWish: number | null = null;
+    /** Große Vorschau der eigenen Figur neu zeichnen (nur solange die Lobby steht) */
+    let drawPreview: (() => void) | null = null;
     conn.onError = (code, text) => {
-      if (code === 'avatar_taken') pendingWish = null;
+      if (code === 'avatar_taken') {
+        // Wunsch abgelehnt: Vorschau springt zurück auf die bestätigte Figur
+        pendingWish = null;
+        drawPreview?.();
+      }
       showError(ERRORS[code] ?? text);
     };
     conn.onClosed = () => {
@@ -584,7 +599,41 @@ export function showOnlineMenu(
         sfx.play('avatar_pick');
         pendingWish = avatar;
         conn.setAvatar(avatar);
+        drawPreview?.();
       };
+      // Große Vorschau neben dem Raster: eigene Figur (auch der noch unbestätigte Wunsch), läuft nach vorn,
+      // Rahmen und Name in der Spielerfarbe
+      const preview = el('div', {}, 'display:flex;flex-direction:column;align-items:center;gap:4px;flex:none');
+      const previewBox = el('div', {}, `padding:4px;border:3px solid #888;background:#1a1a1a;width:${CHAR_FRAME_W * PREVIEW_SCALE}px;height:${CHAR_FRAME_H * PREVIEW_SCALE}px`);
+      const previewName = el('div', {}, 'font-size:14px;max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap');
+      preview.append(previewBox, previewName);
+      let previewIndex: number | null = null;
+      let previewSprite: HTMLDivElement | null = null;
+      const previewStart = performance.now();
+      drawPreview = () => {
+        const shown = shownAvatar(pendingWish, conn.ownAvatar());
+        preview.style.visibility = shown === null ? 'hidden' : 'visible';
+        if (shown === null) return;
+        if (shown !== previewIndex) {
+          previewIndex = shown;
+          previewSprite = avatarSprite(shown, PREVIEW_SCALE);
+          setSpriteFrame(previewSprite, previewFrame(performance.now() - previewStart), PREVIEW_SCALE);
+          previewBox.replaceChildren(previewSprite);
+        }
+        const me = conn.roster.find((p) => p.id === conn.you);
+        const color = me ? chatColorHex(me.color) : '#ffca28';
+        previewBox.style.borderColor = color;
+        previewName.textContent = me?.name ?? '';
+        previewName.style.color = color;
+      };
+      // Gehzyklus; hört von selbst auf, sobald die Lobby nicht mehr im Dokument hängt (Neuaufbau, Spielstart, Abbruch)
+      const previewTimer = setInterval(() => {
+        if (!preview.isConnected) {
+          clearInterval(previewTimer);
+          return;
+        }
+        if (previewSprite) setSpriteFrame(previewSprite, previewFrame(performance.now() - previewStart), PREVIEW_SCALE);
+      }, PREVIEW_FRAME_MS);
       const drawGrid = () => {
         grid.replaceChildren();
         for (const cell of avatarCells(conn.roster, conn.you)) {
@@ -602,7 +651,8 @@ export function showOnlineMenu(
         }
       };
       grid.onkeydown = (e) => {
-        const own = conn.ownAvatar();
+        // Von der angezeigten Figur aus, damit schnelle Tastendrücke nicht auf der alten hängen bleiben
+        const own = shownAvatar(pendingWish, conn.ownAvatar());
         if (own === null) return;
         const next = stepAvatar(own, e.key, takenByOthers(conn.roster, conn.you));
         if (e.key.startsWith('Arrow')) e.preventDefault();
@@ -693,6 +743,7 @@ export function showOnlineMenu(
         codeLine.textContent = `Code ${conn.room}${conn.locked ? '   🔒 Passwort' : ''}${conn.visibility === 'private' ? '   privat' : ''}`;
         drawPlayers(conn.roster);
         drawGrid();
+        drawPreview?.();
         const host = conn.isHost();
         mapPrev.style.display = host ? 'inline-block' : 'none';
         mapNext.style.display = host ? 'inline-block' : 'none';
@@ -723,6 +774,8 @@ export function showOnlineMenu(
         }
         refresh();
       };
+      const figureRow = el('div', {}, 'display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap');
+      figureRow.append(grid, preview);
       start.onclick = () => {
         sfx.play('ui_select');
         conn.requestStart();
@@ -735,7 +788,7 @@ export function showOnlineMenu(
       box.append(
         players,
         el('div', { textContent: 'Deine Figur' }, 'color:#aaa;font-size:14px;margin-bottom:4px'),
-        grid,
+        figureRow,
         chatLog,
         chatInput,
         mapRow,
