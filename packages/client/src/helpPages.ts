@@ -247,7 +247,7 @@ export function helpPages({ config = CONFIG, devices, localMax }: HelpOptions): 
           `Schlagen trifft den nächsten Mitspieler: ${hit} Schaden (${gloveHit} mit Boxhandschuh), danach ${secondsText(c.fight.cooldownMs)} Pause.`,
         ),
         bullet(
-          `Pfefferspray stößt den nächsten Mitspieler ${c.spray.knockbackPx}${NBSP}px weg und kostet ${c.spray.damage} Leben, danach ${secondsText(c.spray.cooldownMs)} Pause.`,
+          `Pfefferspray stößt den nächsten Mitspieler ${c.spray.knockbackPx}${NBSP}px weg und nimmt ihm ${c.spray.damage} Leben, danach ${secondsText(c.spray.cooldownMs)} Pause.`,
         ),
         bullet(
           `Bei 0 Leben bist du ${secondsText(c.health.knockoutMs)} ausgeknockt, danach geht es mit ${c.health.reviveHealth} Leben und ${secondsText(c.health.spawnShieldMs)} Schutz weiter.`,
@@ -255,7 +255,7 @@ export function helpPages({ config = CONFIG, devices, localMax }: HelpOptions): 
         bullet(
           `Einen Ausgeknockten kann man einmal ausrauben: Ausrauben-Taste daneben nimmt ihm ${share(c.steal.fraction)} seiner Flaschen.`,
         ),
-        bullet('Hunde und Polizei lassen Ausgeknockte in Ruhe. Geld und Gekauftes verliert man nie.'),
+        bullet('Hunde und Polizei lassen Ausgeknockte in Ruhe. Beim Knockout bleiben Geld und Gekauftes erhalten.'),
       ],
     },
     {

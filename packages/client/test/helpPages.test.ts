@@ -115,7 +115,7 @@ describe('helpPages', () => {
     c.zone.multiplier = 4;
     const t = flat(helpPages(opts(c)));
     expect(t).toContain('2,5 s');
-    expect(t).toContain('3 s');
+    expect(t).toContain('Countdown von 3 s');
     expect(t).toContain('12 s ausgeknockt');
     expect(t).toContain('25 Schaden');
     expect(t).toContain('40 mit Boxhandschuh');

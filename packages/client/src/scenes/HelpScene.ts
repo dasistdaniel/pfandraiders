@@ -96,6 +96,14 @@ export class HelpScene extends Phaser.Scene {
       .text(x0 + (n - 1) * DOTS.gap + 24, DOTS.y, '', { fontFamily: FONT, fontSize: '14px', color: COLOR.dim })
       .setOrigin(0, 0.5);
     this.add.text(GAME_W / 2, GAME_H - 24, HINT, { fontFamily: FONT, fontSize: '14px', color: COLOR.dim }).setOrigin(0.5);
+    // Maus: "Zurück" unten links (wie Esc/B)
+    const back = this.add
+      .text(24, DOTS.y, '◄ Zurück', { fontFamily: FONT, fontSize: '16px', color: COLOR.text })
+      .setOrigin(0, 0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => back.setColor(COLOR.title))
+      .on('pointerout', () => back.setColor(COLOR.text))
+      .on('pointerdown', () => this.close());
 
     const kb = this.input.keyboard!;
     this.keys = {
