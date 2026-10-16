@@ -146,6 +146,10 @@ describe('helpPages', () => {
     ]);
   });
 
+  it('page 2 mentions switching the online control device in the Esc menu', () => {
+    expect(flat([pages[1]])).toContain('im Esc-Menü wechselt „Steuerung“ es jederzeit');
+  });
+
   it('page 3 explains enemies and fighting with CONFIG numbers', () => {
     const t = flat([pages[2]]);
     expect(t).toContain(`${CONFIG.npc.dog.biteDamage} Leben`);

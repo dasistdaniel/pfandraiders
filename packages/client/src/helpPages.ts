@@ -224,7 +224,7 @@ export function helpPages({ config = CONFIG, devices, localMax }: HelpOptions): 
         bullet(
           `Lokal: in der Lobby mit der Aktionstaste beitreten, Start mit Leertaste oder Start-Taste.`,
         ),
-        bullet('Online spielst du mit dem Gerät aus „Steuerung online“ in den Einstellungen.'),
+        bullet('Online spielst du mit dem Gerät aus „Steuerung online“ in den Einstellungen; im Esc-Menü wechselt „Steuerung“ es jederzeit.'),
         ...(sharedKeyboard ? [bullet('Zwei Spieler an einer Tastatur: nicht jede Tastenkombination kommt an.')] : []),
       ],
     },

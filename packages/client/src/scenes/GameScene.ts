@@ -5,7 +5,7 @@ import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
 import { createSource, padConnected } from '../devices';
 import type { DeviceRef } from '../devices';
-import { anyKeyHeld, OnlineDeviceTracker } from '../onlineDevice';
+import { anyKeyHeld, fallbackNotice, OnlineDeviceTracker } from '../onlineDevice';
 import { isSwinging } from '../fightView';
 import { isSpraying, SPRAY_COLOR, sprayCloudRadius } from '../sprayView';
 import { LocalShop } from '../localShop';
@@ -29,12 +29,12 @@ import { detectEventSounds, mergeSounds, preferAlternatives, searchLoopKeys } fr
 import { Notices } from '../notices';
 import { buildInput } from '../input';
 import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
-import { PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../pauseMenu';
+import { PAUSE_MAX_ITEMS, PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../pauseMenu';
 import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
 import { guardHeld, padBLeaves } from '../sources';
 import type { InputSource } from '../sources';
-import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLastKeyboard, loadLocalMapId, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
+import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLastKeyboard, loadLocalMapId, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice, stepDevice } from '../settings';
 import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 import { chooseLocalMapId } from '../mapChoice';
@@ -58,14 +58,16 @@ const COLOR = {
 const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', resolution: WORLD_ZOOM };
 
 /** Esc-Menü: Feld mittig über dem ganzen Bild, Zeilenabstand der Einträge, Tiefe über HUD und Wiederverbindungstext. */
-const PAUSE = { w: 340, pad: 16, titleH: 32, rowH: 30, hintGap: 10, hintH: 20, depth: 40, maxItems: 4 };
+const PAUSE = { w: 340, pad: 16, titleH: 32, rowH: 30, hintGap: 10, hintH: 20, depth: 40, maxItems: PAUSE_MAX_ITEMS };
 const PAUSE_COLOR = { normal: '#ffffff', selected: '#ffee58', hint: '#aaaaaa' };
 const PAD_START_BUTTON = 9;
 const STICK_THRESHOLD = 0.5;
-type NavKey = 'up' | 'down' | 'w' | 's' | 'enter' | 'e' | 'space';
+type NavKey = 'up' | 'down' | 'w' | 's' | 'left' | 'right' | 'a' | 'd' | 'enter' | 'e' | 'space';
 interface PadNav {
   up: boolean;
   down: boolean;
+  left: boolean;
+  right: boolean;
   a: boolean;
   b: boolean;
   start: boolean;
@@ -73,6 +75,8 @@ interface PadNav {
 /** Eingaben des Esc-Menüs in einem Frame (Flanken, gehaltene Tasten zählen nicht). */
 interface MenuNav {
   move: -1 | 0 | 1;
+  /** links/rechts (online: Steuerung wechseln) */
+  side: -1 | 0 | 1;
   confirm: boolean;
   back: boolean;
   start: boolean;
@@ -166,6 +170,8 @@ export class GameScene extends Phaser.Scene {
   private pendingPad: number | null = null;
   /** Online: gewähltes und aktives Gerät (Tastatur springt für ein fehlendes Gamepad ein); lokal null. */
   private deviceTracker: OnlineDeviceTracker | null = null;
+  /** Online: im Esc-Menü von Hand gewählt; bis zum Ende der Runde gilt diese Wahl (kein Auto-Wechsel, kein Rückfall-Speichern). */
+  private manualDevice = false;
 
   constructor() {
     super('game');
@@ -197,7 +203,7 @@ export class GameScene extends Phaser.Scene {
     this.loopKeys = new Set();
     this.notices = new Notices();
     this.roundTotalMs = 0;
-    this.pause = new PauseMenu();
+    this.pause = new PauseMenu(this.online !== null);
     this.countdown = new CountdownDisplay();
     this.pauseCam = null;
     this.pauseUi = null;
@@ -206,6 +212,7 @@ export class GameScene extends Phaser.Scene {
     this.pendingPad = null;
     this.autoSwitch = loadAutoSwitch();
     this.deviceTracker = null;
+    this.manualDevice = false;
     let state: GameState;
     this.playerColors = new Map();
     let localParams: URLSearchParams | null = null;
@@ -412,6 +419,10 @@ export class GameScene extends Phaser.Scene {
       down: kb.addKey('DOWN'),
       w: kb.addKey('W'),
       s: kb.addKey('S'),
+      left: kb.addKey('LEFT'),
+      right: kb.addKey('RIGHT'),
+      a: kb.addKey('A'),
+      d: kb.addKey('D'),
       enter: kb.addKey('ENTER'),
       e: kb.addKey('E'),
       space: kb.addKey('SPACE'),
@@ -422,9 +433,10 @@ export class GameScene extends Phaser.Scene {
     // Tastatur und Maus schaltet der Modul-Listener frei, das Gamepad hier
     const unlock = (): void => unlockAudio();
     this.input.gamepad?.on('down', unlock);
-    // Online: merkt sich das Pad für den Auto-Wechsel (ausgewertet am Anfang von update)
+    // Online: merkt sich das Pad für den Auto-Wechsel (ausgewertet am Anfang von update). Nicht im offenen Esc-Menü:
+    // dort bedient das Pad das Menü, und eine Wahl unter "Steuerung" soll nicht gleich wieder umspringen.
     const padDown = (pad: Phaser.Input.Gamepad.Gamepad): void => {
-      if (this.online) this.pendingPad = pad.index;
+      if (this.online && !this.pause.isOpen) this.pendingPad = pad.index;
     };
     this.input.gamepad?.on('down', padDown);
     this.events.once('shutdown', () => {
@@ -447,7 +459,7 @@ export class GameScene extends Phaser.Scene {
     const helpOpen = this.helpOpen();
     const escPressed = Phaser.Input.Keyboard.JustDown(this.menuKey) && !helpOpen;
     const navRead = this.readMenuNav();
-    const nav: MenuNav = helpOpen ? { move: 0, confirm: false, back: false, start: false } : navRead;
+    const nav: MenuNav = helpOpen ? { move: 0, side: 0, confirm: false, back: false, start: false } : navRead;
     // Das Esc-Menü gibt es nur in der laufenden Runde ohne Wiederverbindung; sonst gilt das bisherige Esc.
     const menuAllowed = !this.plan && this.conn.getState().phase !== 'ended';
     if (!menuAllowed) {
@@ -664,13 +676,17 @@ export class GameScene extends Phaser.Scene {
     };
     const up = [edge('up'), edge('w')].some(Boolean);
     const down = [edge('down'), edge('s')].some(Boolean);
+    const left = [edge('left'), edge('a')].some(Boolean);
+    const right = [edge('right'), edge('d')].some(Boolean);
     const confirm = [edge('enter'), edge('e'), edge('space')].some(Boolean);
-    const nav: MenuNav = { move: up ? -1 : down ? 1 : 0, confirm, back: false, start: false };
+    const nav: MenuNav = { move: up ? -1 : down ? 1 : 0, side: left ? -1 : right ? 1 : 0, confirm, back: false, start: false };
     for (const pad of this.input.gamepad?.gamepads ?? []) {
       if (!pad || !pad.connected) continue; // abgezogene Pads bleiben in gamepads stehen
       const cur: PadNav = {
         up: pad.up || pad.leftStick.y < -STICK_THRESHOLD,
         down: pad.down || pad.leftStick.y > STICK_THRESHOLD,
+        left: pad.left || pad.leftStick.x < -STICK_THRESHOLD,
+        right: pad.right || pad.leftStick.x > STICK_THRESHOLD,
         a: pad.A,
         b: pad.B,
         start: pad.buttons[PAD_START_BUTTON]?.pressed ?? false,
@@ -679,6 +695,7 @@ export class GameScene extends Phaser.Scene {
       this.padNavPrev[pad.index] = cur;
       if (!prev) continue; // erster Blick: gehaltene Tasten nicht als Druck werten
       if (nav.move === 0) nav.move = cur.up && !prev.up ? -1 : cur.down && !prev.down ? 1 : 0;
+      if (nav.side === 0) nav.side = cur.left && !prev.left ? -1 : cur.right && !prev.right ? 1 : 0;
       if (cur.a && !prev.a) nav.confirm = true;
       if (cur.b && !prev.b) nav.back = true;
       if (cur.start && !prev.start) nav.start = true;
@@ -700,6 +717,13 @@ export class GameScene extends Phaser.Scene {
     } else if (nav.move !== 0) {
       p.move(nav.move);
       sfx.play('ui_move');
+    } else if (nav.side !== 0) {
+      // links/rechts wirkt nur auf "Steuerung" (online)
+      const action = p.adjust(nav.side);
+      if (action) {
+        sfx.play('ui_move');
+        this.runPauseAction(action);
+      }
     } else if (nav.confirm) {
       sfx.play('ui_select');
       if (this.runPauseAction(p.activate())) return true;
@@ -711,6 +735,7 @@ export class GameScene extends Phaser.Scene {
   /** Führt eine Menüaktion aus. true = Szene verlassen. */
   private runPauseAction(action: PauseAction | null): boolean {
     if (action === 'toggleSound') this.cycleSound();
+    if (action === 'deviceNext' || action === 'devicePrev') this.chooseDevice(action === 'deviceNext' ? 1 : -1);
     if (action === 'help') this.openHelp();
     if (action === 'leave') {
       // Online zuerst dem Server Bescheid geben (Platz sofort frei), dann absichtlich schließen
@@ -783,7 +808,7 @@ export class GameScene extends Phaser.Scene {
       t.setVisible(item !== undefined);
       if (!item) return;
       const sel = i === p.selected;
-      t.setText(`${sel ? '> ' : '  '}${pauseLabel(item, audioToggles())}`)
+      t.setText(`${sel ? '> ' : '  '}${pauseLabel(item, audioToggles(), this.deviceTracker?.chosen)}`)
         .setColor(sel ? PAUSE_COLOR.selected : PAUSE_COLOR.normal)
         .setPosition(GAME_W / 2, top + itemsTop + i * PAUSE.rowH);
     });
@@ -913,7 +938,7 @@ export class GameScene extends Phaser.Scene {
     const slot = this.slots[0];
     const tracker = this.deviceTracker;
     if (!tracker || padIndex === null || !slot) return;
-    const next = autoSwitchTarget(slot.device, this.autoSwitch, padIndex);
+    const next = autoSwitchTarget(slot.device, this.autoSwitch && !this.manualDevice, padIndex);
     if (!next) return;
     tracker.choose(next);
     saveOnlineDevice(next);
@@ -939,9 +964,27 @@ export class GameScene extends Phaser.Scene {
     if (notice) this.notices.show(slot.id, notice);
   }
 
+  /**
+   * Esc-Menü "Steuerung" (nur online): nächstes oder voriges Gerät wählen, speichern (wie "Steuerung online" in den
+   * Einstellungen) und sofort umstellen. Fehlt das gewählte Gamepad, springt die Tastatur ein und der Hinweis sagt es.
+   */
+  private chooseDevice(dir: -1 | 1): void {
+    const tracker = this.deviceTracker;
+    const slot = this.slots[0];
+    if (!tracker || !slot) return;
+    const next = stepDevice(tracker.chosen, dir);
+    tracker.choose(next);
+    saveOnlineDevice(next);
+    this.manualDevice = true;
+    const change = tracker.update((i) => padConnected(this, i));
+    if (change) this.useDevice(change.device, change.notice);
+    else if (tracker.fallback && tracker.active) this.notices.show(slot.id, fallbackNotice(tracker.active));
+  }
+
   /** Tastatur als Rückfall wurde wirklich benutzt: sie wird das gespeicherte Gerät (wie ein Auto-Wechsel). */
   private keepKeyboardFallback(): void {
     const slot = this.slots[0];
+    if (this.manualDevice) return; // von Hand gewählt: die Wahl gilt
     const kept = this.deviceTracker?.keepFallback();
     if (!kept || !slot) return;
     saveOnlineDevice(kept);
