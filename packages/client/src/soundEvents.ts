@@ -10,6 +10,12 @@ const BITE_MIN_DROP = CONFIG.npc.dog.biteDamage - 1;
 const BITE_NEAR = CONFIG.npc.dog.biteRadius + 6;
 const PUNCH_NEAR = CONFIG.fight.radius + 6;
 const SPRAY_NEAR = CONFIG.spray.radius + 6;
+/** Beschlagnahme: Polizist so nah am Spieler (Kontrollradius plus Spielraum für Interpolation und Bewegung) ... */
+const SEIZE_NEAR = CONFIG.npc.police.controlRadius + 8;
+/** ... und die Kontrolle im vorigen Zustand höchstens so weit vor dem Ende (online kommen Zustände nur alle paar Ticks) ... */
+const SEIZE_CHECK_SLACK_MS = 600;
+/** ... und die Zahl der verlorenen Flaschen höchstens so weit vom beschlagnahmten Anteil entfernt (Fund im selben Schritt). */
+const SEIZE_COUNT_SLACK = 1;
 
 /** Höchstens so viele Plings pro Frame (online kann ein Snapshot mehrere Abgaben enthalten). */
 export const PLING_MAX_PER_FRAME = 4;
@@ -131,10 +137,13 @@ export interface Seizure {
  * Beschlagnahmen zwischen zwei Zuständen. Rein und nur aus Zustandsunterschieden, damit es lokal und
  * online gleich funktioniert. Erkennungszeichen: Am Ende einer Kontrolle lässt der Polizist den
  * Spieler in Ruhe (restId wechselt auf ihn) und dessen Flaschen werden weniger. Ausrauben und Abgabe
- * senken die Flaschen auch, setzen aber keinen Polizisten in Ruhe.
+ * senken die Flaschen auch, setzen aber keinen Polizisten in Ruhe. Weil ein Polizist, der aufgibt, den
+ * Spieler ebenfalls in Ruhe lässt, zählt es nur, wenn er zuvor neben ihm stand, die Kontrolle fast voll war
+ * und etwa der beschlagnahmte Anteil (aufgerundet) fehlt.
  */
 export function detectSeizures(prev: GameState | null, next: GameState, ownIds: string[] | 'all'): Seizure[] {
   if (prev === null) return [];
+  const cfg = CONFIG.npc.police;
   const out: Seizure[] = [];
   for (const p of Object.values(next.players)) {
     if (ownIds !== 'all' && !ownIds.includes(p.id)) continue;
@@ -142,10 +151,15 @@ export function detectSeizures(prev: GameState | null, next: GameState, ownIds: 
     if (!q) continue;
     const count = totalBottles(q.bottles) - totalBottles(p.bottles);
     if (count <= 0) continue;
+    const expected = Math.ceil(totalBottles(q.bottles) * cfg.fraction);
+    if (Math.abs(count - expected) > SEIZE_COUNT_SLACK) continue;
     const byPolice = next.npcs.some((n) => {
       if (n.kind !== 'police' || n.restId !== p.id) return false;
       const before = prev.npcs.find((m) => m.id === n.id);
-      return before !== undefined && before.restId !== p.id;
+      if (before === undefined || before.restId === p.id) return false;
+      const checking = before.targetId === p.id && before.checkMs >= cfg.checkMs - SEIZE_CHECK_SLACK_MS;
+      const near = Math.hypot(before.x - q.x, before.y - q.y) <= SEIZE_NEAR || Math.hypot(n.x - p.x, n.y - p.y) <= SEIZE_NEAR;
+      return checking && near;
     });
     if (byPolice) out.push({ id: p.id, count });
   }

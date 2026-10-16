@@ -262,18 +262,44 @@ describe('plingStep', () => {
 });
 
 describe('detectSeizures', () => {
-  /** Polizist beendet die Kontrolle: Spieler a verliert Flaschen, der Polizist lässt a nun in Ruhe. */
-  function seized(): [GameState, GameState] {
+  /**
+   * Polizist beendet die Kontrolle: Er steht neben Spieler a, die Kontrolle ist fast voll, a verliert die Hälfte
+   * der Flaschen (aufgerundet) und der Polizist lässt a nun in Ruhe.
+   */
+  function seized(npcOver: Partial<Npc> = {}, after: { plastic: number; glass: number; crate: number } = { plastic: 0, glass: 2, crate: 0 }): [GameState, GameState] {
     const p = next(fresh(), (s) => {
       s.players.a.bottles = { plastic: 3, glass: 2, crate: 0 };
-      s.npcs = [npc({ kind: 'police', targetId: 'a', checkMs: 1980 })];
+      const a = s.players.a;
+      s.npcs = [npc({ kind: 'police', x: a.x + 10, y: a.y, targetId: 'a', checkMs: 1980, ...npcOver })];
     });
     const n = next(p, (s) => {
-      s.players.a.bottles = { plastic: 0, glass: 2, crate: 0 };
+      s.players.a.bottles = { ...after };
       Object.assign(s.npcs[0], { mood: 'roaming', targetId: null, checkMs: 0, restId: 'a', restMs: 20000 });
     });
     return [p, n];
   }
+
+  it('ignores a police npc giving up far away in the same snapshot as an unrelated bottle loss', () => {
+    // Ausdauer verbraucht: der Polizist lässt a in Ruhe, zugleich gibt a Flaschen ab bzw. wird ausgeraubt
+    const [p, n] = seized({ x: 0, y: 0, checkMs: 0 });
+    expect(detectSeizures(p, n, 'all')).toEqual([]);
+    expect(detectSounds(p, n, 'all')).not.toContain('policeSeize');
+  });
+
+  it('needs a nearly finished check right next to the player', () => {
+    expect(detectSeizures(...seized({ checkMs: 300 }), 'all')).toEqual([]);
+    expect(detectSeizures(...seized({ x: 0, y: 0 }), 'all')).toEqual([]);
+    expect(detectSeizures(...seized({ targetId: 'b' }), 'all')).toEqual([]);
+    // online kommen Zustände nur alle paar Ticks an: etwas Spielraum bei der Kontrollzeit
+    expect(detectSeizures(...seized({ checkMs: CONFIG.npc.police.checkMs - 400 }), 'all')).toEqual([{ id: 'a', count: 3 }]);
+  });
+
+  it('needs about half of the bottles (rounded up) to be gone', () => {
+    expect(detectSeizures(...seized({}, { plastic: 2, glass: 2, crate: 0 }), 'all')).toEqual([]);
+    expect(detectSeizures(...seized({}, { plastic: 0, glass: 0, crate: 0 }), 'all')).toEqual([]);
+    // im selben Snapshot eine Flasche gefunden: 2 statt 3 weniger zählt noch
+    expect(detectSeizures(...seized({}, { plastic: 1, glass: 2, crate: 0 }), 'all')).toEqual([{ id: 'a', count: 2 }]);
+  });
 
   it('reports how many bottles the police took', () => {
     const [p, n] = seized();
