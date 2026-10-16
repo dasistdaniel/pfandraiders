@@ -3,7 +3,9 @@ import { CONFIG, createGame, DEFAULT_MAP_ID, MAP_DEFS, NO_INPUT, ROOM_COLORS, TI
 import type { GameState, MapData, MapId, Npc, Player, Progress, ZoneState } from '@pfandraiders/core';
 import { LocalConnection } from '../connection';
 import type { GameConnection } from '../connection';
-import { createSource } from '../devices';
+import { createSource, padConnected } from '../devices';
+import type { DeviceRef } from '../devices';
+import { anyKeyHeld, OnlineDeviceTracker } from '../onlineDevice';
 import { isSwinging } from '../fightView';
 import { isSpraying, SPRAY_COLOR, sprayCloudRadius } from '../sprayView';
 import { LocalShop } from '../localShop';
@@ -30,9 +32,9 @@ import { GAME_H, GAME_W, viewportsFor, WORLD_ZOOM } from '../layout';
 import { PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../pauseMenu';
 import type { PauseAction } from '../pauseMenu';
 import type { OnlineConnection } from '../online';
-import { padBLeaves } from '../sources';
+import { guardHeld, padBLeaves } from '../sources';
 import type { InputSource } from '../sources';
-import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLocalMapId, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
+import { audioNoticeText, autoSwitchTarget, deviceLabel, loadAutoSwitch, loadLastKeyboard, loadLocalMapId, loadLocalRoundMs, loadOnlineDevice, saveOnlineDevice } from '../settings';
 import { playerName, seizeText } from '../text';
 import { CONNECT_STALL_MS, JoinedWatch, ReconnectPlan } from '../reconnect';
 import { chooseLocalMapId } from '../mapChoice';
@@ -162,6 +164,8 @@ export class GameScene extends Phaser.Scene {
   /** Online: Auto-Wechsel aufs Gamepad erlaubt (Einstellung) und Index des Pads, dessen Taste zuletzt gedrückt wurde. */
   private autoSwitch = true;
   private pendingPad: number | null = null;
+  /** Online: gewähltes und aktives Gerät (Tastatur springt für ein fehlendes Gamepad ein); lokal null. */
+  private deviceTracker: OnlineDeviceTracker | null = null;
 
   constructor() {
     super('game');
@@ -201,6 +205,7 @@ export class GameScene extends Phaser.Scene {
     this.padNavPrev = {};
     this.pendingPad = null;
     this.autoSwitch = loadAutoSwitch();
+    this.deviceTracker = null;
     let state: GameState;
     this.playerColors = new Map();
     let localParams: URLSearchParams | null = null;
@@ -209,11 +214,15 @@ export class GameScene extends Phaser.Scene {
       this.conn = online;
       state = online.getState();
       this.mapId = online.mapId;
-      // Ein Spieler pro Browser mit dem Gerät aus den Einstellungen. Farben kommen aus der Raumliste des Servers.
+      // Ein Spieler pro Browser mit dem Gerät aus den Einstellungen (fehlt das gewählte Gamepad, springt die
+      // Tastatur ein). Farben kommen aus der Raumliste des Servers.
       for (const r of online.roster) this.playerColors.set(r.id, r.color);
+      this.deviceTracker = new OnlineDeviceTracker(loadOnlineDevice(), loadLastKeyboard());
+      const first = this.deviceTracker.update((i) => padConnected(this, i));
       this.slots = [
-        { id: online.you, color: this.playerColors.get(online.you) ?? ROOM_COLORS[0], device: loadOnlineDevice() },
+        { id: online.you, color: this.playerColors.get(online.you) ?? ROOM_COLORS[0], device: first?.device ?? loadOnlineDevice() },
       ];
+      if (first?.notice) this.notices.show(online.you, first.notice);
       // Neue Runde (Server schickt erneut `start`) und Verbindungsverlust
       online.onStart = () => this.scene.restart({ online });
       online.onClosed = () => this.beginReconnect();
@@ -432,6 +441,7 @@ export class GameScene extends Phaser.Scene {
     // Gerät für B als 'zurück' vor dem Auto-Wechsel: der Druck, der wechselt, soll nicht zugleich hinauswerfen
     const deviceBefore = this.slots[0]?.device;
     this.applyAutoSwitch();
+    this.syncOnlineDevice();
     // Liegt die Anleitung (aus dem Esc-Menü) darüber, gehören ihr Esc, B und die Pfeile: hier trotzdem lesen,
     // damit kein Druck liegen bleibt, aber nicht auswerten.
     const helpOpen = this.helpOpen();
@@ -453,6 +463,8 @@ export class GameScene extends Phaser.Scene {
     this.slots.forEach((slot, i) => {
       const keys = this.sources[i].read();
       this.conn.setInput(slot.id, paused ? { ...NO_INPUT } : buildInput(keys));
+      // Online: Tastatur springt für ein fehlendes Gamepad ein; ein echter Tastendruck macht sie zum gewählten Gerät
+      if (i === 0 && !paused && this.deviceTracker?.fallback && anyKeyHeld(keys)) this.keepKeyboardFallback();
     });
     if (!frozen) this.conn.update(delta);
     this.updateNetOverlay(delta);
@@ -892,23 +904,48 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Online, Tastatur gewählt, Auto-Wechsel an und eine Gamepad-Taste gedrückt: Steuerung auf dieses Pad
-   * umstellen und speichern. Die neue Quelle wird einmal gelesen, damit der auslösende Druck keinen Kauf auslöst.
+   * Online, mit Tastatur gespielt (auch als Rückfall für ein fehlendes Gamepad), Auto-Wechsel an und eine
+   * Gamepad-Taste gedrückt: dieses Pad wählen und speichern. Den Wechsel selbst macht syncOnlineDevice.
    */
   private applyAutoSwitch(): void {
     const padIndex = this.pendingPad;
     this.pendingPad = null;
     const slot = this.slots[0];
-    if (!this.online || padIndex === null || !slot) return;
+    const tracker = this.deviceTracker;
+    if (!tracker || padIndex === null || !slot) return;
     const next = autoSwitchTarget(slot.device, this.autoSwitch, padIndex);
     if (!next) return;
-    slot.device = next;
+    tracker.choose(next);
     saveOnlineDevice(next);
-    const source = createSource(this, next);
-    source.read();
+  }
+
+  /** Online: aktives Gerät nachführen (Gamepad verbunden oder weg, neue Wahl) und bei einem Wechsel umstellen. */
+  private syncOnlineDevice(): void {
+    const change = this.deviceTracker?.update((i) => padConnected(this, i));
+    if (change) this.useDevice(change.device, change.notice);
+  }
+
+  /**
+   * Eigene Eingabequelle mitten im Spiel tauschen: Tasten, die beim Wechsel gehalten werden (der auslösende Druck),
+   * zählen erst nach dem Loslassen; die Tastenhinweise im HUD folgen dem Gerät.
+   */
+  private useDevice(device: DeviceRef, notice: string): void {
+    const slot = this.slots[0];
+    if (!slot) return;
+    slot.device = device;
+    const source = guardHeld(createSource(this, device));
     this.sources[0] = source;
     this.huds[0]?.setLabels(source.labels);
-    this.notices.show(slot.id, `Steuerung: ${deviceLabel(next)}`);
+    if (notice) this.notices.show(slot.id, notice);
+  }
+
+  /** Tastatur als Rückfall wurde wirklich benutzt: sie wird das gespeicherte Gerät (wie ein Auto-Wechsel). */
+  private keepKeyboardFallback(): void {
+    const slot = this.slots[0];
+    const kept = this.deviceTracker?.keepFallback();
+    if (!kept || !slot) return;
+    saveOnlineDevice(kept);
+    this.notices.show(slot.id, `Steuerung: ${deviceLabel(kept)}`);
   }
 
   /** Pads mit neuem B-Druck; beim ersten Blick auf ein Pad nur den Zustand merken (gehaltene Taste zählt nicht). */

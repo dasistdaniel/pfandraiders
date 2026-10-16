@@ -74,6 +74,7 @@ export function stepVolume(v: number, dir: -1 | 1): number {
 
 const ONLINE_DEVICE_KEY = 'pfandraiders.onlineDevice';
 const AUTO_SWITCH_KEY = 'pfandraiders.autoSwitch';
+const LAST_KEYBOARD_KEY = 'pfandraiders.lastKeyboard';
 
 /** Wählbare Geräte für den einen Online-Platz, in der Reihenfolge des Menüs. */
 export const ONLINE_DEVICES: readonly DeviceRef[] = [
@@ -87,7 +88,7 @@ export const ONLINE_DEVICES: readonly DeviceRef[] = [
 
 export const DEFAULT_ONLINE_DEVICE: DeviceRef = { kind: 'keyboard', layout: 0 };
 
-const sameDevice = (a: DeviceRef, b: DeviceRef): boolean =>
+export const sameDevice = (a: DeviceRef, b: DeviceRef): boolean =>
   a.kind === 'keyboard' ? b.kind === 'keyboard' && a.layout === b.layout : b.kind === 'pad' && a.index === b.index;
 
 /** Kopie, damit niemand die Einträge von ONLINE_DEVICES verändert. */
@@ -125,11 +126,24 @@ export function loadOnlineDevice(store: KeyValueStore | undefined = defaultStore
   }
 }
 
+/** Speichert das Gerät; eine Tastatur merkt sich zusätzlich als zuletzt genutzte (Rückfall bei fehlendem Gamepad). */
 export function saveOnlineDevice(d: DeviceRef, store: KeyValueStore | undefined = defaultStore()): void {
   try {
     store?.setItem(ONLINE_DEVICE_KEY, serializeDevice(d));
+    if (d.kind === 'keyboard') store?.setItem(LAST_KEYBOARD_KEY, String(d.layout));
   } catch {
     // Speicher gesperrt: Wahl gilt nur für diese Sitzung
+  }
+}
+
+/** Zuletzt online gewählte Tastaturbelegung (0 = Tastatur 1, Standard). Wirft nie. */
+export function loadLastKeyboard(store: KeyValueStore | undefined = defaultStore()): number {
+  try {
+    const raw = store?.getItem(LAST_KEYBOARD_KEY);
+    const found = ONLINE_DEVICES.find((d) => d.kind === 'keyboard' && String(d.layout) === raw);
+    return found?.kind === 'keyboard' ? found.layout : 0;
+  } catch {
+    return 0;
   }
 }
 

@@ -1,20 +1,22 @@
 import Phaser from 'phaser';
 import { BUY_REFUSAL_TEXT, freshProgress, ROOM_COLORS } from '@pfandraiders/core';
 import type { MapId, Progress } from '@pfandraiders/core';
-import { createSource } from '../devices';
+import { createSource, padConnected } from '../devices';
 import type { PlayerSlot } from '../devices';
 import { formatMoney } from '../format';
 import { GAME_H, GAME_W, viewportsFor } from '../layout';
 import type { Rect } from '../layout';
 import { LocalShop } from '../localShop';
 import type { OnlineConnection } from '../online';
-import { loadOnlineDevice } from '../settings';
+import { OnlineDeviceTracker } from '../onlineDevice';
+import { loadLastKeyboard, loadOnlineDevice } from '../settings';
 import type { SoundId } from '../audioIds';
 import { preferAlternatives } from '../eventSounds';
 import { sfx } from '../sfx';
 import { ShopModel, shopPointerEnabled } from '../shopModel';
 import type { ShopAction, ShopRowView } from '../shopModel';
 import { ShopNav, shopHint } from '../shopNav';
+import { guardHeld } from '../sources';
 import type { InputSource } from '../sources';
 import { playerName } from '../text';
 
@@ -72,6 +74,8 @@ export class ShopScene extends Phaser.Scene {
   private leaving = false;
   private lastMoney: number | null = null;
   private lastCart: number | null = null;
+  /** Online: Tastatur springt für ein fehlendes Gamepad ein (wie im Spiel) */
+  private deviceTracker: OnlineDeviceTracker | null = null;
 
   constructor() {
     super('shop');
@@ -87,6 +91,7 @@ export class ShopScene extends Phaser.Scene {
     this.leaving = false;
     this.lastMoney = null;
     this.lastCart = null;
+    this.deviceTracker = null;
   }
 
   create(): void {
@@ -99,7 +104,11 @@ export class ShopScene extends Phaser.Scene {
     if (online) {
       const me = online.roster.find((r) => r.id === online.you);
       const view = { x: 0, y: 0, w: GAME_W, h: GAME_H };
-      this.panels.push(this.makePanel(online.you, me?.name ?? 'Du', me?.color ?? ROOM_COLORS[0], view, createSource(this, loadOnlineDevice()), online.isHost()));
+      this.deviceTracker = new OnlineDeviceTracker(loadOnlineDevice(), loadLastKeyboard());
+      const first = this.deviceTracker.update((i) => padConnected(this, i));
+      const device = first?.device ?? loadOnlineDevice();
+      this.panels.push(this.makePanel(online.you, me?.name ?? 'Du', me?.color ?? ROOM_COLORS[0], view, createSource(this, device), online.isHost()));
+      if (first?.notice) this.say(this.panels[0], first.notice);
       this.lastMoney = online.shop?.money ?? null;
       this.lastCart = online.shop?.items.cart ?? null;
       online.onShopState = () => {
@@ -144,6 +153,12 @@ export class ShopScene extends Phaser.Scene {
       if (this.online) this.leaveOnline();
       else this.goTo('menu', {});
       return;
+    }
+    // Online: gewähltes Gamepad taucht auf oder verschwindet: Quelle tauschen (gehaltene Tasten erst nach dem Loslassen)
+    const change = this.deviceTracker?.update((i) => padConnected(this, i));
+    if (change && this.panels[0]) {
+      this.panels[0].source = guardHeld(createSource(this, change.device));
+      if (change.notice) this.say(this.panels[0], change.notice);
     }
     for (const panel of this.panels) {
       const progress = this.progressOf(panel.id);

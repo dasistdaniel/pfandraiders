@@ -11,6 +11,7 @@ import {
   DEFAULT_ONLINE_DEVICE,
   deviceLabel,
   loadAutoSwitch,
+  loadLastKeyboard,
   loadOnlineDevice,
   ONLINE_DEVICES,
   parseDevice,
@@ -194,6 +195,19 @@ describe('online control device', () => {
     expect(stepDevice({ kind: 'keyboard', layout: 1 }, 1)).toEqual({ kind: 'pad', index: 0 });
     expect(stepDevice({ kind: 'pad', index: 3 }, 1)).toEqual({ kind: 'keyboard', layout: 0 });
     expect(stepDevice({ kind: 'keyboard', layout: 0 }, -1)).toEqual({ kind: 'pad', index: 3 });
+  });
+
+  it('remembers the last keyboard layout (Tastatur 1 by default) when a keyboard is saved', () => {
+    const s = store();
+    expect(loadLastKeyboard(s)).toBe(0);
+    saveOnlineDevice({ kind: 'keyboard', layout: 1 }, s);
+    expect(loadLastKeyboard(s)).toBe(1);
+    saveOnlineDevice({ kind: 'pad', index: 2 }, s);
+    expect(loadLastKeyboard(s)).toBe(1);
+    s.map.set('pfandraiders.lastKeyboard', '7');
+    expect(loadLastKeyboard(s)).toBe(0);
+    const broken: KeyValueStore = { getItem: () => { throw new Error('locked'); }, setItem: () => { throw new Error('full'); } };
+    expect(loadLastKeyboard(broken)).toBe(0);
   });
 });
 

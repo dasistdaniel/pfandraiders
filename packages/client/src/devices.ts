@@ -174,6 +174,11 @@ const IDLE_PAD = {
   r1: false,
 };
 
+/** Ist das Gamepad mit diesem Index verbunden? Browser melden ein Pad oft erst nach dem ersten Tastendruck. */
+export function padConnected(scene: Phaser.Scene, index: number): boolean {
+  return scene.input.gamepad?.getPad(index)?.connected === true;
+}
+
 /** Baut die Eingabequelle für ein Gerät. Muss in der Szene aufgerufen werden, die sie nutzt. */
 export function createSource(scene: Phaser.Scene, ref: DeviceRef): InputSource {
   if (ref.kind === 'keyboard') {

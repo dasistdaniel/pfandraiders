@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
-import { createSource } from '../devices';
+import { createSource, padConnected } from '../devices';
 import { finalFooter, finalRows, winnerText } from '../finalView';
 import { formatMoney } from '../format';
 import { GAME_H, GAME_W } from '../layout';
 import type { OnlineConnection } from '../online';
 import { charFrameIndex, characterOfAvatar } from '../playerChars';
-import { loadOnlineDevice } from '../settings';
+import { OnlineDeviceTracker } from '../onlineDevice';
+import { loadLastKeyboard, loadOnlineDevice } from '../settings';
 import { sfx } from '../sfx';
 import { ShopNav } from '../shopNav';
+import { guardHeld } from '../sources';
 import type { InputSource } from '../sources';
 import { charTexture } from '../textureKeys';
 
@@ -26,6 +28,8 @@ export class FinalScene extends Phaser.Scene {
   private leaving = false;
   private requested = false;
   private source!: InputSource;
+  /** Tastatur springt für ein fehlendes Gamepad ein (wie im Spiel) */
+  private deviceTracker: OnlineDeviceTracker | null = null;
   /** Aktionstaste nur als neuer Druck (eine aus Rangliste oder Shop gehaltene Taste zählt nicht) */
   private nav = new ShopNav();
   private escKey!: Phaser.Input.Keyboard.Key;
@@ -55,7 +59,8 @@ export class FinalScene extends Phaser.Scene {
       return;
     }
     this.escKey = this.input.keyboard!.addKey('ESC');
-    this.source = createSource(this, loadOnlineDevice());
+    this.deviceTracker = new OnlineDeviceTracker(loadOnlineDevice(), loadLastKeyboard());
+    this.source = createSource(this, this.deviceTracker.update((i) => padConnected(this, i))?.device ?? loadOnlineDevice());
     this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.9).setOrigin(0, 0);
     this.add.text(GAME_W / 2, 20, 'Endwertung', { ...FONT, fontSize: '32px', color: '#ffee58' }).setOrigin(0.5, 0);
     this.winner = this.add.text(GAME_W / 2, 66, '', { ...FONT, fontSize: '20px', align: 'center', wordWrap: { width: GAME_W - 40 } }).setOrigin(0.5, 0);
@@ -97,6 +102,8 @@ export class FinalScene extends Phaser.Scene {
       this.leave();
       return;
     }
+    const change = this.deviceTracker?.update((i) => padConnected(this, i));
+    if (change) this.source = guardHeld(createSource(this, change.device));
     // Wie im Shop: Was beim ersten Bild schon gedrückt ist (Aktionstaste von "Serie beenden" oder der Rangliste),
     // zählt nicht; sonst würde der Host die Endwertung sofort für alle überspringen
     for (const cmd of this.nav.update(this.source.read(), delta)) {
