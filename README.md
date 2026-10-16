@@ -2,18 +2,32 @@
 
 # PfandRaiders
 
-Retro-Top-Down-Spiel: Pfandflaschen sammeln, abgeben, Container ausbauen. Design: `docs/superpowers/specs/`, Pläne: `docs/superpowers/plans/`.
+Retro-Top-Down-Spiel: Pfandflaschen sammeln, am Automaten abgeben, zwischen den Runden im Shop aufrüsten, Mitspieler ausknocken und ausrauben. Lokal im Splitscreen mit 1 bis 4 Spielern oder online mit 2 bis 8.
+
+Dokumentation:
+
+- [HANDOVER.md](HANDOVER.md): Einstieg für Entwickler. Stand, Aufbau, Architektur, Auslieferung, Konventionen, offene Punkte.
+- [docs/WARTUNG.md](docs/WARTUNG.md): Wartungshandbuch mit Rezepten (Werte ändern, Shop-Artikel, Töne, Karten, Figuren, Protokoll), Betrieb des Servers und Fehlersuche.
+- [docs/KARTEN.md](docs/KARTEN.md): eigene Karten mit Tiled bauen.
+- [docs/NETZ.md](docs/NETZ.md): Netz-Diagnose, Lag-Proxy, Messungen.
+- [docs/SOUNDLISTE.md](docs/SOUNDLISTE.md): alle Audio-IDs für eigene Sounds und Musik.
+- Entwürfe und Umsetzungspläne: `docs/superpowers/specs/` und `docs/superpowers/plans/` (Archiv, nicht nachgeführt; im Zweifel gilt der Code).
+
+Dieses README beschreibt das Spiel und seine Regeln.
 
 ## Entwickeln
 
     npm install
-    npm run dev        # Spiel im Browser (Vite)
-    npm test           # Tests aller Pakete
+    npm run dev          # Spiel im Browser (Vite, http://localhost:5173)
+    npm run dev:server   # Mehrspieler-Server (ws://localhost:8080)
+    npm test             # Tests aller Pakete
     npm run typecheck
+    npm run build        # Client bauen
+    npm run build:server # Server bauen
 
 ## Spielen
 
-Das Hauptmenü bietet Lokal spielen, Online spielen, So wird gespielt und Einstellungen (Effekte an/aus, Effekt-Lautstärke, Musik an/aus und Musik-Lautstärke; Lautstärken per Pfeiltasten, A/D oder Mausklick links/rechts der Zeile; Steuerung online, Auto-Wechsel, Steuerungsübersicht). Bedienung: Pfeile oder W/S wählen, Enter/E/Leertaste bestätigt, Esc geht zurück; Gamepad: Steuerkreuz, A, B. Lautstärken, die Schalter für Musik und Effekte und die Steuerung werden im Browser gespeichert.
+Das Hauptmenü bietet Lokal spielen, Online spielen, So wird gespielt, Einstellungen (Effekte an/aus, Effekt-Lautstärke, Musik an/aus und Musik-Lautstärke; Lautstärken per Pfeiltasten, A/D oder Mausklick links/rechts der Zeile; Steuerung online, Auto-Wechsel, Steuerung anzeigen) und Credits. Bedienung: Pfeile oder W/S wählen, Enter/E/Leertaste bestätigt, Esc geht zurück; Gamepad: Steuerkreuz, A, B. Lautstärken, die Schalter für Musik und Effekte und die Steuerung werden im Browser gespeichert.
 
 Online spielt jeder Browser einen Spieler. Mit welchem Gerät, legt „Steuerung online“ in den Einstellungen fest (Tastatur 1, Tastatur 2, Gamepad 1 bis 4; Standard Tastatur 1; links/rechts oder Klick auf die Pfeile); während der Runde wechselt man es im Esc-Menü unter „Steuerung“. Ist „Auto-Wechsel“ an (Standard), stellt ein Tastendruck auf einem Gamepad die Steuerung online sofort auf dieses Gamepad um und merkt sich das; die Tastenhinweise im HUD folgen dem Gerät. Ist das gewählte Gamepad nicht verbunden (Browser melden ein Gamepad oft erst nach dem ersten Tastendruck) oder wird es abgezogen, springt die zuletzt gewählte Tastaturbelegung ein (sonst Tastatur 1) und das HUD zeigt 3 s lang „Gamepad nicht verbunden: Tastatur 1“; sobald das Gamepad sich meldet, gilt wieder das Gamepad. Wer währenddessen wirklich mit der Tastatur spielt, stellt die Steuerung online damit dauerhaft auf diese Tastatur um (wie beim Auto-Wechsel). Shop und Endwertung springen ebenso ein. Online führt am Rundenende nur das B des gewählten Gamepads zurück ins Menü, beim Wiederverbinden nur Esc.
 
@@ -127,11 +141,11 @@ Ohne Audiodateien erzeugt das Spiel alle Effekte und die Musik selbst (WebAudio)
 
 ## Testhilfen per URL
 
-`?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden, überschreibt die Wahl der Lobby), `?seed=123` (feste Zufallsbefüllung), `?map=retro` (Karte, überschreibt die Wahl der Lobby), `?events=now` (NPCs und Zonen sofort statt nach Minuten).
+`?solo=1` (ein Spieler, ohne Lobby), `?players=2` (n Spieler ohne Lobby, abwechselnd Tastatur 1 und 2), `?round=30` (Rundenlänge in Sekunden, überschreibt die Wahl der Lobby), `?seed=123` (feste Zufallsbefüllung), `?map=retro` (Karte, überschreibt die Wahl der Lobby), `?events=now` (NPCs und Zonen sofort statt nach Minuten). Diese gelten für das lokale Spiel. Für das Online-Spiel: `?server=ws://localhost:8080` (Server-Adresse), `?join=CODE` (Teilen-Link, öffnet „Beitreten“) und `?debug=net` (Netz-Overlay, siehe „Netz testen“).
 
 ## Online spielen und Server
 
-Der Mehrspieler-Server (`packages/server`) ist ein WebSocket-Server mit Räumen. Die Spiellogik liegt im Paket `core`. Der Server rechnet 20 Schritte pro Sekunde; die eigene Figur bewegt der Client trotzdem sofort mit derselben Laufregel vorher (Vorhersage), Abweichungen zum Server werden sanft korrigiert, große (Respawn, Neustart) sofort übernommen. Fremde Figuren werden mit 100 ms Verzögerung zwischen zwei Server-Ständen gezeigt. Jede Eingabe-Nachricht (`input`) meldet im optionalen Feld `held` (ganze ms, höchstens 500), wie lange die vorige Eingabe galt; kommen nach einem Stau mehrere Eingaben auf einmal an, rechnet der Server die sonst verschluckte Bewegung nach (höchstens Echtzeit + 500 ms Laufzeit, siehe [docs/NETZ.md](docs/NETZ.md), Befund 2). Ältere Clients ohne `held` und ältere Server, die das Feld ignorieren, funktionieren weiter wie bisher.
+Der Mehrspieler-Server (`packages/server`) ist ein WebSocket-Server mit Räumen. Die Spiellogik liegt im Paket `core`. Der Server rechnet 20 Schritte pro Sekunde; die eigene Figur bewegt der Client trotzdem sofort mit derselben Laufregel vorher (Vorhersage), Abweichungen zum Server werden sanft korrigiert, große (Respawn, Neustart) sofort übernommen. Fremde Figuren werden mit einer Verzögerung zwischen zwei Server-Ständen gezeigt, die sich dem gemessenen Jitter anpasst (100 ms auf ruhiger Leitung, höchstens 250 ms; bei Lücken werden sie bis zu 150 ms fortgeschrieben, siehe [docs/NETZ.md](docs/NETZ.md), Befund 3). Jede Eingabe-Nachricht (`input`) meldet im optionalen Feld `held` (ganze ms, höchstens 500), wie lange die vorige Eingabe galt; kommen nach einem Stau mehrere Eingaben auf einmal an, rechnet der Server die sonst verschluckte Bewegung nach (höchstens Echtzeit + 500 ms Laufzeit, siehe [docs/NETZ.md](docs/NETZ.md), Befund 2). Ältere Clients ohne `held` und ältere Server, die das Feld ignorieren, funktionieren weiter wie bisher.
 
 Lokal starten (zwei Terminals):
 
@@ -142,7 +156,7 @@ Umgebungsvariablen des Servers:
 
 - `PORT`: Listen-Port, Standard 8080.
 - `ALLOWED_ORIGINS`: kommagetrennte Liste erlaubter Origins, zum Beispiel `https://dasistdaniel.github.io`. Ist sie leer, darf jede Origin verbinden (nur für die Entwicklung, der Server warnt beim Start).
-
+- `MAP_ID`: Startkarte neuer Räume, Standard `city` (siehe „Karten“).
 - `ROUND_MS`: optionale feste Rundenlänge in Millisekunden für Testrunden (mindestens 1000). Ist sie gesetzt, gilt sie statt der Wahl des Hosts (ist sie keine der wählbaren Zeiten, zeigt die Lobby statt der Auswahl „Rundenzeit: 2 min (vom Server festgelegt)“); sonst wählt der Host 3, 5, 7 oder 10 Minuten (Standard 5).
 - `GRACE_MS`: wie lange der Server den Platz eines getrennten Spielers hält, ganze Zahl in Millisekunden, 5000 bis 3600000, Standard 120000 (2 Minuten). Ungültige Werte ergeben eine Warnung und den Standardwert. Ein leerer Raum bleibt mindestens so lange bestehen wie die Frist plus 15 s. Folge: Eine getrennte Figur steht bis zu 2 Minuten regungslos in der Runde und kann in dieser Zeit niedergeschlagen und ausgeraubt werden.
 - `WS_COMPRESSION`: `on` oder `off`, Standard `on`. Komprimiert die WebSocket-Nachrichten mit permessage-deflate (Snapshots schrumpfen auf etwa 5 %, siehe [docs/NETZ.md](docs/NETZ.md), Befund 4). Der Browser handelt das selbst aus, das Nachrichtenformat bleibt gleich; `off` ist nur zum Vergleichen oder für Fehlersuche gedacht. Andere Werte ergeben eine Warnung, die Kompression bleibt an.
@@ -162,7 +176,7 @@ Auf dem VPS (Docker, der Nginx Proxy Manager übernimmt HTTPS; das externe Docke
     echo "ALLOWED_ORIGINS=https://dasistdaniel.github.io" > .env   # einmalig; optional auch ROUND_MS, GRACE_MS, MAP_ID, WS_COMPRESSION
     ./update.sh
 
-`update.sh` holt den neuesten Stand (`git pull --ff-only`) und baut den Container mit Buildinfo neu. Von Hand geht es so:
+`update.sh` holt den neuesten Stand (`git pull --ff-only`) und baut den Container mit Buildinfo neu. Jede Auslieferung beendet alle laufenden Räume (nichts wird gespeichert). Logs, Health-Check, Aufräumen alter Images und Zurückrollen: [docs/WARTUNG.md](docs/WARTUNG.md#betrieb-des-servers). Von Hand geht es so:
 
     cd deploy
     GIT_SHA=$(git rev-parse --short=7 HEAD) BUILD_NUMBER=$(git rev-list --count HEAD) docker compose up -d --build

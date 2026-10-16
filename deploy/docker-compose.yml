@@ -19,6 +19,12 @@ services:
       GRACE_MS: ${GRACE_MS:-}
       MAP_ID: ${MAP_ID:-}
       WS_COMPRESSION: ${WS_COMPRESSION:-}
+    # Log-Rotation: höchstens 3 Dateien zu 10 MB (sonst wächst das Docker-Log unbegrenzt)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - proxy-net
 networks:
