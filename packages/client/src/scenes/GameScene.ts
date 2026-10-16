@@ -56,7 +56,7 @@ const COLOR = {
 const FONT = { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', resolution: WORLD_ZOOM };
 
 /** Esc-Menü: Feld mittig über dem ganzen Bild, Zeilenabstand der Einträge, Tiefe über HUD und Wiederverbindungstext. */
-const PAUSE = { w: 340, pad: 16, titleH: 32, rowH: 30, hintGap: 10, hintH: 20, depth: 40, maxItems: 3 };
+const PAUSE = { w: 340, pad: 16, titleH: 32, rowH: 30, hintGap: 10, hintH: 20, depth: 40, maxItems: 4 };
 const PAUSE_COLOR = { normal: '#ffffff', selected: '#ffee58', hint: '#aaaaaa' };
 const PAD_START_BUTTON = 9;
 const STICK_THRESHOLD = 0.5;
@@ -419,6 +419,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.input.gamepad?.on('down', padDown);
     this.events.once('shutdown', () => {
+      this.closeHelp(); // eine offene Anleitung darf nicht über Shop oder Menü liegen bleiben
       this.syncLoops([]);
       this.input.gamepad?.off('down', unlock);
       this.input.gamepad?.off('down', padDown);
@@ -431,13 +432,17 @@ export class GameScene extends Phaser.Scene {
     // Gerät für B als 'zurück' vor dem Auto-Wechsel: der Druck, der wechselt, soll nicht zugleich hinauswerfen
     const deviceBefore = this.slots[0]?.device;
     this.applyAutoSwitch();
-    const escPressed = Phaser.Input.Keyboard.JustDown(this.menuKey);
-    const nav = this.readMenuNav();
+    // Liegt die Anleitung (aus dem Esc-Menü) darüber, gehören ihr Esc, B und die Pfeile: hier trotzdem lesen,
+    // damit kein Druck liegen bleibt, aber nicht auswerten.
+    const helpOpen = this.helpOpen();
+    const escPressed = Phaser.Input.Keyboard.JustDown(this.menuKey) && !helpOpen;
+    const navRead = this.readMenuNav();
+    const nav: MenuNav = helpOpen ? { move: 0, confirm: false, back: false, start: false } : navRead;
     // Das Esc-Menü gibt es nur in der laufenden Runde ohne Wiederverbindung; sonst gilt das bisherige Esc.
     const menuAllowed = !this.plan && this.conn.getState().phase !== 'ended';
     if (!menuAllowed) {
       if (this.pause.isOpen) this.closePause();
-    } else if (this.handlePauseInput(escPressed, nav)) {
+    } else if (!helpOpen && this.handlePauseInput(escPressed, nav)) {
       return; // Spiel verlassen
     }
     const paused = this.pause.isOpen;
@@ -462,7 +467,7 @@ export class GameScene extends Phaser.Scene {
     // Esc zählt hier nur, wenn das Esc-Menü nicht zuständig war (Rundenende, Wiederverbindung).
     // Online zählt nur das B des gewählten Gamepads, und nur am Rundenende: beim Wiederverbinden nur Esc,
     // denn B ist Ausrauben und ein Verbindungsabbruch mitten im Ausrauben soll nicht hinauswerfen.
-    const padB = padBLeaves(this.online !== null, deviceBefore, this.padBPresses());
+    const padB = padBLeaves(this.online !== null, deviceBefore, this.padBPresses()) && !helpOpen;
     const escMenu = !menuAllowed && escPressed;
     const menuPressed = escMenu || padB;
     if (this.plan && this.tickReconnect(delta, this.online ? escMenu : menuPressed)) return;
@@ -615,12 +620,12 @@ export class GameScene extends Phaser.Scene {
       const t = text(18, PAUSE_COLOR.normal).setInteractive({ useHandCursor: true });
       // Maus: Überfahren wählt die Zeile, Klick löst sie aus (wie Enter)
       t.on('pointerover', () => {
-        if (!this.pause.isOpen || i >= this.pause.items.length) return;
+        if (!this.pause.isOpen || i >= this.pause.items.length || this.helpOpen()) return;
         this.pause.select(i);
         this.renderPause();
       });
       t.on('pointerdown', () => {
-        if (!this.pause.isOpen || i >= this.pause.items.length) return;
+        if (!this.pause.isOpen || i >= this.pause.items.length || this.helpOpen()) return;
         this.pause.select(i);
         this.runPauseAction(this.pause.activate());
       });
@@ -694,6 +699,7 @@ export class GameScene extends Phaser.Scene {
   /** Führt eine Menüaktion aus. true = Szene verlassen. */
   private runPauseAction(action: PauseAction | null): boolean {
     if (action === 'toggleSound') this.cycleSound();
+    if (action === 'help') this.openHelp();
     if (action === 'leave') {
       // Online zuerst dem Server Bescheid geben (Platz sofort frei), dann absichtlich schließen
       this.online?.leave();
@@ -724,9 +730,25 @@ export class GameScene extends Phaser.Scene {
     for (const slot of this.slots) this.notices.show(slot.id, text);
   }
 
+  /** Esc-Menü schließen; eine darüber liegende Anleitung geht mit zu. */
   private closePause(): void {
     this.pause.close();
+    this.closeHelp();
     this.renderPause();
+  }
+
+  /** Liegt die Anleitung aus dem Esc-Menü gerade über dem Spiel? */
+  private helpOpen(): boolean {
+    return this.scene.isActive('help');
+  }
+
+  private openHelp(): void {
+    this.scene.launch('help', { from: 'game' });
+    this.scene.bringToTop('help');
+  }
+
+  private closeHelp(): void {
+    if (this.helpOpen()) this.scene.stop('help');
   }
 
   private renderPause(): void {
