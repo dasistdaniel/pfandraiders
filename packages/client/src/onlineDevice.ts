@@ -1,4 +1,5 @@
 import type { DeviceRef } from './devices';
+import { KEY_FIELDS } from './input';
 import type { KeyState } from './input';
 import { deviceLabel, sameDevice } from './settings';
 
@@ -24,7 +25,7 @@ export function fallbackNotice(keyboard: DeviceRef): string {
 
 /** Irgendeine Spieltaste gehalten? (Echter Tastendruck während des Rückfalls.) */
 export function anyKeyHeld(k: KeyState): boolean {
-  return Object.values(k).some(Boolean);
+  return KEY_FIELDS.some((f) => k[f]);
 }
 
 /**

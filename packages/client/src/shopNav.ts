@@ -28,7 +28,9 @@ export class ShopNav {
   private prevTabNext = false;
 
   update(k: KeyState, dtMs: number): ShopNavCommand[] {
-    const dir: ShopDir | null = k.up ? 'up' : k.down ? 'down' : k.left ? 'left' : k.right ? 'right' : null;
+    // Aus der Runde gehaltene Richtungstasten zählen erst nach dem Loslassen (wie die Aktionstaste)
+    const on = (d: ShopDir): boolean => k[d] && k.heldOver?.[d] !== true;
+    const dir: ShopDir | null = on('up') ? 'up' : on('down') ? 'down' : on('left') ? 'left' : on('right') ? 'right' : null;
     const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs : 0;
     if (this.first) {
       this.first = false;

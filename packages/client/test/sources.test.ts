@@ -134,3 +134,11 @@ describe('ReleaseGate and guardHeld', () => {
     expect(src.confirmPressed()).toBe(true);
   });
 });
+
+describe('ReleaseGate with held-over flags', () => {
+  it('only gates the boolean keys and passes heldOver through', () => {
+    const NONE: KeyState = { left: false, right: false, up: false, down: false, action: false, steal: false, attack: false, spray: false, tabPrev: false, tabNext: false };
+    const gate = new ReleaseGate({ ...NONE, heldOver: { up: true } });
+    expect(gate.filter({ ...NONE, up: true, heldOver: { up: true } })).toEqual({ ...NONE, up: true, heldOver: { up: true } });
+  });
+});

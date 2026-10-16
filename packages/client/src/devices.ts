@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { KeyState } from './input';
+import type { Direction, KeyState } from './input';
 import { isHeldOver, keyboardTabLabels, PAD_LABELS, PAD_TAB_LABELS, padToHeld } from './sources';
 import type { InputSource, KeyLabels, TabLabels } from './sources';
 
@@ -70,6 +70,8 @@ class KeyboardSource implements InputSource {
   /** Dasselbe für Ausrauben und Schlagen, nur für den Kategoriewechsel im Shop (im Spiel bleibt alles wie es war). */
   private stealHeldOver = false;
   private attackHeldOver = false;
+  /** Richtungen aus der vorigen Szene: nur als Hinweis in KeyState.heldOver (der Shop wertet es aus, das Spiel nicht). */
+  private readonly dirHeldOver: Record<Direction, boolean> = { up: false, down: false, left: false, right: false };
 
   constructor(
     keyboard: Phaser.Input.Keyboard.KeyboardPlugin,
@@ -90,6 +92,11 @@ class KeyboardSource implements InputSource {
     this.keys[layout.attack].on('down', (_key: Key, event: KeyboardEvent) => {
       this.attackHeldOver = isHeldOver(event);
     });
+    for (const dir of ['up', 'down', 'left', 'right'] as const) {
+      this.keys[layout[dir]].on('down', (_key: Key, event: KeyboardEvent) => {
+        this.dirHeldOver[dir] = isHeldOver(event);
+      });
+    }
   }
 
   read(): KeyState {
@@ -106,6 +113,7 @@ class KeyboardSource implements InputSource {
       spray: k[l.spray].isDown,
       tabPrev: k[l.steal].isDown && !this.stealHeldOver,
       tabNext: k[l.attack].isDown && !this.attackHeldOver,
+      heldOver: { ...this.dirHeldOver },
     };
   }
 

@@ -1,5 +1,6 @@
 import type { DeviceRef } from './devices';
-import type { KeyState } from './input';
+import { KEY_FIELDS } from './input';
+import type { KeyField, KeyState } from './input';
 
 /** Beschriftung der Tasten eines Geräts für Hinweistexte. */
 export interface KeyLabels {
@@ -98,10 +99,10 @@ export function isHeldOver(event: { repeat?: unknown } | null | undefined): bool
  * Esc-Menü), wirken nicht sofort als Spieleingabe.
  */
 export class ReleaseGate {
-  private readonly blocked = new Set<keyof KeyState>();
+  private readonly blocked = new Set<KeyField>();
 
   constructor(initial: KeyState) {
-    for (const key of Object.keys(initial) as (keyof KeyState)[]) if (initial[key]) this.blocked.add(key);
+    for (const key of KEY_FIELDS) if (initial[key]) this.blocked.add(key);
   }
 
   /** Eingabe ohne die noch gesperrten Tasten; eine losgelassene Taste ist ab dann frei. */
@@ -114,7 +115,7 @@ export class ReleaseGate {
     return out;
   }
 
-  blocks(key: keyof KeyState): boolean {
+  blocks(key: KeyField): boolean {
     return this.blocked.has(key);
   }
 }

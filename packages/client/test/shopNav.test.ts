@@ -66,6 +66,19 @@ describe('ShopNav', () => {
     expect(nav.update(k({ tabNext: true }), 16)).toEqual(['nextCategory']);
   });
 
+  it('ignores a direction held over from the round until it was released', () => {
+    // Phaser meldet eine aus der Runde gehaltene Taste erst mit der Tastenwiederholung, also nach dem ersten Bild
+    const nav = new ShopNav();
+    expect(nav.update(NONE, 16)).toEqual([]);
+    const held = k({ down: true, heldOver: { down: true } });
+    expect(nav.update(held, 16)).toEqual([]);
+    expect(nav.update(held, NAV_REPEAT_DELAY_MS + 3 * NAV_REPEAT_EVERY_MS)).toEqual([]);
+    // eine frisch gedrückte andere Richtung zählt trotzdem
+    expect(nav.update(k({ down: true, right: true, heldOver: { down: true } }), 16)).toEqual(['right']);
+    expect(nav.update(NONE, 16)).toEqual([]);
+    expect(nav.update(k({ down: true }), 16)).toEqual(['down']);
+  });
+
   it('switches the category while a direction is held', () => {
     const nav = new ShopNav();
     nav.update(NONE, 16);

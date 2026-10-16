@@ -90,3 +90,10 @@ describe('OnlineDeviceTracker', () => {
     expect(new OnlineDeviceTracker(KB1, 0).keepFallback()).toBeNull();
   });
 });
+
+describe('anyKeyHeld with held-over flags', () => {
+  it('ignores the heldOver object itself', () => {
+    const NONE: KeyState = { left: false, right: false, up: false, down: false, action: false, steal: false, attack: false, spray: false, tabPrev: false, tabNext: false };
+    expect(anyKeyHeld({ ...NONE, heldOver: {} })).toBe(false);
+  });
+});
