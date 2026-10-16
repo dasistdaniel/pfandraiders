@@ -216,7 +216,7 @@ Proxy Host: Domain der Spielserver-Adresse, Scheme `http`, Forward Hostname `pfa
 
 ## Zurückrollen
 
-**Client:** den schuldigen Merge auf `master` mit `git revert -m 1 <merge-commit>` (bei einem normalen Commit ohne `-m 1`) rückgängig machen und pushen; GitHub Pages baut neu. Alternativ in GitHub unter Actions einen älteren Lauf von „Pages“ erneut ausführen; der baut aber den aktuellen Stand von `master`, nicht den alten.
+**Client:** den schuldigen Merge auf `master` mit `git revert -m 1 <merge-commit>` (bei einem normalen Commit ohne `-m 1`) rückgängig machen und pushen; GitHub Pages baut neu.
 
 **Server:** `update.sh` kann nur vorwärts. Von Hand:
 
@@ -263,7 +263,7 @@ Zu sichern ist deshalb nur, was nicht im Repository steht:
 |---|---|
 | Online-Lobby zeigt „Client und Server haben verschiedene Versionen“ | Nach einem Merge ist Pages neu gebaut, der Server noch nicht. Auf dem VPS `deploy/update.sh` ausführen. Sonst hat der Browser einen alten Client im Cache: Strg+F5. |
 | „Raum nicht gefunden.“ | Code vertippt; der Raum wurde gelöscht, weil lange niemand verbunden war (Rückkehrfrist plus 15 s); der Server wurde neu gestartet oder ausgeliefert (alle Räume weg); oder der Client spricht mit einem anderen Server (`?server=` in der Adresse, falsche `SERVER_URL`). |
-| „Die Runde läuft bereits.“ | Beitritt nur in der Lobby und im Shop. Nach einem Verbindungsabbruch klappt die Rückkehr nur im selben Tab oder nach Neuladen (Token im sessionStorage), nicht in einem neuen Tab. |
+| „Die Runde läuft bereits.“ | Neu beitreten geht jederzeit außer während einer laufenden Runde (in der Endwertung sieht man sie und wartet auf die Lobby). Nach einem Verbindungsabbruch klappt die Rückkehr nur im selben Tab oder nach Neuladen (Token im sessionStorage), nicht in einem neuen Tab. |
 | Regungslose Figuren in der Runde („Geister“) | Getrennte Spieler bleiben bis zum Ende der Rückkehrfrist (`GRACE_MS`, Standard 2 min) als stehende Figur im Spiel und können ausgeraubt werden. Wer über „Spiel verlassen“ geht, bleibt bis Rundenende als Statist stehen. Beides ist so gewollt. |
 | Serie startet nicht | „Mindestens zwei Spieler nötig.“: Es müssen zwei Spieler verbunden sein. Nur der Host (erster verbundener Spieler) kann starten. |
 | Shop hängt, nächste Runde beginnt nicht | Alle verbundenen Spieler müssen „Bereit“ drücken, ein Zeitlimit gibt es nicht. Ein abwesender, aber verbundener Spieler blockiert; Auswege: er trennt sich, oder der Host wählt „Serie beenden“. Zeigt der Shop bei einem Spieler gar keinen Stand, verwirft sein Client den `shopState` (verschiedene Versionen, siehe erste Zeile). |
