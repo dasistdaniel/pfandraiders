@@ -24,6 +24,8 @@ import {
   saveLocalRoundMs,
   loadAvatarWish,
   saveAvatarWish,
+  loadHelpSeen,
+  saveHelpSeen,
   type KeyValueStore,
 } from '../src/settings';
 
@@ -323,5 +325,37 @@ describe('local map', () => {
     };
     expect(loadLocalMapId(broken)).toBe('city');
     expect(() => saveLocalMapId('retro', broken)).not.toThrow();
+  });
+});
+
+describe('help seen flag', () => {
+  const store = (): KeyValueStore & { data: Map<string, string> } => {
+    const data = new Map<string, string>();
+    return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) };
+  };
+
+  it('is unset at first and set after saving', () => {
+    const s = store();
+    expect(loadHelpSeen(s)).toBe(false);
+    saveHelpSeen(s);
+    expect(s.data.get('pfandraiders.helpSeen')).toBe('1');
+    expect(loadHelpSeen(s)).toBe(true);
+  });
+
+  it('counts as not seen without storage (the menu remembers it for the session)', () => {
+    expect(loadHelpSeen(undefined)).toBe(false);
+  });
+
+  it('never throws with a blocked store', () => {
+    const broken: KeyValueStore = {
+      getItem: () => {
+        throw new Error('gesperrt');
+      },
+      setItem: () => {
+        throw new Error('gesperrt');
+      },
+    };
+    expect(loadHelpSeen(broken)).toBe(false);
+    expect(() => saveHelpSeen(broken)).not.toThrow();
   });
 });

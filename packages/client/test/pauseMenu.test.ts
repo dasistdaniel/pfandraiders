@@ -10,7 +10,7 @@ describe('PauseMenu', () => {
     expect(m.activate()).toBeNull();
     m.toggle();
     expect(m.view).toBe('main');
-    expect(ids(m)).toEqual(['resume', 'toggleSound', 'askLeave']);
+    expect(ids(m)).toEqual(['resume', 'toggleSound', 'help', 'askLeave']);
     expect(m.selected).toBe(0);
   });
 
@@ -40,10 +40,20 @@ describe('PauseMenu', () => {
     expect(m.selected).toBe(1);
   });
 
-  it('asks once before leaving: askLeave shows the confirm page with "Nein" preselected', () => {
+  it('help keeps the menu open on the same entry (the help screen lies above it)', () => {
     const m = new PauseMenu();
     m.open();
     m.select(2);
+    expect(m.activate()).toBe('help');
+    expect(m.view).toBe('main');
+    expect(m.selected).toBe(2);
+    expect(m.items[2].label).toBe('Anleitung');
+  });
+
+  it('asks once before leaving: askLeave shows the confirm page with "Nein" preselected', () => {
+    const m = new PauseMenu();
+    m.open();
+    m.select(3);
     expect(m.activate()).toBe('askLeave');
     expect(m.view).toBe('confirm');
     expect(ids(m)).toEqual(['leave', 'stay']);
@@ -56,15 +66,15 @@ describe('PauseMenu', () => {
   it('"Nein, zurück" and Esc/B in the confirm page go back to the main page on "Spiel verlassen"', () => {
     const m = new PauseMenu();
     m.open();
-    m.select(2);
+    m.select(3);
     m.activate();
     expect(m.activate()).toBe('stay');
     expect(m.view).toBe('main');
-    expect(m.selected).toBe(2);
+    expect(m.selected).toBe(3);
     m.activate();
     m.toggle(); // Esc
     expect(m.view).toBe('main');
-    expect(m.selected).toBe(2);
+    expect(m.selected).toBe(3);
     m.activate();
     m.back(); // B
     expect(m.view).toBe('main');
@@ -77,13 +87,13 @@ describe('PauseMenu', () => {
     m.open();
     expect(m.selected).toBe(0);
     m.move(-1);
-    expect(m.selected).toBe(2);
+    expect(m.selected).toBe(3);
   });
 
   it('reopening after leaving the confirm page starts on the main page', () => {
     const m = new PauseMenu();
     m.open();
-    m.select(2);
+    m.select(3);
     m.activate();
     m.close();
     m.toggle();

@@ -5,12 +5,13 @@ import type { AudioToggles } from './settings';
 
 /** Ansicht des Esc-Menüs im Spiel: zu, Hauptseite oder Rückfrage vor dem Verlassen. */
 export type PauseView = 'closed' | 'main' | 'confirm';
-/** Ergebnis einer Bestätigung. Nur 'toggleSound' und 'leave' muss die Szene selbst ausführen. */
-export type PauseAction = 'resume' | 'toggleSound' | 'askLeave' | 'leave' | 'stay';
+/** Ergebnis einer Bestätigung. Nur 'toggleSound', 'help' und 'leave' muss die Szene selbst ausführen. */
+export type PauseAction = 'resume' | 'toggleSound' | 'help' | 'askLeave' | 'leave' | 'stay';
 
 export const PAUSE_MAIN_ITEMS: MenuItem[] = [
   { id: 'resume', label: 'Fortsetzen' },
   { id: 'toggleSound', label: 'Ton' },
+  { id: 'help', label: 'Anleitung' },
   { id: 'askLeave', label: 'Spiel verlassen' },
 ];
 
@@ -88,6 +89,8 @@ export class PauseMenu {
         break;
       case 'toggleSound':
         break; // Menü bleibt offen, nur die Beschriftung ändert sich
+      case 'help':
+        break; // Menü bleibt offen; die Anleitung liegt darüber, Esc/B führt hierher zurück
     }
     return action;
   }

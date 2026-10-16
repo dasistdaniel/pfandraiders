@@ -298,3 +298,25 @@ export function audioNoticeText(t: AudioToggles): string {
   const onOff = (on: boolean): string => (on ? 'an' : 'aus');
   return `Musik ${onOff(t.music)}, Effekte ${onOff(t.effects)}`;
 }
+
+// ---- Anleitung ----
+
+const HELP_SEEN_KEY = 'pfandraiders.helpSeen';
+
+/** Wurde die Anleitung schon einmal geöffnet? Ohne Speicher (gesperrt, fehlt) false. Wirft nie. */
+export function loadHelpSeen(store: KeyValueStore | undefined = defaultStore()): boolean {
+  try {
+    return store?.getItem(HELP_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Merkt sich, dass die Anleitung geöffnet wurde (der Hinweis im Hauptmenü verschwindet). */
+export function saveHelpSeen(store: KeyValueStore | undefined = defaultStore()): void {
+  try {
+    store?.setItem(HELP_SEEN_KEY, '1');
+  } catch {
+    // Speicher gesperrt: das Menü merkt es sich nur für diese Sitzung
+  }
+}
