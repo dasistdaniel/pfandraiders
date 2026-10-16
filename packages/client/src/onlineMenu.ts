@@ -20,7 +20,7 @@ import type { MenuTab } from './onlineMenuLogic';
 import { OnlineConnection } from './online';
 import { ALL_CHARACTERS, CHAR_FRAME_H, CHAR_FRAME_W, framePosition, PREVIEW_FRAME_MS, previewFrame } from './playerChars';
 import { EMPTY_ROOM_LIST_TEXT, firstSelectable, listAction, moveSelection, refreshAllowed, ROOM_LIST_HEADER, roomRows } from './roomList';
-import { roundMsLabel, roundsLabel } from './roundTime';
+import { fixedRoundText, roundMsLabel, roundsLabel } from './roundTime';
 import { loadAvatarWish, saveAvatarWish } from './settings';
 import { buildJoinLink, copyText } from './shareLink';
 import type { SocketFactory } from './online';
@@ -749,7 +749,8 @@ export function showOnlineMenu(
       const roundSelect = el('select', {}, 'font:inherit;margin-left:6px');
       for (const ms of ROUND_MS_CHOICES) roundSelect.appendChild(el('option', { value: String(ms), textContent: roundMsLabel(ms) }));
       roundSelect.onchange = () => conn.setRoundMs(Number(roundSelect.value));
-      roundRow.append(el('span', { textContent: 'Rundenzeit:' }), roundSelect, roundText);
+      const roundLabel = el('span', { textContent: 'Rundenzeit:' });
+      roundRow.append(roundLabel, roundSelect, roundText);
       const roundsRow = el('div', {}, 'margin-bottom:10px');
       const roundsText = el('span', { textContent: '' });
       const roundsSelect = el('select', {}, 'font:inherit;margin-left:6px');
@@ -776,9 +777,12 @@ export function showOnlineMenu(
         start.style.display = host ? 'inline-block' : 'none';
         hint.style.display = host ? 'none' : 'block';
         start.disabled = conn.roster.filter((p) => p.connected).length < 2;
-        roundSelect.style.display = host ? 'inline-block' : 'none';
+        // Vom Server festgelegte Rundenzeit (ROUND_MS, keine der Wahlmöglichkeiten): feste Zeile statt leerer Auswahl
+        const fixedRound = fixedRoundText(conn.roundMs);
+        roundLabel.style.display = fixedRound ? 'none' : 'inline';
+        roundSelect.style.display = host && !fixedRound ? 'inline-block' : 'none';
         roundSelect.value = String(conn.roundMs);
-        roundText.textContent = host ? '' : ` ${roundMsLabel(conn.roundMs)}`;
+        roundText.textContent = fixedRound ?? (host ? '' : ` ${roundMsLabel(conn.roundMs)}`);
         roundsSelect.style.display = host ? 'inline-block' : 'none';
         roundsSelect.value = String(conn.rounds);
         roundsText.textContent = host ? '' : ` ${roundsLabel(conn.rounds)}`;
