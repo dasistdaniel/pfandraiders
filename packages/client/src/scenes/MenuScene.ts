@@ -13,9 +13,10 @@ import { parseJoinParam, withoutJoinParam } from '../shareLink';
 import { audioToggles, music, setAudioToggles, sfx } from '../sfx';
 import { resolveServerUrl } from '../serverUrl';
 import { PAD_LABELS } from '../sources';
-import { deviceLabel, loadAutoSwitch, loadOnlineDevice, saveAutoSwitch, saveOnlineDevice, stepDevice, stepVolume } from '../settings';
+import { deviceLabel, loadAutoSwitch, loadHelpSeen, loadOnlineDevice, saveAutoSwitch, saveOnlineDevice, stepDevice, stepVolume } from '../settings';
 import type { DeviceRef } from '../devices';
 import { tileTexture } from '../textureKeys';
+import { helpOpenedThisSession } from './HelpScene';
 
 const STICK_THRESHOLD = 0.5;
 const COLOR_NORMAL = '#ffffff';
@@ -36,6 +37,7 @@ interface PadPrev {
 const MAIN_ITEMS: MenuItem[] = [
   { id: 'local', label: 'Lokal spielen' },
   { id: 'online', label: 'Online spielen' },
+  { id: 'help', label: 'So wird gespielt' },
   { id: 'settings', label: 'Einstellungen' },
   { id: 'credits', label: 'Credits' },
 ];
@@ -82,6 +84,9 @@ const ROW_H_SUB = 32;
 const CREDITS_LAST_Y = 470;
 const CREDITS_ROW_H = Math.min(56, Math.floor((CREDITS_LAST_Y - CREDITS_TOP) / Math.max(1, CREDIT_ITEMS.length - 1)));
 const CREDITS_WRAP = GAME_W - 64;
+/** Hinweis für Neue auf der Hauptseite: zwischen letztem Eintrag (y 452) und Hilfezeile (GAME_H - 24). */
+const NEW_HINT_Y = 486;
+const NEW_HINT = 'Neu hier? „So wird gespielt“ erklärt alles.';
 
 /** Ein Teilen-Link (?join=CODE) öffnet den Online-Dialog nur einmal pro Seitenaufruf. */
 let joinLinkChecked = false;
@@ -115,6 +120,10 @@ export class MenuScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private logo!: Phaser.GameObjects.Image;
   private noticeText: Phaser.GameObjects.Text | null = null;
+  /** "Neu hier?" nur, solange die Anleitung nie geöffnet wurde */
+  private newHint: Phaser.GameObjects.Text | null = null;
+  /** Eintrag, der beim Start gewählt sein soll (zurück aus der Anleitung) */
+  private selectId = '';
   private controlsText!: Phaser.GameObjects.Text;
   private keys!: Record<KeyName, Phaser.Input.Keyboard.Key>;
   private padPrev: Record<number, PadPrev> = {};
@@ -126,8 +135,9 @@ export class MenuScene extends Phaser.Scene {
     super('menu');
   }
 
-  init(data?: { notice?: string; resumeOnline?: OnlineConnection }): void {
+  init(data?: { notice?: string; resumeOnline?: OnlineConnection; select?: string }): void {
     this.notice = data?.notice ?? '';
+    this.selectId = data?.select ?? '';
     this.resumeOnline = data?.resumeOnline ?? null;
     // Phaser behält die Startdaten, wenn ein späteres scene.start('menu') keine mitgibt; sonst würde eine längst
     // geschlossene Verbindung erneut "fortgesetzt" (oder ein alter Hinweis erneut gezeigt)
@@ -150,6 +160,7 @@ export class MenuScene extends Phaser.Scene {
     this.itemTexts = [];
     this.detailTexts = [];
     this.model = new MenuModel(MAIN_ITEMS);
+    this.model.select(MAIN_ITEMS.findIndex((i) => i.id === this.selectId));
     // Ruhige Fassung: langsam, ohne Beat; läuft weiter, falls sie schon spielt
     music.setMode('menu');
     music.setProgress(0);
@@ -169,6 +180,12 @@ export class MenuScene extends Phaser.Scene {
           })
           .setOrigin(0.5)
       : null;
+    this.newHint =
+      loadHelpSeen() || helpOpenedThisSession()
+        ? null
+        : this.add
+            .text(GAME_W / 2, NEW_HINT_Y, NEW_HINT, { fontFamily: 'monospace', fontSize: '16px', color: '#a5d6a7' })
+            .setOrigin(0.5);
     this.controlsText = this.add
       .text(GAME_W / 2, 400, '', { fontFamily: 'monospace', fontSize: '14px', color: '#cccccc', align: 'center' })
       .setOrigin(0.5, 0);
@@ -272,6 +289,7 @@ export class MenuScene extends Phaser.Scene {
     const main = this.page === 'main';
     this.hintText.setText(credits ? HINT_CREDITS : HINT_DEFAULT);
     this.logo.setScale(main ? 1 : LOGO_SCALE_SUB);
+    this.newHint?.setVisible(main);
     this.noticeText?.setY(main ? NOTICE_Y_MAIN : NOTICE_Y_SUB);
     const itemsTop = main ? ITEMS_TOP_MAIN : ITEMS_TOP_SUB;
     const rowH = main ? ROW_H_MAIN : ROW_H_SUB;
@@ -377,6 +395,9 @@ export class MenuScene extends Phaser.Scene {
         break;
       case 'online':
         this.openOnline();
+        break;
+      case 'help':
+        this.scene.start('help', { from: 'menu' });
         break;
       case 'settings':
         this.showPage('settings');

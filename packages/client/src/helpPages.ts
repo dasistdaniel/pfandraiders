@@ -303,3 +303,12 @@ export function helpPages({ config = CONFIG, devices, localMax }: HelpOptions): 
     },
   ];
 }
+
+/** Nächste bzw. vorige Seite, ohne Umlauf (am Rand bleibt sie stehen). */
+export function stepPage(i: number, dir: -1 | 1, count: number): number {
+  return Math.min(count - 1, Math.max(0, i + dir));
+}
+
+export function pageLabel(i: number, count: number): string {
+  return `Seite ${i + 1}/${count}`;
+}

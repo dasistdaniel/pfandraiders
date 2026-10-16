@@ -12,6 +12,8 @@ import {
   moveLabel,
   NBSP,
   pageHeight,
+  pageLabel,
+  stepPage,
   secondsText,
   wrapText,
 } from '../src/helpPages';
@@ -177,5 +179,19 @@ describe('helpPages', () => {
   it('icons are only known keys', () => {
     const known = ['bottles', 'spot', 'dropoff', 'player', 'dog', 'police', 'money'];
     for (const p of pages) for (const e of p.entries) if (e.icon) expect(known).toContain(e.icon);
+  });
+});
+
+describe('page navigation', () => {
+  it('steps within the pages without wrapping', () => {
+    expect(stepPage(0, -1, 5)).toBe(0);
+    expect(stepPage(0, 1, 5)).toBe(1);
+    expect(stepPage(4, 1, 5)).toBe(4);
+    expect(stepPage(3, -1, 5)).toBe(2);
+  });
+
+  it('labels the page as "Seite n/m"', () => {
+    expect(pageLabel(0, 5)).toBe('Seite 1/5');
+    expect(pageLabel(4, 5)).toBe('Seite 5/5');
   });
 });
