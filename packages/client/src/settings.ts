@@ -1,4 +1,4 @@
-import { DEFAULT_MAP_ID, DEFAULT_ROUND_MS, isAvatar, isMapId, isRoundMs } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, DEFAULT_ROUND_MS, isAvatar, isRoundMs, isSelectableMapId } from '@pfandraiders/core';
 import type { MapId } from '@pfandraiders/core';
 import type { DeviceRef } from './devices';
 
@@ -187,18 +187,21 @@ export function saveLocalRoundMs(ms: number, store: KeyValueStore | undefined = 
 
 const LOCAL_MAP_KEY = 'pfandraiders.mapId';
 
-/** Karte der lokalen Lobby. Wirft nie; unbekannte (etwa gelöschte eigene) Karten ergeben die Standardkarte. */
+/**
+ * Karte der lokalen Lobby. Wirft nie; unbekannte (etwa gelöschte eigene) und versteckte Karten (die Übungskarte
+ * war früher wählbar) ergeben die Standardkarte.
+ */
 export function loadLocalMapId(store: KeyValueStore | undefined = defaultStore()): MapId {
   try {
     const raw = store?.getItem(LOCAL_MAP_KEY);
-    return isMapId(raw) ? raw : DEFAULT_MAP_ID;
+    return isSelectableMapId(raw) ? raw : DEFAULT_MAP_ID;
   } catch {
     return DEFAULT_MAP_ID;
   }
 }
 
 export function saveLocalMapId(id: MapId, store: KeyValueStore | undefined = defaultStore()): void {
-  if (!isMapId(id)) return;
+  if (!isSelectableMapId(id)) return;
   try {
     store?.setItem(LOCAL_MAP_KEY, id);
   } catch {

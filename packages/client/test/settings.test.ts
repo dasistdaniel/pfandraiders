@@ -314,6 +314,17 @@ describe('local map', () => {
     expect(store.data.get('pfandraiders.mapId')).toBe('geloescht');
   });
 
+  it('ignores a stored hidden map (the practice map was selectable before) and never stores one', () => {
+    const store = mapStore();
+    store.data.set('pfandraiders.mapId', 'uebung');
+    expect(loadLocalMapId(store)).toBe('city');
+    saveLocalMapId('uebung', store);
+    expect(store.data.get('pfandraiders.mapId')).toBe('uebung');
+    saveLocalMapId('retro', store);
+    saveLocalMapId('uebung', store);
+    expect(store.data.get('pfandraiders.mapId')).toBe('retro');
+  });
+
   it('never throws with a blocked store', () => {
     const broken: KeyValueStore = {
       getItem: () => {

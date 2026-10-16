@@ -35,6 +35,7 @@ export function customMapDef(src: CustomMapSource, taken: ReadonlySet<string>): 
     // retro zeichnet aus den Kacheltypen; Grafikebenen einer retro-Karte bleiben ungenutzt
     visuals: v.tileset === 'city' ? v.visuals : null,
     builtin: false,
+    hidden: v.hidden,
   };
 }
 

@@ -20,6 +20,12 @@ describe('chooseLocalMapId', () => {
     expect(chooseLocalMapId('moon', 'mars', 'venus')).toBe(DEFAULT_MAP_ID);
     expect(chooseLocalMapId('__proto__', {}, 'constructor')).toBe(DEFAULT_MAP_ID);
   });
+
+  it('plays the hidden practice map only via ?map= (and keeps it for the series), never from storage', () => {
+    expect(chooseLocalMapId('uebung', 'city', 'city')).toBe('uebung');
+    expect(chooseLocalMapId(null, 'uebung', 'city')).toBe('uebung');
+    expect(chooseLocalMapId(null, undefined, 'uebung')).toBe(DEFAULT_MAP_ID);
+  });
 });
 
 describe('mapLine', () => {

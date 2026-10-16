@@ -23,7 +23,7 @@ describe('customMapIdProblem', () => {
 describe('customMapDef', () => {
   it('turns a valid map into a registry entry with name and tileset from the properties', () => {
     const def = customMapDef(src('test-1'), BUILTIN);
-    expect(def).toMatchObject({ id: 'test-1', name: 'Testkarte', tileset: 'retro', visuals: null, builtin: false });
+    expect(def).toMatchObject({ id: 'test-1', name: 'Testkarte', tileset: 'retro', visuals: null, builtin: false, hidden: false });
     expect(def.map.spawns).toHaveLength(8);
   });
 

@@ -74,6 +74,7 @@ Dazu kommen eigene Karten aus `packages/core/src/maps/custom/` (Kennung = Datein
 
 - Lokal: In der Lobby wählt hoch/runter (W/S, Pfeiltasten, Steuerkreuz) die Karte; die Wahl wird gemerkt und gilt für alle Runden der Serie. `?map=<kennung>` in der URL hat Vorrang (Testhilfe).
 - Online: Der Host wählt die Karte in der Lobby mit ◄ ►, die anderen sehen sie; sie gilt für die ganze Serie und bleibt nach der Rückkehr in die Lobby. Die Raumliste zeigt die Karte jedes Raums.
+- Versteckte Karten (Tiled-Eigenschaft `hidden` = true, etwa die Übungskarte `uebung`) fehlen in beiden Kartenauswahlen und lehnt der Server bei der Auswahl ab; spielbar sind sie nur per `?map=<kennung>` oder `MAP_ID=<kennung>`.
 - Server: Umgebungsvariable `MAP_ID` legt die Startkarte neuer Räume fest (eine Kennung aus der Kartenliste, Standard `city`; Unbekanntes ergibt `city` und eine Warnung mit den bekannten Kennungen).
 
 Die Stadt wird aus einem ASCII-Plan erzeugt: `packages/core/src/maps/cityPlan.ts` (Legende im Kopf der Datei) wird mit `npx tsx packages/core/scripts/generateCity.ts` zur Tiled-Datei `city.tiled.json` mit Regel- und Grafikebenen. Nach Änderungen am Plan die Datei neu erzeugen; ein Test prüft, dass beide übereinstimmen und dass jeder Punkt von jedem Startpunkt aus erreichbar ist. Die Retro-Karte entsteht ebenso aus `packages/core/src/maps/retro-ascii.ts` mit `npx tsx packages/core/scripts/asciiToTiled.ts`. Shops gibt es auf keiner Karte mehr; das frühere Zeichen `S` bzw. der Objekttyp `shop` sind ungültig.
@@ -84,12 +85,12 @@ Bäume und Laternen sind weiche Hindernisse (Ebene `soft`): sie blockieren nur e
 
 Eigene Karten baut man mit [Tiled](https://www.mapeditor.org) (ab 1.10). Ausführlich: [docs/KARTEN.md](docs/KARTEN.md).
 
-1. `maps-src/pfandraiders.tiled-project` in Tiled öffnen, `maps-src/vorlage.tmx` kopieren und bearbeiten (Eigenschaften `name` und `tileset`, Ebenen `ground`, `below`, `above`, `walls`, `soft`, `objects`, `zones`).
+1. `maps-src/pfandraiders.tiled-project` in Tiled öffnen, `maps-src/vorlage.tmx` kopieren und bearbeiten (Eigenschaften `name`, `tileset` und optional `hidden`, Ebenen `ground`, `below`, `above`, `walls`, `soft`, `objects`, `zones`).
 2. Als JSON exportieren nach `packages/core/src/maps/custom/<kennung>.tiled.json` (Kennung: `a-z`, `0-9`, `-`, höchstens 24 Zeichen). Exporteinstellungen: Kachelebenen-Format CSV, Karte nicht unendlich; Kachelsätze einbetten egal.
 3. `npm run maps` prüft alle eigenen Karten und trägt sie ein, danach `npm test`.
 4. Spielen: `?map=<kennung>` in der URL, in der lokalen Lobby (hoch/runter) oder online als Host in der Lobby.
 
-Regeln (die Prüfung meldet jeden Verstoß auf Deutsch mit Stelle): Kacheln 16 px, 32 x 20 bis 128 x 80 Kacheln, genau 8 Startpunkte, mindestens 1 Pfandautomat, 20 Spots und 2 NPC-Eingänge, nur Punkt-Objekte, nichts auf Wänden, alles von jedem Startpunkt erreichbar, keine gedrehten oder gespiegelten Kacheln, nur der Kachelsatz `kenney-city`. Wände werden von Hand in der Ebene `walls` gemalt. Beispiel: `packages/core/src/maps/custom/uebung.tiled.json` ("Übung").
+Regeln (die Prüfung meldet jeden Verstoß auf Deutsch mit Stelle): Kacheln 16 px, 32 x 20 bis 128 x 80 Kacheln, genau 8 Startpunkte, mindestens 1 Pfandautomat, 20 Spots und 2 NPC-Eingänge, nur Punkt-Objekte, nichts auf Wänden, alles von jedem Startpunkt erreichbar, keine gedrehten oder gespiegelten Kacheln, nur der Kachelsatz `kenney-city`. Wände werden von Hand in der Ebene `walls` gemalt. Beispiel: `packages/core/src/maps/custom/uebung.tiled.json` ("Übung", versteckt: `?map=uebung`).
 
 ## Grafik
 

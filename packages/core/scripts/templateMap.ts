@@ -48,7 +48,7 @@ export const TILED_FORMAT = '1.10';
 export interface JsonProperty {
   name: string;
   type: string;
-  value: string;
+  value: string | boolean;
 }
 export interface JsonObject {
   id: number;
@@ -111,6 +111,8 @@ export interface TemplateOptions {
   name: string;
   /** Pfad zur Kachelsatz-Datei kenney-city.tsx, relativ zur geschriebenen Datei */
   tilesetSource: string;
+  /** Eigenschaft `hidden` = true: nicht in der Kartenauswahl (Übungskarte) */
+  hidden?: boolean;
 }
 
 function toJsonObject(o: TiledObject): JsonObject {
@@ -187,6 +189,7 @@ export function templateTiledMap(opts: TemplateOptions): TemplateJson {
     nextobjectid: maxObjectId + 1,
     orientation: 'orthogonal',
     properties: [
+      ...(opts.hidden ? [{ name: 'hidden', type: 'bool', value: true }] : []),
       { name: 'name', type: 'string', value: opts.name },
       { name: 'tileset', type: 'string', value: 'city' },
     ],
@@ -208,7 +211,10 @@ function tmxProperties(props: readonly JsonProperty[], indent: string): string[]
   if (props.length === 0) return [];
   return [
     `${indent}<properties>`,
-    ...props.map((p) => `${indent} <property name="${esc(p.name)}" value="${esc(p.value)}"/>`),
+    ...props.map((p) => {
+      const type = p.type === 'string' ? '' : ` type="${esc(p.type)}"`;
+      return `${indent} <property name="${esc(p.name)}"${type} value="${esc(String(p.value))}"/>`;
+    }),
     `${indent}</properties>`,
   ];
 }
@@ -253,8 +259,9 @@ const json = (m: TemplateJson): string => JSON.stringify(m, null, 1) + '\n';
 /** Alle erzeugten Dateien mit Pfad relativ zum Wurzelordner (Reihenfolge = Schreibreihenfolge). */
 export function templateFiles(): { path: string; content: string }[] {
   const vorlage = templateTiledMap({ name: 'Vorlage', tilesetSource: 'kenney-city.tsx' });
-  // Beispielkarte: dieselbe Vorlage; der Kachelsatz-Pfad zeigt von custom/ zurück nach maps-src/
-  const uebung = templateTiledMap({ name: 'Übung', tilesetSource: '../../../../../maps-src/kenney-city.tsx' });
+  // Beispielkarte: dieselbe Vorlage; der Kachelsatz-Pfad zeigt von custom/ zurück nach maps-src/.
+  // Versteckt: zum Üben und Testen per ?map=uebung bzw. MAP_ID=uebung, nicht in der Kartenauswahl
+  const uebung = templateTiledMap({ name: 'Übung', tilesetSource: '../../../../../maps-src/kenney-city.tsx', hidden: true });
   return [
     { path: 'maps-src/vorlage.tiled.json', content: json(vorlage) },
     { path: 'maps-src/vorlage.tmx', content: toTmx(vorlage) },

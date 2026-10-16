@@ -5520,6 +5520,11 @@
  "orientation": "orthogonal",
  "properties": [
   {
+   "name": "hidden",
+   "type": "bool",
+   "value": true
+  },
+  {
    "name": "name",
    "type": "string",
    "value": "Übung"

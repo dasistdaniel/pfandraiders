@@ -43,6 +43,8 @@ export interface ValidatedMap {
   /** Eigenschaft `name` (bereinigt) oder null */
   name: string | null;
   tileset: TilesetId;
+  /** Eigenschaft `hidden` (bool): Karte erscheint nicht in der Kartenauswahl (Übungs- und Testkarten) */
+  hidden: boolean;
   /** Gelesene Karte; null, wenn die Grundform kaputt ist */
   map: MapData | null;
   visuals: MapVisuals | null;
@@ -253,7 +255,8 @@ export function validateTiledMap(json: unknown, opts: ValidateOptions = {}): Val
   const problems: string[] = [];
   let name: string | null = null;
   let tileset: TilesetId = opts.tileset ?? 'city';
-  const result = (map: MapData | null, visuals: MapVisuals | null): ValidatedMap => ({ problems, name, tileset, map, visuals });
+  let hidden = false;
+  const result = (map: MapData | null, visuals: MapVisuals | null): ValidatedMap => ({ problems, name, tileset, hidden, map, visuals });
   if (!isRecord(json)) {
     problems.push('Die Datei ist keine Tiled-Karte im JSON-Format.');
     return result(null, null);
@@ -268,6 +271,11 @@ export function validateTiledMap(json: unknown, opts: ValidateOptions = {}): Val
     const t = props.get('tileset');
     if (!isTilesetId(t)) problems.push(`Eigenschaft "tileset" muss "city" oder "retro" sein, nicht ${JSON.stringify(t)}.`);
     else if (!opts.tileset) tileset = t;
+  }
+  if (props.has('hidden')) {
+    const h = props.get('hidden');
+    if (typeof h !== 'boolean') problems.push(`Eigenschaft "hidden" muss ein Wahrheitswert sein (Typ bool), nicht ${JSON.stringify(h)}.`);
+    else hidden = h;
   }
 
   if (json.infinite === true) problems.push('Unendliche Karten gehen nicht; in den Karteneigenschaften "Unendlich" ausschalten.');

@@ -15,6 +15,8 @@ export interface MapDef {
   visuals: MapVisuals | null;
   /** Eingebaute Karte (Regeln BUILTIN_MAP_RULES) oder eigene aus `custom/` (CUSTOM_MAP_RULES) */
   builtin: boolean;
+  /** Versteckt (Tiled-Eigenschaft `hidden`): nicht in der Kartenauswahl, nur per `?map=` oder `MAP_ID` */
+  hidden: boolean;
 }
 
 /** Eine eigene Karte aus `packages/core/src/maps/custom/` (die Liste erzeugt `npm run maps`). */

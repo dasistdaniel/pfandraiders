@@ -23,11 +23,12 @@ const BUILTIN_DEFS: readonly MapDef[] = [
     tileset: 'city',
     map: CITY_TILED_MAP,
     builtin: true,
+    hidden: false,
     get visuals() {
       return getCityVisuals();
     },
   },
-  { id: 'retro', name: 'Retro', tileset: 'retro', map: RETRO_MAP, visuals: null, builtin: true },
+  { id: 'retro', name: 'Retro', tileset: 'retro', map: RETRO_MAP, visuals: null, builtin: true, hidden: false },
 ];
 
 /**
@@ -51,10 +52,17 @@ export const MAP_DEFS: Readonly<Record<MapId, MapDef>> = Object.freeze(
 export interface MapListEntry {
   id: MapId;
   name: string;
+  /** Versteckte Karte (Übungskarte): gültig, aber nicht in der Kartenauswahl */
+  hidden: boolean;
 }
 
-/** Auswahlliste für Lobby und Raumliste: eingebaute Karten, dann eigene nach Kennung. */
-export const MAP_LIST: readonly MapListEntry[] = Object.freeze(ALL.map((d) => Object.freeze({ id: d.id, name: d.name })));
+/** Alle Karten: eingebaute zuerst, dann eigene nach Kennung, auch versteckte (gültig für `?map=` und `MAP_ID`). */
+export const MAP_LIST: readonly MapListEntry[] = Object.freeze(
+  ALL.map((d) => Object.freeze({ id: d.id, name: d.name, hidden: d.hidden })),
+);
+
+/** Kartenauswahl der lokalen und der Online-Lobby: MAP_LIST ohne versteckte Karten. */
+export const SELECTABLE_MAPS: readonly MapListEntry[] = Object.freeze(MAP_LIST.filter((m) => !m.hidden));
 
 const KNOWN: ReadonlySet<string> = new Set(ALL.map((d) => d.id));
 
@@ -67,12 +75,21 @@ export function mapName(id: string): string {
   return isMapId(id) ? MAP_DEFS[id].name : id;
 }
 
-/** Nächste oder vorige Karte in MAP_LIST, zyklisch; eine unbekannte Kennung ergibt die erste Karte. */
-export function stepMapId(id: string, dir: -1 | 1): MapId {
-  const n = MAP_LIST.length;
-  const i = MAP_LIST.findIndex((m) => m.id === id);
-  if (i < 0) return MAP_LIST[0].id;
-  return MAP_LIST[(i + dir + n) % n].id;
+/** Darf diese Karte gewählt werden (Lobby, setMap)? Versteckte Karten nicht. */
+export function isSelectableMapId(v: unknown): v is MapId {
+  return isMapId(v) && !MAP_DEFS[v].hidden;
+}
+
+/**
+ * Nächste oder vorige wählbare Karte, zyklisch; versteckte Karten werden übersprungen.
+ * Eine unbekannte oder versteckte Kennung (etwa bei MAP_ID=uebung) ergibt die erste wählbare Karte.
+ */
+export function stepMapId(id: string, dir: -1 | 1, list: readonly MapListEntry[] = MAP_LIST): MapId {
+  const selectable = list.filter((m) => !m.hidden);
+  const n = selectable.length;
+  const i = selectable.findIndex((m) => m.id === id);
+  if (i < 0) return selectable[0].id;
+  return selectable[(i + dir + n) % n].id;
 }
 
 export const DEFAULT_MAP_ID: BuiltinMapId = 'city';
