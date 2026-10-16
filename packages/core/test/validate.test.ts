@@ -241,6 +241,21 @@ describe('validateTiledMap: properties', () => {
     expect(problems(list)).toContain('Die Karteneigenschaften ("properties") müssen eine Liste sein.');
   });
 
+  it('reads the optional bool property hidden and rejects other types', () => {
+    expect(validateTiledMap(fixtureMap()).hidden).toBe(false);
+    const on = fixtureMap();
+    on.properties = [...on.properties, { name: 'hidden', type: 'bool', value: true }];
+    expect(validateTiledMap(on)).toMatchObject({ problems: [], hidden: true });
+    const off = fixtureMap();
+    off.properties = [...off.properties, { name: 'hidden', type: 'bool', value: false }];
+    expect(validateTiledMap(off)).toMatchObject({ problems: [], hidden: false });
+    const text = fixtureMap();
+    text.properties = [...text.properties, { name: 'hidden', type: 'string', value: 'true' }];
+    const v = validateTiledMap(text);
+    expect(v.problems).toEqual(['Eigenschaft "hidden" muss ein Wahrheitswert sein (Typ bool), nicht "true".']);
+    expect(v.hidden).toBe(false);
+  });
+
   it('lets the caller fix the tileset (built-in maps without properties)', () => {
     const v = validateTiledMap(fixtureMap(), { tileset: 'city' });
     expect(v.tileset).toBe('city');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CITY_MAP, DEFAULT_MAP_ID, isMapId, MAP_DEFS, MAP_LIST, mapName, stepMapId } from '../src/maps';
+import { CITY_MAP, DEFAULT_MAP_ID, isMapId, isSelectableMapId, MAP_DEFS, MAP_LIST, mapName, SELECTABLE_MAPS, stepMapId } from '../src/maps';
 import { RETRO_MAP } from '../src/maps/retro';
 
 describe('map registry', () => {
@@ -19,8 +19,8 @@ describe('map registry', () => {
 
   it('lists the built-in maps first and every entry with valid map data', () => {
     expect(MAP_LIST.slice(0, 2)).toEqual([
-      { id: 'city', name: 'Stadt' },
-      { id: 'retro', name: 'Retro' },
+      { id: 'city', name: 'Stadt', hidden: false },
+      { id: 'retro', name: 'Retro', hidden: false },
     ]);
     expect(Object.keys(MAP_DEFS).sort()).toEqual(MAP_LIST.map((m) => m.id).sort());
     for (const { id, name } of MAP_LIST) {
@@ -55,12 +55,37 @@ describe('map registry', () => {
     expect(mapName('moon')).toBe('moon');
   });
 
-  it('stepMapId cycles through MAP_LIST and starts over for unknown ids', () => {
-    const ids = MAP_LIST.map((m) => m.id);
+  it('stepMapId cycles through the selectable maps and starts over for unknown ids', () => {
+    const ids = SELECTABLE_MAPS.map((m) => m.id);
     expect(stepMapId(ids[0], 1)).toBe(ids[1 % ids.length]);
     expect(stepMapId(ids[0], -1)).toBe(ids[ids.length - 1]);
     expect(stepMapId(ids[ids.length - 1], 1)).toBe(ids[0]);
     expect(stepMapId('moon', 1)).toBe(ids[0]);
     expect(stepMapId('moon', -1)).toBe(ids[0]);
+  });
+
+  it('hides maps with the property hidden from the selection, but keeps them registered', () => {
+    expect(SELECTABLE_MAPS.map((m) => m.id)).toEqual(MAP_LIST.filter((m) => !m.hidden).map((m) => m.id));
+    expect(isMapId('uebung')).toBe(true);
+    expect(isSelectableMapId('uebung')).toBe(false);
+    expect(isSelectableMapId('city')).toBe(true);
+    expect(isSelectableMapId('moon')).toBe(false);
+    expect(MAP_DEFS.city.hidden).toBe(false);
+  });
+
+  it('stepMapId skips hidden maps; from a hidden map it goes to the first selectable one', () => {
+    const list = [
+      { id: 'a', name: 'A', hidden: false },
+      { id: 'h', name: 'H', hidden: true },
+      { id: 'b', name: 'B', hidden: false },
+    ];
+    expect(stepMapId('a', 1, list)).toBe('b');
+    expect(stepMapId('b', -1, list)).toBe('a');
+    expect(stepMapId('b', 1, list)).toBe('a');
+    expect(stepMapId('h', 1, list)).toBe('a');
+    expect(stepMapId('h', -1, list)).toBe('a');
+    // die Übungskarte ist versteckt: von retro geht es zurück zur Stadt
+    expect(stepMapId('retro', 1)).toBe('city');
+    expect(stepMapId('uebung', 1)).toBe('city');
   });
 });

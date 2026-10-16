@@ -1,5 +1,6 @@
 import type { DeviceRef } from './devices';
-import type { KeyState } from './input';
+import { KEY_FIELDS } from './input';
+import type { KeyField, KeyState } from './input';
 
 /** Beschriftung der Tasten eines Geräts für Hinweistexte. */
 export interface KeyLabels {
@@ -90,4 +91,43 @@ export function padBLeaves(online: boolean, device: DeviceRef | undefined, press
  */
 export function isHeldOver(event: { repeat?: unknown } | null | undefined): boolean {
   return event?.repeat === true;
+}
+
+/**
+ * Sperrt die Tasten, die beim Anlegen schon gedrückt sind, bis sie einmal losgelassen wurden. Für den
+ * Gerätewechsel mitten im Spiel: Tasten, die beim Wechsel gehalten werden (etwa die Bestätigung im
+ * Esc-Menü), wirken nicht sofort als Spieleingabe.
+ */
+export class ReleaseGate {
+  private readonly blocked = new Set<KeyField>();
+
+  constructor(initial: KeyState) {
+    for (const key of KEY_FIELDS) if (initial[key]) this.blocked.add(key);
+  }
+
+  /** Eingabe ohne die noch gesperrten Tasten; eine losgelassene Taste ist ab dann frei. */
+  filter(k: KeyState): KeyState {
+    const out = { ...k };
+    for (const key of [...this.blocked]) {
+      if (k[key]) out[key] = false;
+      else this.blocked.delete(key);
+    }
+    return out;
+  }
+
+  blocks(key: KeyField): boolean {
+    return this.blocked.has(key);
+  }
+}
+
+/** Quelle, deren beim Anlegen gehaltene Tasten erst nach dem Loslassen zählen (siehe ReleaseGate). */
+export function guardHeld(source: InputSource): InputSource {
+  const gate = new ReleaseGate(source.read());
+  return {
+    label: source.label,
+    labels: source.labels,
+    tabLabels: source.tabLabels,
+    read: () => gate.filter(source.read()),
+    confirmPressed: () => source.confirmPressed() && !gate.blocks('action'),
+  };
 }

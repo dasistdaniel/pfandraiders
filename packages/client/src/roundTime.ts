@@ -13,6 +13,14 @@ export function stepRoundMs(ms: number, dir: -1 | 1): number {
   return ROUND_MS_CHOICES[to];
 }
 
+/**
+ * Online-Lobby: Rundenzeit, die keine der wählbaren ist (Server mit ROUND_MS), als feste Zeile für Host und Gäste;
+ * null = normale Wahl. Die Auswahlliste hätte dafür keinen Eintrag und stünde leer da.
+ */
+export function fixedRoundText(ms: number): string | null {
+  return ROUND_MS_CHOICES.includes(ms) ? null : `Rundenzeit: ${roundMsLabel(ms)} (vom Server festgelegt)`;
+}
+
 /** Rundenzahl einer Serie: 0 = "offen", 1 = "1 Runde", sonst "n Runden". */
 export function roundsLabel(rounds: number): string {
   if (rounds === 0) return 'offen';

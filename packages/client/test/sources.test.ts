@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { isHeldOver, keyboardTabLabels, padBLeaves, padToHeld, PAD_LABELS, PAD_TAB_LABELS, STICK_DEADZONE } from '../src/sources';
-import type { PadSnapshot } from '../src/sources';
+import { guardHeld, isHeldOver, keyboardTabLabels, padBLeaves, padToHeld, PAD_LABELS, PAD_TAB_LABELS, ReleaseGate, STICK_DEADZONE } from '../src/sources';
+import type { InputSource, PadSnapshot } from '../src/sources';
+import type { KeyState } from '../src/input';
 
 const IDLE: PadSnapshot = {
   stickX: 0,
@@ -91,5 +92,53 @@ describe('keyboardTabLabels', () => {
   it('uses the steal key for the previous and the attack key for the next shop category', () => {
     expect(keyboardTabLabels({ action: 'E', steal: 'Q', attack: 'F', spray: 'C' })).toEqual({ prev: 'Q', next: 'F' });
     expect(keyboardTabLabels({ action: 'Enter', steal: '/', attack: '.', spray: ',' })).toEqual({ prev: '/', next: '.' });
+  });
+});
+
+describe('ReleaseGate and guardHeld', () => {
+  const NONE: KeyState = { left: false, right: false, up: false, down: false, action: false, steal: false, attack: false, spray: false, tabPrev: false, tabNext: false };
+  const k = (over: Partial<KeyState>): KeyState => ({ ...NONE, ...over });
+
+  it('ignores keys held at the start until they were released once', () => {
+    const gate = new ReleaseGate(k({ up: true, action: true }));
+    expect(gate.filter(k({ up: true, action: true, left: true }))).toEqual(k({ left: true }));
+    expect(gate.blocks('action')).toBe(true);
+    expect(gate.filter(k({ action: true }))).toEqual(NONE);
+    expect(gate.filter(NONE)).toEqual(NONE);
+    expect(gate.blocks('action')).toBe(false);
+    expect(gate.filter(k({ up: true, action: true }))).toEqual(k({ up: true, action: true }));
+  });
+
+  it('wraps a source: reads through the gate, keeps labels, swallows a held confirm', () => {
+    let state = k({ action: true });
+    let confirm = true;
+    const inner: InputSource = {
+      label: 'Tastatur 1 (WASD, E)',
+      labels: { action: 'E', steal: 'Q', attack: 'F', spray: 'C' },
+      tabLabels: { prev: 'Q', next: 'F' },
+      read: () => state,
+      confirmPressed: () => confirm,
+    };
+    const src = guardHeld(inner);
+    expect(src.labels).toBe(inner.labels);
+    expect(src.tabLabels).toBe(inner.tabLabels);
+    expect(src.label).toBe(inner.label);
+    expect(src.read()).toEqual(NONE);
+    expect(src.confirmPressed()).toBe(false);
+    state = NONE;
+    confirm = false;
+    expect(src.read()).toEqual(NONE);
+    state = k({ action: true });
+    confirm = true;
+    expect(src.read()).toEqual(k({ action: true }));
+    expect(src.confirmPressed()).toBe(true);
+  });
+});
+
+describe('ReleaseGate with held-over flags', () => {
+  it('only gates the boolean keys and passes heldOver through', () => {
+    const NONE: KeyState = { left: false, right: false, up: false, down: false, action: false, steal: false, attack: false, spray: false, tabPrev: false, tabNext: false };
+    const gate = new ReleaseGate({ ...NONE, heldOver: { up: true } });
+    expect(gate.filter({ ...NONE, up: true, heldOver: { up: true } })).toEqual({ ...NONE, up: true, heldOver: { up: true } });
   });
 });

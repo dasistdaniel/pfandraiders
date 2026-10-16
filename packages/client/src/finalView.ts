@@ -20,16 +20,25 @@ export interface FinalRow {
   left: boolean;
 }
 
-/** Zeilen der Endwertung: nach Gesamtverdienst (finalRanking), Namen/Figuren/Farben aus der Raumliste. */
-export function finalRows(entries: readonly RankEntry[], roster: readonly RosterEntry[], you: string): FinalRow[] {
+/**
+ * Zeilen der Endwertung: nach Gesamtverdienst (finalRanking), Namen/Figuren/Farben aus der Raumliste.
+ * `knownNames`: früher gesehene Namen; wer gegangen ist, heißt dann "Name (gegangen)", sonst nur "(gegangen)".
+ */
+export function finalRows(
+  entries: readonly RankEntry[],
+  roster: readonly RosterEntry[],
+  you: string,
+  knownNames: ReadonlyMap<string, string> = new Map(),
+): FinalRow[] {
   const rows: FinalRow[] = [];
   finalRanking(entries).forEach((entry, i) => {
     const place = i > 0 && rows[i - 1].total === entry.total ? rows[i - 1].place : i + 1;
     const member = roster.find((p) => p.id === entry.id);
+    const former = knownNames.get(entry.id);
     rows.push({
       place,
       id: entry.id,
-      name: member ? member.name : '(gegangen)',
+      name: member ? member.name : former ? `${former} (gegangen)` : '(gegangen)',
       total: entry.total,
       avatar: member ? member.avatar : null,
       color: member ? member.color : LEFT_COLOR,
@@ -41,9 +50,14 @@ export function finalRows(entries: readonly RankEntry[], roster: readonly Roster
   return rows;
 }
 
-/** "Gesamtsieger: Anna", "… Anna und Bob", "… Anna, Bob und Cara"; ohne Zeilen "Keine Wertung". */
+/**
+ * "Gesamtsieger: Anna", "… Anna und Bob", "… Anna, Bob und Cara"; ohne Zeilen "Keine Wertung". Teilt sich ein
+ * Anwesender den ersten Platz mit jemandem, der gegangen ist, stehen nur die Anwesenden da; sonst die Gegangenen.
+ */
 export function winnerText(rows: readonly FinalRow[]): string {
-  const names = rows.filter((r) => r.isWinner).map((r) => r.name);
+  const winners = rows.filter((r) => r.isWinner);
+  const present = winners.filter((r) => !r.left);
+  const names = (present.length > 0 ? present : winners).map((r) => r.name);
   if (names.length === 0) return 'Keine Wertung';
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`;
   return `Gesamtsieger: ${list}`;

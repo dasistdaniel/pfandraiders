@@ -17,7 +17,18 @@ export interface KeyState {
   tabPrev: boolean;
   /** Shop: nächste Kategorie (Tastatur: Schlagen-Taste, Gamepad: RB); im Spiel ohne Wirkung */
   tabNext: boolean;
+  /**
+   * Tastatur: Richtungen, die schon in der vorigen Szene gedrückt waren (Phaser meldet sie erst mit der
+   * Tastenwiederholung). Nur Menüs wie der Shop werten das aus; im Spiel läuft man damit weiter wie bisher.
+   */
+  heldOver?: Partial<Record<Direction, boolean>>;
 }
+
+export type Direction = 'up' | 'down' | 'left' | 'right';
+
+/** Die gehaltenen Tasten eines KeyState (ohne heldOver). */
+export const KEY_FIELDS = ['left', 'right', 'up', 'down', 'action', 'steal', 'attack', 'spray', 'tabPrev', 'tabNext'] as const;
+export type KeyField = (typeof KEY_FIELDS)[number];
 
 function axis(negative: boolean, positive: boolean): -1 | 0 | 1 {
   return ((positive ? 1 : 0) - (negative ? 1 : 0)) as -1 | 0 | 1;

@@ -15,7 +15,7 @@ PfandRaiders lädt jede Tiled-Karte aus `packages/core/src/maps/custom/`. Diese 
    - Kachelgröße 16 x 16, Ausrichtung Orthogonal, **Unendlich aus**.
    - Größe 32 x 20 bis 128 x 80 Kacheln (Karte > Kartengröße ändern).
    - **Kachelebenen-Format: CSV** (nicht Base64 oder komprimiert).
-   - Eigene Eigenschaften: `name` (Anzeigename, 1 bis 24 Zeichen, z. B. "Hafen") und `tileset` (`city` für die Kenney-Grafik, `retro` für die selbst gezeichneten Kacheln ohne Grafikebenen).
+   - Eigene Eigenschaften: `name` (Anzeigename, 1 bis 24 Zeichen, z. B. "Hafen") und `tileset` (`city` für die Kenney-Grafik, `retro` für die selbst gezeichneten Kacheln ohne Grafikebenen), optional `hidden` (Typ **bool**; `true` = versteckte Karte: gültig und spielbar per `?map=<kennung>` oder Server-`MAP_ID`, erscheint aber nicht in der Kartenauswahl der Lobbys und lässt sich online nicht per Auswahl setzen; für Übungs- und Testkarten wie `uebung`).
 
 ## 3. Ebenen
 
@@ -75,4 +75,4 @@ Weitere Regeln: Kein Objekt auf einer Wand oder einem weichen Hindernis. Von jed
 
 - Wände kommen nur aus der Ebene `walls`; sie aus Kacheleigenschaften des Kachelsatzes abzuleiten ist spätere Arbeit.
 - Ein Kachelsatz (`kenney-city`), keine gedrehten Kacheln, keine Karten zur Laufzeit hochladen.
-- Die Vorlage und die Beispielkarte `uebung` erzeugt `npm run maps:vorlage` aus `packages/core/scripts/templateMap.ts`; Änderungen dort, nicht in den erzeugten Dateien.
+- Die Vorlage und die Beispielkarte `uebung` (versteckt, Eigenschaft `hidden`) erzeugt `npm run maps:vorlage` aus `packages/core/scripts/templateMap.ts`; Änderungen dort, nicht in den erzeugten Dateien.

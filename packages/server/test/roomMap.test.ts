@@ -93,9 +93,15 @@ describe('map choice in the room', () => {
     expect(b.conns[0].last('start').map.cols).toBe(CITY_MAP.cols);
   });
 
-  it('starts the example map uebung when the host picks it', () => {
+  it('rejects the hidden practice map uebung in setMap', () => {
     const { room, conns } = twoInLobby();
-    expect(room.setMap('p1', 'uebung').ok).toBe(true);
+    expect(room.setMap('p1', 'uebung')).toEqual({ ok: false, code: 'bad_message', message: 'Diese Karte ist nicht wählbar.' });
+    expect(room.selectedMapId()).toBe(DEFAULT_MAP_ID);
+    expect(conns[1].last('lobby')).toMatchObject({ mapId: 'city' });
+  });
+
+  it('starts the practice map uebung when the server default is MAP_ID=uebung', () => {
+    const { room, conns } = twoInLobby({ mapId: 'uebung' });
     expect(conns[1].last('lobby')).toMatchObject({ mapId: 'uebung', mapName: 'Übung' });
     room.start('p1');
     expect(conns[1].last('start')).toMatchObject({ mapId: 'uebung' });

@@ -11,6 +11,7 @@ import {
   freshProgress,
   isAvatar,
   isMapId,
+  isSelectableMapId,
   isRoundMs,
   isRounds,
   MAP_DEFS,
@@ -603,6 +604,8 @@ export class Room {
     if (byId === '' || this.hostId() !== byId) return fail('not_host', 'Nur der Host kann die Karte wählen.');
     if (this.phase !== 'lobby') return fail('wrong_phase', 'Die Karte wählt man in der Lobby.');
     if (!isMapId(mapId)) return fail('bad_message', 'Unbekannte Karte.');
+    // Versteckte Karten (Übungskarte) gibt es nur als Serverstandard (MAP_ID), nicht in der Auswahl
+    if (!isSelectableMapId(mapId)) return fail('bad_message', 'Diese Karte ist nicht wählbar.');
     this.lastActive = this.now();
     if (mapId !== this.mapId) {
       this.mapId = mapId;

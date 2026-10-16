@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../src/pauseMenu';
+import { PAUSE_MAX_ITEMS, PauseMenu, pauseHint, pauseLabel, pauseTitle } from '../src/pauseMenu';
 
 const ids = (m: PauseMenu): string[] => m.items.map((i) => i.id);
 
@@ -117,5 +117,62 @@ describe('pause menu texts', () => {
     expect(pauseHint('main', false)).toBe('Spiel pausiert.');
     expect(pauseTitle('confirm', true)).toBe('Wirklich verlassen?');
     expect(pauseTitle('main', false)).toBe('Pause');
+  });
+});
+
+describe('PauseMenu online: control device entry', () => {
+  it('offers "Steuerung" only online, between "Ton" and "Anleitung"', () => {
+    const online = new PauseMenu(true);
+    online.open();
+    expect(ids(online)).toEqual(['resume', 'toggleSound', 'device', 'help', 'askLeave']);
+    const local = new PauseMenu(false);
+    local.open();
+    expect(ids(local)).toEqual(['resume', 'toggleSound', 'help', 'askLeave']);
+  });
+
+  it('confirm on the entry steps to the next device and keeps the menu open on it', () => {
+    const m = new PauseMenu(true);
+    m.open();
+    m.select(2);
+    expect(m.activate()).toBe('deviceNext');
+    expect(m.view).toBe('main');
+    expect(m.selected).toBe(2);
+  });
+
+  it('left/right change the device only on the entry', () => {
+    const m = new PauseMenu(true);
+    expect(m.adjust(1)).toBeNull();
+    m.open();
+    expect(m.adjust(1)).toBeNull();
+    m.select(2);
+    expect(m.adjust(1)).toBe('deviceNext');
+    expect(m.adjust(-1)).toBe('devicePrev');
+    expect(m.selected).toBe(2);
+  });
+
+  it('asks before leaving and returns to "Spiel verlassen" (last entry) also online', () => {
+    const m = new PauseMenu(true);
+    m.open();
+    m.select(4);
+    expect(m.activate()).toBe('askLeave');
+    expect(m.adjust(1)).toBeNull();
+    expect(m.activate()).toBe('stay');
+    expect(m.selected).toBe(4);
+    m.move(1);
+    expect(m.selected).toBe(0);
+  });
+
+  it('labels the entry with the chosen device and arrows', () => {
+    const item = { id: 'device', label: 'Steuerung' };
+    const audio = { music: true, effects: true };
+    expect(pauseLabel(item, audio, { kind: 'pad', index: 0 })).toBe('Steuerung: ◄ Gamepad 1 ►');
+    expect(pauseLabel(item, audio, { kind: 'keyboard', layout: 1 })).toBe('Steuerung: ◄ Tastatur 2 ►');
+    expect(pauseLabel(item, audio)).toBe('Steuerung');
+  });
+
+  it('fits into the overlay (maxItems)', () => {
+    const m = new PauseMenu(true);
+    m.open();
+    expect(m.items.length).toBeLessThanOrEqual(PAUSE_MAX_ITEMS);
   });
 });
