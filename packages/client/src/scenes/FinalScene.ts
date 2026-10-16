@@ -114,7 +114,7 @@ export class FinalScene extends Phaser.Scene {
 
   /** Jedes Bild neu: Ranglistenzeilen, Gesamtsieger und Fußzeile (ein neuer Host bekommt sofort den Knopf). */
   private render(online: OnlineConnection): void {
-    const rows = finalRows(online.ranking, online.roster, online.you).slice(0, MAX_ROWS);
+    const rows = finalRows(online.ranking, online.roster, online.you, online.knownNames).slice(0, MAX_ROWS);
     this.winner.setText(winnerText(rows));
     this.rowTexts.forEach((t, i) => {
       const row = rows[i];

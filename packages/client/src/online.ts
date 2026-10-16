@@ -88,6 +88,8 @@ export class OnlineConnection implements GameConnection {
   token = '';
   host = '';
   roster: RosterEntry[] = [];
+  /** Jeder in diesem Raum gesehene Name (auch von Spielern, die gegangen sind; für die Endwertung). */
+  readonly knownNames = new Map<string, string>();
   /** Karte der laufenden Runde (wird mit start gesetzt). */
   mapId: MapId = DEFAULT_MAP_ID;
   /** Karte der Lobby (Wahl des Hosts für den nächsten Serienstart) laut lobby-Nachricht. */
@@ -371,6 +373,13 @@ export class OnlineConnection implements GameConnection {
     this.requestStart();
   }
 
+  private rememberNames(players: unknown): void {
+    if (!Array.isArray(players)) return;
+    for (const p of players as Partial<RosterEntry>[]) {
+      if (typeof p?.id === 'string' && typeof p.name === 'string') this.knownNames.set(p.id, p.name);
+    }
+  }
+
   private handle(raw: string): void {
     let msg: ServerMessage;
     try {
@@ -381,6 +390,8 @@ export class OnlineConnection implements GameConnection {
     switch (msg?.t) {
       case 'joined':
         this.serverBuild = parseServerBuild(msg.build);
+        // Rückkehr in denselben Raum behält die gemerkten Namen
+        if (msg.room !== this.room) this.knownNames.clear();
         this.room = msg.room;
         this.you = msg.you;
         this.token = msg.token;
@@ -391,6 +402,7 @@ export class OnlineConnection implements GameConnection {
       case 'lobby':
         this.host = msg.host;
         this.roster = msg.players;
+        this.rememberNames(msg.players);
         if (Array.isArray(msg.players)) {
           for (const id of rosterSounds(this.soundRoster, msg.players, this.you)) this.play(id);
           this.soundRoster = [...msg.players];
@@ -416,6 +428,7 @@ export class OnlineConnection implements GameConnection {
         this.you = msg.you;
         this.localPlayerIds = [msg.you];
         this.roster = msg.players;
+        this.rememberNames(msg.players);
         if (Array.isArray(msg.players)) this.soundRoster = [...msg.players];
         this.buffer = [{ at: this.clock, snap: msg.snap }];
         this.timeline.reset();

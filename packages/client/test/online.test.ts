@@ -91,6 +91,20 @@ describe('OnlineConnection messages', () => {
     expect(conn.isHost()).toBe(true);
   });
 
+  it('remembers the names of players who left (for the final ranking), per room', () => {
+    const { socket, conn } = setup();
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p1', token: 'secret' });
+    socket.receive(lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS));
+    socket.receive({ ...lobbyMsg('p1', 'lobby', DEFAULT_ROUND_MS), players: roster().slice(0, 1) } as ServerMessage);
+    expect(conn.roster.map((r) => r.id)).toEqual(['p1']);
+    expect(conn.knownNames.get('p2')).toBe('Bob');
+    // Rückkehr in denselben Raum behält die Namen, ein anderer Raum beginnt leer
+    socket.receive({ t: 'joined', room: 'ABCD', you: 'p1', token: 'secret' });
+    expect(conn.knownNames.get('p2')).toBe('Bob');
+    socket.receive({ t: 'joined', room: 'WXYZ', you: 'p1', token: 'other' });
+    expect(conn.knownNames.size).toBe(0);
+  });
+
   it('stores the server build from joined, before onJoined fires', () => {
     const { socket, conn } = setup();
     expect(conn.serverBuild).toBeNull();
