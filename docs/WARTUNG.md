@@ -21,6 +21,7 @@ Für jedes Rezept gilt derselbe Rahmen:
 - [Verträglichkeit von Client und Server](#verträglichkeit-von-client-und-server)
 - [Ruckeln im Netz untersuchen](#ruckeln-im-netz-untersuchen)
 - [Betrieb des Servers](#betrieb-des-servers)
+- [Social Preview (Link-Vorschau)](#social-preview-link-vorschau)
 - [Zurückrollen](#zurückrollen)
 - [Sicherung](#sicherung)
 - [Sicherheit](#sicherheit)
@@ -192,7 +193,7 @@ docker compose logs --tail 50 server     # letzte Zeilen
 docker compose logs -f server            # live mitlesen, Strg+C beendet
 ```
 
-In der Startzeile steht `PfandRaiders server listening on :8080 (build #N · hash)`. Warnungen zu ungültigen Umgebungsvariablen stehen direkt davor. Der Health-Check im Image prüft nur, ob Port 8080 offen ist (`nc -z`), nicht ob Räume ticken. Von außen ist der Server erreichbar, wenn eine normale HTTP-Anfrage an die Domain mit Status 426 („Upgrade Required“) beantwortet wird, zum Beispiel `curl -s -o /dev/null -w "%{http_code}\n" https://play.example.org/`. Ein echter Test ist die Online-Lobby im Browser: Dort steht „Server: Build #…“.
+In der Startzeile steht `PfandRaiders server listening on :8080 (build #N · hash)`. Warnungen zu ungültigen Umgebungsvariablen stehen direkt davor. Der Health-Check im Image prüft nur, ob Port 8080 offen ist (`nc -z`), nicht ob Räume ticken. Von außen ist der Server erreichbar, wenn eine normale HTTP-Anfrage an die Domain mit Status 200 und der kleinen Vorschauseite beantwortet wird (früher 426 „Upgrade Required“, siehe [Social Preview](#social-preview-link-vorschau)), zum Beispiel `curl -s -o /dev/null -w "%{http_code}\n" https://play.example.org/`. Ein echter Test ist die Online-Lobby im Browser: Dort steht „Server: Build #…“.
 
 Was im Log auftaucht: Tick-Fehler eines Raums („Tick-Fehler in Raum ABCD“, nach drei in Folge wird der Raum geschlossen), Handler-Fehler einzelner Nachrichten, unbehandelte Ausnahmen. Der Prozess läuft in allen Fällen weiter. Spielereignisse werden nicht geloggt.
 
@@ -213,6 +214,16 @@ docker system df           # Platzverbrauch ansehen
 **Nginx Proxy Manager**
 
 Proxy Host: Domain der Spielserver-Adresse, Scheme `http`, Forward Hostname `pfandraiders-server`, Port `8080`, Websockets Support an, SSL mit Let's Encrypt und Force SSL. Das externe Netz `proxy-net` muss existieren (`docker network ls`). Für die Kompression ist nichts einzustellen. Die Schritte stehen auch im README unter „Online spielen und Server“.
+
+## Social Preview (Link-Vorschau)
+
+Geteilte Links zeigen in WhatsApp, Facebook, Discord, Slack und Co. eine Vorschau mit Bild, Titel und Beschreibung. Einzelheiten im README unter „Social Preview“. Kurz:
+
+- **Texte und Seitenadresse:** `SOCIAL_PREVIEW` in `packages/core/src/social.ts` (Titel, Beschreibung, Bildname, Bildtext). Dieselben Werte stehen von Hand in `packages/client/index.html`; nach einer Änderung beide anpassen, `socialPreview.test.ts` im Client meldet Abweichungen.
+- **Bild:** `npm run social` erzeugt `packages/client/public/social-preview.png` (1200 x 630) und `apple-touch-icon.png` neu. Spruch und Aufbau stehen in `packages/client/src/socialPreview.ts`. Das Bild muss PNG oder JPG sein (WhatsApp zeigt kein SVG) und unter 300 KB bleiben.
+- **Server:** Normale HTTP-Anfragen (GET, HEAD) an die Serveradresse bekommen eine Vorschauseite mit denselben Tags und einer Weiterleitung zur Spielseite. Die Spielseite legt `PAGE_URL` in `deploy/.env` fest (Standard GitHub Pages); das Bild lädt der Crawler von dort. Wer den Client woanders hostet, setzt `PAGE_URL` und passt die absoluten Adressen in `index.html` und `SOCIAL_PREVIEW.pageUrl` an.
+- **Prüfen:** `curl -A "WhatsApp/2.23.20.0" https://play.example.org/` muss HTML mit `og:image` liefern (Status 200, keine Umleitung), `curl -I https://dasistdaniel.github.io/pfandraiders/social-preview.png` Status 200 mit `image/png`.
+- **Alte Vorschau hängt fest:** WhatsApp und Facebook speichern Vorschauen lange. Den Link mit einem Zusatz teilen, etwa `…/pfandraiders/?v=2` (bei jeder Änderung hochzählen). Für Facebook im [Sharing Debugger](https://developers.facebook.com/tools/debug/) die Adresse eingeben und „Scrape Again“ drücken; das hilft oft auch WhatsApp.
 
 ## Zurückrollen
 
@@ -274,5 +285,6 @@ Zu sichern ist deshalb nur, was nicht im Repository steht:
 | GitHub Pages zeigt alten Stand | Unter Actions nachsehen, ob „Pages“ gelaufen ist. Fehlermeldung „Repository variable SERVER_URL is empty“: Variable setzen. Pages-Quelle muss „GitHub Actions“ sein. Ein neuer Lauf bricht einen älteren ab (`concurrency`). Danach Strg+F5. |
 | Dev-Server zeigt Unsinn nach `npm install` oder Branch-Wechsel | Vite-Cache veraltet: Dev-Server beenden und mit `npm run dev -w @pfandraiders/client -- --force` neu starten (oder `packages/client/node_modules/.vite` löschen). |
 | Server startet nicht: „Server konnte nicht starten: listen EADDRINUSE“ | Port 8080 belegt, meist ein zweiter `dev:server`. Anderen Prozess beenden oder `PORT=8090` setzen und den Client mit `?server=ws://localhost:8090` öffnen. |
+| Geteilter Link zeigt keine oder eine alte Vorschau | Siehe [Social Preview](#social-preview-link-vorschau): Link mit `?v=2` teilen, Facebook Sharing Debugger „Scrape Again“. Prüfen, ob `social-preview.png` auf Pages erreichbar ist und ob Pages den neuen Stand schon gebaut hat. |
 | Verbindung wird sofort abgelehnt (403) | Origin des Clients steht nicht in `ALLOWED_ORIGINS`. Groß- und Kleinschreibung und ein Schrägstrich am Ende sind egal, Schema und Port nicht. |
 | „Zu viele Nachrichten.“ / Verbindung bricht ab | Ratenlimit von 120 Nachrichten pro Sekunde. Bei normalem Spiel nicht erreichbar; deutet auf eine Endlosschleife beim Senden im Client hin. |
