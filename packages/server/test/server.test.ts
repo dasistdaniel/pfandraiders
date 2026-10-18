@@ -513,16 +513,19 @@ describe('plain HTTP (link preview page)', () => {
     await ok.until('joined');
   });
 
-  it('closes cleanly while an HTTP keep-alive connection is open', async () => {
+  it('closes cleanly while an unfinished HTTP request keeps a connection open', async () => {
     server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
     const net = await import('node:net');
     const sock = net.connect(server.port, '127.0.0.1');
+    sock.on('error', () => {});
     await new Promise<void>((resolve) => sock.once('connect', () => resolve()));
-    sock.write('GET / HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n');
-    await new Promise<void>((resolve) => sock.once('data', () => resolve()));
+    // Kopfzeilen ohne Leerzeile am Ende: die Anfrage bleibt offen, close() muss die Verbindung trotzdem beenden
+    sock.write('GET / HTTP/1.1\r\nHost: x\r\n');
+    await new Promise((r) => setTimeout(r, 50));
+    const closed = new Promise<void>((resolve) => sock.once('close', () => resolve()));
     const s = server;
     server = undefined as unknown as RunningServer;
     await s.close();
-    sock.destroy();
+    await closed;
   });
 });

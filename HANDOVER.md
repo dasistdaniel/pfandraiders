@@ -78,7 +78,7 @@ npm run build          # Client nach packages/client/dist
 npm run build:server   # Server nach packages/server/dist/server.cjs
 ```
 
-Weitere Befehle: `npm run maps` (eigene Karten prüfen und eintragen), `npm run maps:vorlage` (Tiled-Vorlage und Übungskarte neu erzeugen), `npm run logo` (Logo und Favicon neu erzeugen), `npm run social` (Vorschaubild für geteilte Links und Apple-Touch-Icon neu erzeugen), `npx tsx packages/core/scripts/generateCity.ts` (Stadt aus dem ASCII-Plan), `npx tsx packages/core/scripts/asciiToTiled.ts` (Retro-Karte), `node scripts/lag-proxy.mjs --preset steam` (schlechte Leitung vorspielen). Alle wurden am 16.10.2026 ausgeführt und liefen fehlerfrei. Die Generatoren erzeugen unveränderte Inhalte; unter Windows zeigt `git status` die Dateien danach trotzdem als geändert an (nur Zeilenenden, siehe [WARTUNG.md](docs/WARTUNG.md#fehlersuche)).
+Weitere Befehle: `npm run maps` (eigene Karten prüfen und eintragen), `npm run maps:vorlage` (Tiled-Vorlage und Übungskarte neu erzeugen), `npm run logo` (Logo und Favicon neu erzeugen), `npm run social` (Vorschaubild für geteilte Links und Apple-Touch-Icon neu erzeugen), `npx tsx packages/core/scripts/generateCity.ts` (Stadt aus dem ASCII-Plan), `npx tsx packages/core/scripts/asciiToTiled.ts` (Retro-Karte), `node scripts/lag-proxy.mjs --preset steam` (schlechte Leitung vorspielen). Alle wurden am 16.10.2026 ausgeführt und liefen fehlerfrei (`npm run social` kam am 18.10.2026 dazu). Die Generatoren erzeugen unveränderte Inhalte; unter Windows zeigt `git status` die Dateien danach trotzdem als geändert an (nur Zeilenenden, siehe [WARTUNG.md](docs/WARTUNG.md#fehlersuche)).
 
 Zum Ausprobieren:
 
