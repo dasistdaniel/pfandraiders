@@ -16,7 +16,7 @@ export const SOCIAL_PREVIEW = {
   image: 'social-preview.png',
   imageWidth: 1200,
   imageHeight: 630,
-  imageAlt: 'PfandRaiders-Logo in Pixelschrift mit dem Spruch: Pfand sammeln. Schlag zu. Gewinne.',
+  imageAlt: 'PfandRaiders-Logo in Pixelschrift, darunter: Pfand sammeln. Schlag zu. Gewinne. Lokal bis 4, online bis 8.',
   locale: 'de_DE',
 } as const;
 

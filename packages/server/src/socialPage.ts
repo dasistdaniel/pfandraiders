@@ -16,7 +16,7 @@ export function socialPageHtml(pageUrl: string): string {
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${escapeHtml(s.title)}</title>`,
     socialMetaTags(pageUrl),
-    '<meta name="theme-color" content="#111111">',
+    '<meta name="theme-color" content="#111">',
     `<link rel="canonical" href="${url}">`,
     `<meta http-equiv="refresh" content="0; url=${url}">`,
     '<style>body{margin:0;padding:2rem;background:#111;color:#fff6d6;font:1.1rem/1.5 sans-serif;text-align:center}' +
