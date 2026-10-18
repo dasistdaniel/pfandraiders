@@ -3,8 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PfandRaiders</title>
+    <title>PfandRaiders – Pfand sammeln, ausknocken, gewinnen</title>
+    <!--
+      Link-Vorschau (WhatsApp, Facebook, Discord, Slack …). Texte, Seitenadresse und Bild stammen aus
+      packages/core/src/social.ts (SOCIAL_PREVIEW); ein Test prüft, dass diese Tags dazu passen.
+      Crawler brauchen absolute Adressen: https://dasistdaniel.github.io/pfandraiders/ ist die Spielseite.
+      Das Bild erzeugt npm run social (scripts/generate-social-preview.mjs).
+    -->
+    <meta name="description" content="Sammle Pfandflaschen, trickse Hunde und Polizei aus, schlag deine Gegner k.o. und kauf zwischen den Runden ein. Lokal zu viert oder online mit bis zu acht Leuten.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="PfandRaiders">
+    <meta property="og:locale" content="de_DE">
+    <meta property="og:url" content="https://dasistdaniel.github.io/pfandraiders/">
+    <meta property="og:title" content="PfandRaiders – Pfand sammeln, ausknocken, gewinnen">
+    <meta property="og:description" content="Sammle Pfandflaschen, trickse Hunde und Polizei aus, schlag deine Gegner k.o. und kauf zwischen den Runden ein. Lokal zu viert oder online mit bis zu acht Leuten.">
+    <meta property="og:image" content="https://dasistdaniel.github.io/pfandraiders/social-preview.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="PfandRaiders-Logo in Pixelschrift, darunter: Pfand sammeln. Schlag zu. Gewinne. Lokal bis 4, online bis 8.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="PfandRaiders – Pfand sammeln, ausknocken, gewinnen">
+    <meta name="twitter:description" content="Sammle Pfandflaschen, trickse Hunde und Polizei aus, schlag deine Gegner k.o. und kauf zwischen den Runden ein. Lokal zu viert oder online mit bis zu acht Leuten.">
+    <meta name="twitter:image" content="https://dasistdaniel.github.io/pfandraiders/social-preview.png">
+    <meta name="theme-color" content="#111">
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <style>
       html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
       #game { width: 100%; height: 100%; }

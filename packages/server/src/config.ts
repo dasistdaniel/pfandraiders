@@ -1,4 +1,4 @@
-import { DEFAULT_MAP_ID, isMapId, MAP_LIST } from '@pfandraiders/core';
+import { DEFAULT_MAP_ID, isMapId, MAP_LIST, SOCIAL_PREVIEW } from '@pfandraiders/core';
 import type { MapId } from '@pfandraiders/core';
 
 /** Serverwerte (Spielwerte stehen in core/config.ts). */
@@ -90,4 +90,26 @@ export function parseMapId(raw: string | undefined): { value: MapId; invalid: bo
 export function mapIdWarning(raw: string | undefined): string {
   const known = MAP_LIST.map((m) => m.id).join(', ');
   return `MAP_ID=${raw?.trim() ?? ''} ist ungültig (bekannt: ${known}), Standardwert ${DEFAULT_MAP_ID} wird genutzt.`;
+}
+
+/**
+ * Wertet PAGE_URL aus (Adresse der Spielseite, auf die die Vorschauseite des Servers verweist). Fehlend oder leer:
+ * GitHub-Pages-Adresse ohne Warnung. Sonst eine http(s)-Adresse; Abfrage und Anker fallen weg, der Pfad endet
+ * immer mit Schrägstrich (das Vorschaubild hängt daran). Alles andere: Standardadresse, invalid = true.
+ */
+export function parsePageUrl(raw: string | undefined): { value: string; invalid: boolean } {
+  const fallback = { value: SOCIAL_PREVIEW.pageUrl, invalid: true };
+  const text = raw?.trim();
+  if (!text) return { value: SOCIAL_PREVIEW.pageUrl, invalid: false };
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return fallback;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback;
+  url.search = '';
+  url.hash = '';
+  if (!url.pathname.endsWith('/')) url.pathname += '/';
+  return { value: url.href, invalid: false };
 }

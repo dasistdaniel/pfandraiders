@@ -443,3 +443,89 @@ describe('websocket compression (permessage-deflate)', () => {
     expect(wireBytes(a)).toBeGreaterThanOrEqual(textBytes(a));
   });
 });
+
+describe('plain HTTP (link preview page)', () => {
+  interface HttpReply {
+    status: number;
+    headers: import('http').IncomingHttpHeaders;
+    body: string;
+  }
+  async function request(port: number, method: string, path = '/', headers: Record<string, string> = {}): Promise<HttpReply> {
+    const http = await import('node:http');
+    return new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port, method, path, headers, agent: false }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+  }
+  const crawler = { 'User-Agent': 'WhatsApp/2.23.20.0 A' };
+
+  it('answers GET with the preview page for crawlers, without a redirect status', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, pageUrl: 'https://spiel.example/pfand/' });
+    for (const path of ['/', '/irgendwas?x=1']) {
+      const r = await request(server.port, 'GET', path, crawler);
+      expect(r.status).toBe(200);
+      expect(r.headers['content-type']).toBe('text/html; charset=utf-8');
+      expect(r.headers['cache-control']).toBe('public, max-age=300');
+      expect(r.headers['set-cookie']).toBeUndefined();
+      expect(Number(r.headers['content-length'])).toBe(Buffer.byteLength(r.body));
+      expect(r.body).toContain('<meta property="og:image" content="https://spiel.example/pfand/social-preview.png">');
+      expect(r.body).toContain('<meta property="og:url" content="https://spiel.example/pfand/">');
+      expect(r.body).toContain('<meta http-equiv="refresh" content="0; url=https://spiel.example/pfand/">');
+    }
+  });
+
+  it('uses the GitHub Pages address without PAGE_URL', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
+    const r = await request(server.port, 'GET', '/');
+    expect(r.body).toContain('content="https://dasistdaniel.github.io/pfandraiders/social-preview.png"');
+  });
+
+  it('answers HEAD with the headers only', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
+    const get = await request(server.port, 'GET', '/');
+    const head = await request(server.port, 'HEAD', '/');
+    expect(head.status).toBe(200);
+    expect(head.body).toBe('');
+    expect(head.headers['content-type']).toBe('text/html; charset=utf-8');
+    expect(head.headers['content-length']).toBe(String(Buffer.byteLength(get.body)));
+  });
+
+  it('answers /favicon.ico with 404 and other methods with 426 as before', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
+    expect((await request(server.port, 'GET', '/favicon.ico')).status).toBe(404);
+    const post = await request(server.port, 'POST', '/');
+    expect(post.status).toBe(426);
+    expect(post.body).toBe('Upgrade Required');
+  });
+
+  it('still accepts WebSocket upgrades on the same port and keeps the origin check', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0, allowedOrigins: ['https://good.example'] });
+    expect((await request(server.port, 'GET', '/', { Origin: 'https://evil.example' })).status).toBe(200);
+    await expect(connect(server.port, { Origin: 'https://evil.example' })).rejects.toThrow(/403/);
+    const ok = await connect(server.port, { Origin: 'https://good.example' });
+    expect(ok.ws.extensions).toContain('permessage-deflate');
+    ok.send({ t: 'create', name: 'Anna' });
+    await ok.until('joined');
+  });
+
+  it('closes cleanly while an unfinished HTTP request keeps a connection open', async () => {
+    server = await startServer({ port: 0, stepMs: 20, countdownMs: 0 });
+    const net = await import('node:net');
+    const sock = net.connect(server.port, '127.0.0.1');
+    sock.on('error', () => {});
+    await new Promise<void>((resolve) => sock.once('connect', () => resolve()));
+    // Kopfzeilen ohne Leerzeile am Ende: die Anfrage bleibt offen, close() muss die Verbindung trotzdem beenden
+    sock.write('GET / HTTP/1.1\r\nHost: x\r\n');
+    await new Promise((r) => setTimeout(r, 50));
+    const closed = new Promise<void>((resolve) => sock.once('close', () => resolve()));
+    const s = server;
+    server = undefined as unknown as RunningServer;
+    await s.close();
+    await closed;
+  });
+});

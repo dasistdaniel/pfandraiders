@@ -27,6 +27,7 @@ Der Client liegt auf GitHub Pages, der Server läuft als Docker-Container auf ei
 - Ton: alle Effekte und die Musik werden im Browser erzeugt (WebAudio); eigene Audiodateien können jede ID einzeln ersetzen.
 - Menüs: Hauptmenü, Einstellungen, Credits, Anleitung (fünf Seiten, Texte aus `CONFIG`), Esc-Menü im Spiel, online mit Wechsel der Steuerung.
 - Netz-Diagnose: Overlay (`?debug=net`, F3) und Lag-Proxy.
+- Social Preview: Open-Graph-Tags in `index.html`, Vorschaubild 1200 x 630 aus `npm run social`, und der Server beantwortet normale HTTP-Anfragen mit einer Vorschauseite samt Weiterleitung zur Spielseite (siehe Abschnitt 6).
 
 ### Offen und bekannte Schwächen
 
@@ -44,6 +45,7 @@ Der Client liegt auf GitHub Pages, der Server läuft als Docker-Container auf ei
 - Töne und Musik bei normaler Bildrate über längere Zeit; eigene Audiodateien im fertigen Build auf GitHub Pages.
 - Neuladen oder Wiederverbinden mitten in der Endwertung, „Link kopieren“ auf verschiedenen Browsern, große und sehr kleine Bildschirme.
 - Handys und Tablets: Es gibt keine Touch-Steuerung.
+- Link-Vorschau (Social Preview) in echtem WhatsApp, Facebook, Discord oder Slack und hinter dem Nginx Proxy Manager; geprüft sind nur die Tags und die Antworten des Servers lokal (Tests und curl mit Crawler-Kennungen).
 - Der Server-Takt auf dem VPS und das Verhalten bei einem echten großen Download nebenher (nur mit dem Lag-Proxy nachgestellt).
 
 ## 3. Aufbau des Repositorys
@@ -58,7 +60,7 @@ TypeScript-Monorepo mit npm workspaces. Entwickelt wurde auf Windows 11 mit Node
 | `packages/core/scripts` | Generatoren: eigene Karten eintragen, Tiled-Vorlage, Stadt aus dem ASCII-Plan, Retro-Karte. |
 | `maps-src/` | Tiled-Projekt, Kachelsatz `kenney-city.tsx` und die Vorlage für eigene Karten. |
 | `deploy/` | `docker-compose.yml` und `update.sh` für den VPS. |
-| `scripts/` | Logo-Generator, Lag-Proxy (`lag-proxy.mjs`, `lagSchedule.mjs`). |
+| `scripts/` | Logo-Generator, Generator des Vorschaubilds (`generate-social-preview.mjs`), Lag-Proxy (`lag-proxy.mjs`, `lagSchedule.mjs`). |
 | `assets/logo/` | Logo in drei Varianten, erzeugt von `npm run logo`. |
 | `assets-src/audio/CREDITS.txt` | Herkunftsliste für eigene Audiodateien (der Rest von `assets-src/` ist nicht im Repository). |
 | `docs/` | Anleitungen (siehe Abschnitt 11), Entwürfe und Pläne unter `docs/superpowers/`. |
@@ -76,7 +78,7 @@ npm run build          # Client nach packages/client/dist
 npm run build:server   # Server nach packages/server/dist/server.cjs
 ```
 
-Weitere Befehle: `npm run maps` (eigene Karten prüfen und eintragen), `npm run maps:vorlage` (Tiled-Vorlage und Übungskarte neu erzeugen), `npm run logo` (Logo und Favicon neu erzeugen), `npx tsx packages/core/scripts/generateCity.ts` (Stadt aus dem ASCII-Plan), `npx tsx packages/core/scripts/asciiToTiled.ts` (Retro-Karte), `node scripts/lag-proxy.mjs --preset steam` (schlechte Leitung vorspielen). Alle wurden am 16.10.2026 ausgeführt und liefen fehlerfrei. Die Generatoren erzeugen unveränderte Inhalte; unter Windows zeigt `git status` die Dateien danach trotzdem als geändert an (nur Zeilenenden, siehe [WARTUNG.md](docs/WARTUNG.md#fehlersuche)).
+Weitere Befehle: `npm run maps` (eigene Karten prüfen und eintragen), `npm run maps:vorlage` (Tiled-Vorlage und Übungskarte neu erzeugen), `npm run logo` (Logo und Favicon neu erzeugen), `npm run social` (Vorschaubild für geteilte Links und Apple-Touch-Icon neu erzeugen), `npx tsx packages/core/scripts/generateCity.ts` (Stadt aus dem ASCII-Plan), `npx tsx packages/core/scripts/asciiToTiled.ts` (Retro-Karte), `node scripts/lag-proxy.mjs --preset steam` (schlechte Leitung vorspielen). Alle wurden am 16.10.2026 ausgeführt und liefen fehlerfrei (`npm run social` kam am 18.10.2026 dazu). Die Generatoren erzeugen unveränderte Inhalte; unter Windows zeigt `git status` die Dateien danach trotzdem als geändert an (nur Zeilenenden, siehe [WARTUNG.md](docs/WARTUNG.md#fehlersuche)).
 
 Zum Ausprobieren:
 
@@ -176,6 +178,10 @@ Was über Runden bleibt, ist der `Progress` je Spieler (Geld, Besitz, Gesamtverd
 
 `.github/workflows/pages.yml` baut bei jedem Push auf `master` und veröffentlicht `packages/client/dist`. Nötig sind zwei Einstellungen im Repository: unter Settings > Pages die Quelle „GitHub Actions“, und unter Settings > Secrets and variables > Actions > Variables die Variable `SERVER_URL` (zum Beispiel `wss://play.example.org`). Fehlt sie, bricht der Workflow absichtlich mit einer Fehlermeldung ab. Die Build-Nummer des Clients ist die Laufnummer von GitHub Actions, der Hash der Commit.
 
+### Social Preview
+
+Geteilte Links (Spielseite oder Serveradresse) zeigen in WhatsApp und Co. Bild, Titel und Beschreibung. Texte in `packages/core/src/social.ts` und von Hand in `packages/client/index.html` (ein Test vergleicht), Bild per `npm run social`, Serverseite über `PAGE_URL`. Hängt eine alte Vorschau: Link mit `?v=2` teilen, für Facebook den Sharing Debugger („Scrape Again“). Mehr in [WARTUNG.md](docs/WARTUNG.md#social-preview-link-vorschau) und im README unter „Social Preview“. Mit echtem WhatsApp oder dem Facebook-Debugger ist das noch nicht geprüft.
+
 ### Server (VPS)
 
 Auf dem VPS liegt ein Klon des Repositorys. Der Container hat keinen Host-Port; der Nginx Proxy Manager erreicht ihn über das externe Docker-Netz `proxy-net` unter dem Namen `pfandraiders-server`, Port 8080, mit eingeschaltetem Websockets Support. Einmalig `deploy/.env` anlegen, danach genügt:
@@ -194,6 +200,7 @@ Umgebungsvariablen (in `deploy/.env`):
 | `GRACE_MS` | Optional. Rückkehrfrist in ms, 5000 bis 3600000, Standard 120000. |
 | `MAP_ID` | Optional. Startkarte neuer Räume, Standard `city`. Auch versteckte Karten wie `uebung` gehen. |
 | `WS_COMPRESSION` | Optional. `on` (Standard) oder `off` für permessage-deflate. |
+| `PAGE_URL` | Optional. Adresse der Spielseite für die Vorschauseite des Servers, Standard `https://dasistdaniel.github.io/pfandraiders/`. |
 | `PORT` | Setzt `docker-compose.yml` fest auf 8080. |
 
 Ungültige Werte ergeben eine Warnung im Log und den Standardwert.

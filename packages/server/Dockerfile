@@ -20,6 +20,6 @@ WORKDIR /app
 COPY --from=build /app/packages/server/dist/server.cjs ./server.cjs
 USER node
 EXPOSE 8080
-# TCP-Check: der Server spricht nur WebSocket, HTTP-GET liefert 426 (wget wertet das als Fehler)
+# TCP-Check: prüft nur, ob Port 8080 offen ist (HTTP-GET liefert die Vorschauseite, sagt aber nichts über die Räume)
 HEALTHCHECK --interval=30s --timeout=3s CMD nc -z 127.0.0.1 8080 || exit 1
 CMD ["node", "server.cjs"]
