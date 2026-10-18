@@ -3,10 +3,22 @@
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { crc32, deflateSync } from 'node:zlib';
+import { deflateSync } from 'node:zlib';
 import { renderSocialPreview, renderTouchIcon } from '../packages/client/src/socialPreview.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/** CRC-32 wie im PNG-Standard (zlib.crc32 gibt es erst ab Node 22.2). */
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
 
 function chunk(type, data) {
   const len = Buffer.alloc(4);
