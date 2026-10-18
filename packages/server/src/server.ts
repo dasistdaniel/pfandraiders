@@ -1,9 +1,11 @@
-import { MAX_MESSAGE_BYTES, parseClientMessage } from '@pfandraiders/core';
+import { MAX_MESSAGE_BYTES, parseClientMessage, SOCIAL_PREVIEW } from '@pfandraiders/core';
 import type { ErrorCode, MapId, ServerMessage } from '@pfandraiders/core';
-import type { IncomingMessage } from 'http';
+import { createServer, STATUS_CODES } from 'http';
+import type { IncomingMessage, ServerResponse } from 'http';
 import { WebSocketServer } from 'ws';
 import type { PerMessageDeflateOptions, WebSocket } from 'ws';
 import { SERVER_CONFIG } from './config';
+import { socialPageHtml } from './socialPage';
 import type { Conn, Member, Room } from './room';
 import { RoomManager } from './rooms';
 
@@ -31,6 +33,37 @@ export interface ServerOptions {
   onError?: (err: unknown, room: Room | null) => void;
   /** permessage-deflate anbieten (WS_DEFLATE). Standard an; Umgebungsvariable WS_COMPRESSION=off schaltet ab. */
   compression?: boolean;
+  /** Adresse der Spielseite für die Vorschauseite (PAGE_URL, mit Schrägstrich am Ende). Standard GitHub Pages. */
+  pageUrl?: string;
+}
+
+/**
+ * Antwort auf normale HTTP-Anfragen (alles ohne WebSocket-Upgrade). GET und HEAD liefern die Vorschauseite für
+ * Link-Vorschauen (WhatsApp, Facebook, Discord, Slack …), /favicon.ico ein 404, andere Methoden wie bisher
+ * 426 Upgrade Required (so antwortet ws ohne eigenen HTTP-Server).
+ */
+export function handleHttp(req: IncomingMessage, res: ServerResponse, html: string): void {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    const body = STATUS_CODES[426] ?? 'Upgrade Required';
+    res.writeHead(426, { 'Content-Length': Buffer.byteLength(body), 'Content-Type': 'text/plain' });
+    res.end(body);
+    return;
+  }
+  const path = (req.url ?? '/').split('?')[0];
+  if (path === '/favicon.ico') {
+    res.writeHead(404, { 'Content-Length': 0, Connection: 'close' });
+    res.end();
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': Buffer.byteLength(html),
+    'Cache-Control': 'public, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+    Connection: 'close',
+  });
+  // Bei HEAD verwirft Node den Inhalt selbst und schickt nur die Header
+  res.end(html);
 }
 
 /**
@@ -384,8 +417,11 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       : (err, room) => console.error(`Tick-Fehler in Raum ${room.code}:`, err),
   });
 
+  // Eigener HTTP-Server: Upgrades gehen an ws, normale Anfragen bekommen die Vorschauseite
+  const html = socialPageHtml(opts.pageUrl ?? SOCIAL_PREVIEW.pageUrl);
+  const httpServer = createServer((req, res) => handleHttp(req, res, html));
   const wss = new WebSocketServer({
-    port: opts.port,
+    server: httpServer,
     maxPayload: MAX_MESSAGE_BYTES,
     perMessageDeflate: opts.compression === false ? false : WS_DEFLATE,
     verifyClient: (info, done) => {
@@ -465,24 +501,26 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     clearInterval(pingTimer);
   };
 
+  // ws reicht Fehler des HTTP-Servers nur weiter; behandelt werden sie unten am HTTP-Server selbst
+  wss.on('error', () => {});
+
   return new Promise((resolve, reject) => {
     let listening = false;
-    wss.on('error', (err) => {
+    httpServer.on('error', (err) => {
       if (!listening) {
         clearTimers();
-        try {
-          wss.close();
-        } catch {
+        wss.close();
+        httpServer.close(() => {
           /* nicht gestartet */
-        }
+        });
         reject(err);
       } else {
-        console.error('WebSocket-Serverfehler:', err);
+        console.error('HTTP-/WebSocket-Serverfehler:', err);
       }
     });
-    wss.on('listening', () => {
+    httpServer.listen(opts.port, () => {
       listening = true;
-      const address = wss.address();
+      const address = httpServer.address();
       const port = typeof address === 'object' && address ? address.port : opts.port;
       resolve({
         port,
@@ -490,6 +528,9 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         close: () =>
           new Promise<void>((done) => {
             clearTimers();
+            // Keine neuen HTTP-Verbindungen mehr; offene Keep-alive-Verbindungen schliessen
+            httpServer.close();
+            httpServer.closeIdleConnections();
             for (const ws of wss.clients) ws.close(1001, 'server shutting down');
             // Wer die Close-Handshake nicht beantwortet, wird nach kurzer Frist getrennt
             const force = setTimeout(() => {
@@ -497,6 +538,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
             }, 500);
             wss.close(() => {
               clearTimeout(force);
+              httpServer.closeAllConnections();
               done();
             });
           }),

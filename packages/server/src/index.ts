@@ -1,7 +1,7 @@
 import { currentBuild, startupLine } from './buildInfo';
 import { startServer } from './server';
 import type { RunningServer } from './server';
-import { mapIdWarning, parseGraceMs, parseMapId, parseRoundMs, parseWsCompression, SERVER_CONFIG } from './config';
+import { mapIdWarning, parseGraceMs, parseMapId, parsePageUrl, parseRoundMs, parseWsCompression, SERVER_CONFIG } from './config';
 
 const port = Number(process.env.PORT ?? 8080);
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
@@ -27,6 +27,10 @@ const comp = parseWsCompression(process.env.WS_COMPRESSION);
 const compression = comp.value;
 if (comp.invalid) console.warn(`WS_COMPRESSION=${process.env.WS_COMPRESSION} ist ungültig (on oder off), Kompression bleibt an.`);
 
+const page = parsePageUrl(process.env.PAGE_URL);
+const pageUrl = page.value;
+if (page.invalid) console.warn(`PAGE_URL=${process.env.PAGE_URL} ist ungültig (http- oder https-Adresse), Standardwert ${pageUrl} wird genutzt.`);
+
 // Letzte Rettung: loggen und weiterlaufen, damit ein Fehler nicht alle Räume beendet
 process.on('uncaughtException', (err) => {
   console.error('Unbehandelte Ausnahme:', err);
@@ -38,7 +42,7 @@ process.on('unhandledRejection', (reason) => {
 const build = currentBuild();
 let running: RunningServer | null = null;
 
-startServer({ port, allowedOrigins, roundMs, graceMs, mapId, compression })
+startServer({ port, allowedOrigins, roundMs, graceMs, mapId, compression, pageUrl })
   .then((srv) => {
     running = srv;
     console.log(startupLine(srv.port, build));
