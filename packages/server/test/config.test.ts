@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP_ID, MAP_LIST } from '@pfandraiders/core';
-import { mapIdWarning, parseGraceMs, parseMapId, parseRoundMs, parseWsCompression, SERVER_CONFIG } from '../src/config';
+import { mapIdWarning, parseGraceMs, parseMapId, parsePageUrl, parseRoundMs, parseWsCompression, SERVER_CONFIG } from '../src/config';
 
 describe('parseGraceMs', () => {
   const fb = SERVER_CONFIG.graceMs;
@@ -72,5 +72,25 @@ describe('parseMapId', () => {
     const known = MAP_LIST.map((m) => m.id).join(', ');
     expect(mapIdWarning(' moon ')).toBe(`MAP_ID=moon ist ungültig (bekannt: ${known}), Standardwert city wird genutzt.`);
     expect(mapIdWarning('moon')).toContain('city, retro');
+  });
+});
+
+describe('parsePageUrl', () => {
+  const def = 'https://dasistdaniel.github.io/pfandraiders/';
+  it('uses the GitHub Pages address for missing, empty and blank values without a warning', () => {
+    for (const raw of [undefined, '', '  ']) expect(parsePageUrl(raw)).toEqual({ value: def, invalid: false });
+  });
+  it('accepts http and https and adds a trailing slash', () => {
+    expect(parsePageUrl('https://spiel.example/pfand')).toEqual({ value: 'https://spiel.example/pfand/', invalid: false });
+    expect(parsePageUrl(' http://localhost:5173/ ')).toEqual({ value: 'http://localhost:5173/', invalid: false });
+    expect(parsePageUrl('https://spiel.example')).toEqual({ value: 'https://spiel.example/', invalid: false });
+  });
+  it('drops query and fragment, they would break the image address', () => {
+    expect(parsePageUrl('https://spiel.example/a/?x=1#y')).toEqual({ value: 'https://spiel.example/a/', invalid: false });
+  });
+  it('flags other schemes and garbage and falls back to the default', () => {
+    for (const raw of ['ftp://spiel.example/', 'javascript:alert(1)', 'spiel.example', 'kein url']) {
+      expect(parsePageUrl(raw)).toEqual({ value: def, invalid: true });
+    }
   });
 });
